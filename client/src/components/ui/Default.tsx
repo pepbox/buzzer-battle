@@ -14,7 +14,8 @@ const Default: React.FC = () => {
       <Container maxWidth="sm">
         <Paper elevation={3} sx={{ p: 4, textAlign: "center" }}>
           <Typography variant="h3" component="h1" gutterBottom color="primary">
-            Welcome to <span style={{ color: "primary.main" }}>GETSETKNOW</span>
+            Welcome to{" "}
+            <span style={{ color: "primary.main" }}>BUZZER BATTLE</span>
           </Typography>
           <Typography variant="body1" color="text.secondary">
             Please obtain the correct link from your admin to start playing.
