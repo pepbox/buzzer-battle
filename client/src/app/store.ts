@@ -6,6 +6,10 @@ import { api } from './api';
 // import playerReducer from '../features/player/services/player.slice';
 // import gameArenaReducer from '../features/game/services/gameArenaSlice';
 import adminReducer from '../features/admin/services/adminSlice';
+import teamReducer from '../features/game/services/teamSlice';
+import gameStateReducer from '../features/game/services/gameStateSlice';
+import buzzerReducer from '../features/game/services/buzzerSlice';
+import questionReducer from '../features/question/services/questions.slice';
 
 export const store = configureStore({
   reducer: {
@@ -14,6 +18,10 @@ export const store = configureStore({
     // player: playerReducer,
     // gameArena: gameArenaReducer,
     admin: adminReducer,
+    team: teamReducer,
+    gameState: gameStateReducer,
+    buzzer: buzzerReducer,
+    question: questionReducer,
     [api.reducerPath]: api.reducer,
   },
   middleware: (getDefaultMiddleware) =>

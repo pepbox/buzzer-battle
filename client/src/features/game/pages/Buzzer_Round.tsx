@@ -1,43 +1,75 @@
 import React, { useState, useEffect } from "react";
-import { Box, LinearProgress } from "@mui/material";
+import { Box, LinearProgress, Alert } from "@mui/material";
+import { useNavigate, useParams } from "react-router-dom";
 import QuestionBuzzer from "../../question/components/Question_Buzzer";
 import Buzzer from "../../../components/ui/Buzzer";
 import normalBg from "../../../assets/background/question_bg.webp";
+import { useFetchCurrentQuestionQuery } from "../../question/services/questions.api";
+import { useAppSelector } from "../../../app/hooks";
+import { RootState } from "../../../app/store";
+import { websocketService } from "../../../services/websocket/websocketService";
+import { Events } from "../../../services/websocket/enums/Events";
+import Loader from "../../../components/ui/Loader";
+import Error from "../../../components/ui/Error";
 
-interface BuzzerRoundProps {
-  questionNumber?: number;
-  questionText?: string;
-  timeLimit?: number; // in seconds
-  onBuzzerPress?: () => void;
-  onTimeUp?: () => void;
-}
-
-const BuzzerRound: React.FC<BuzzerRoundProps> = ({
-  questionNumber = 1,
-  questionText = "Which feature in Figma allows multiple people to work on a design file at the same time?",
-  timeLimit = 30,
-  onBuzzerPress,
-  onTimeUp,
-}) => {
+const BuzzerRound: React.FC = () => {
+  const navigate = useNavigate();
+  const { sessionId } = useParams<{ sessionId: string }>();
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [isRunning, setIsRunning] = useState(true);
+  const [buzzerPressed, setBuzzerPressed] = useState(false);
+  const [buzzerError, setBuzzerError] = useState<string | null>(null);
+
+  // Get current team from Redux
+  const team = useAppSelector((state: RootState) => state.team.team);
+  
+  // Fetch current question
+  const { data: questionData, isLoading, error } = useFetchCurrentQuestionQuery();
+
+  const timeLimit = 30; // 30 seconds for buzzer round
+  const question = questionData?.data?.question;
+  const currentQuestionIndex = questionData?.data?.currentQuestionIndex || 1;
 
   // Progress calculation (0 to 100)
   const progress = (timeElapsed / timeLimit) * 100;
 
+  // Listen for buzzer success/error events
+  useEffect(() => {
+    const handleBuzzerSuccess = () => {
+      setBuzzerPressed(true);
+      setBuzzerError(null);
+      // Navigate to buzzer leaderboard after short delay
+      setTimeout(() => {
+        navigate(`/game/${sessionId}/buzzer-leaderboard`);
+      }, 1000);
+    };
+
+    const handleBuzzerError = (data: { message: string }) => {
+      setBuzzerError(data.message || "Failed to press buzzer");
+      setIsRunning(true); // Resume timer if buzzer press failed
+    };
+
+    websocketService.on(Events.BUZZER_PRESSED_SUCCESS, handleBuzzerSuccess);
+    websocketService.on(Events.BUZZER_ERROR, handleBuzzerError);
+
+    return () => {
+      websocketService.off(Events.BUZZER_PRESSED_SUCCESS, handleBuzzerSuccess);
+      websocketService.off(Events.BUZZER_ERROR, handleBuzzerError);
+    };
+  }, [navigate, sessionId]);
+
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
-    if (isRunning && timeElapsed < timeLimit) {
+    if (isRunning && timeElapsed < timeLimit && !buzzerPressed) {
       interval = setInterval(() => {
         setTimeElapsed((prev) => {
           const newTime = prev + 0.1; // Update every 100ms for smooth animation
 
           if (newTime >= timeLimit) {
             setIsRunning(false);
-            if (onTimeUp) {
-              onTimeUp();
-            }
+            // Time's up - navigate to leaderboard
+            navigate(`/game/${sessionId}/leaderboard`);
             return timeLimit;
           }
 
@@ -51,14 +83,29 @@ const BuzzerRound: React.FC<BuzzerRoundProps> = ({
         clearInterval(interval);
       }
     };
-  }, [isRunning, timeElapsed, timeLimit, onTimeUp]);
+  }, [isRunning, timeElapsed, timeLimit, buzzerPressed, navigate, sessionId]);
 
   const handleBuzzerPress = () => {
+    if (buzzerPressed || !team) return;
+    
     setIsRunning(false); // Stop the timer when buzzer is pressed
-    if (onBuzzerPress) {
-      onBuzzerPress();
-    }
+    setBuzzerPressed(true);
+    
+    // Emit buzzer press event via WebSocket
+    websocketService.emit(Events.PRESS_BUZZER, {
+      timestamp: BigInt(Date.now()).toString(),
+    });
   };
+
+  // Show loading state
+  if (isLoading) {
+    return <Loader />;
+  }
+
+  // Show error state
+  if (error || !question) {
+    return <Error />;
+  }
 
   return (
     <Box
@@ -99,6 +146,15 @@ const BuzzerRound: React.FC<BuzzerRoundProps> = ({
         />
       </Box>
 
+      {/* Error Alert */}
+      {buzzerError && (
+        <Box sx={{ m: "0 24px" }}>
+          <Alert severity="error" onClose={() => setBuzzerError(null)}>
+            {buzzerError}
+          </Alert>
+        </Box>
+      )}
+
       {/* Main Content */}
       <Box
         sx={{
@@ -125,8 +181,8 @@ const BuzzerRound: React.FC<BuzzerRoundProps> = ({
           }}
         >
           <QuestionBuzzer
-            questionNumber={questionNumber}
-            questionText={questionText}
+            questionNumber={currentQuestionIndex}
+            questionText={question?.questionText || ""}
           />
         </Box>
 
@@ -147,6 +203,7 @@ const BuzzerRound: React.FC<BuzzerRoundProps> = ({
             size="large"
             onPress={handleBuzzerPress}
             showPressText={true}
+            disabled={buzzerPressed}
           />
         </Box>
       </Box>

@@ -1,59 +1,170 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import QuestionRound from "../compoenents/Question_Round";
 import { QuestionData } from "../../question/components/Question";
+import { useFetchCurrentQuestionQuery, useSendQuestionResponseMutation } from "../../question/services/questions.api";
+import { useAppSelector } from "../../../app/hooks";
+import { RootState } from "../../../app/store";
+import Loader from "../../../components/ui/Loader";
+import Error from "../../../components/ui/Error";
+import { Box, CircularProgress, Typography } from "@mui/material";
 
 const QuestionRoundPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { sessionId } = useParams<{ sessionId: string }>();
   const [selectedAnswer, setSelectedAnswer] = useState<string>("");
   const [isAnswered, setIsAnswered] = useState(false);
+  const [submittingAnswer, setSubmittingAnswer] = useState(false);
 
-  // Dummy question data - will be replaced with RTK Query later
-  const dummyQuestionData: QuestionData = {
-    id: "q1",
-    text: "Which feature in Figma allows multiple people to work on a design file at the same time?",
-    media: {
-      url: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=300&fit=crop", // Fish image placeholder
-      alt: "Fish swimming in water",
-    },
-    options: ["Alt/Option + Drag", "shift + f1", "ctrl + f2", "super + f3"],
-  };
+  // Get team from Redux
+  const team = useAppSelector((state: RootState) => state.team.team);
+  const gameState = useAppSelector((state: RootState) => state.gameState.gameState);
 
-  // Dummy team data - will be replaced with RTK Query later
-  const dummyTeamData = {
-    teamName: "Mystery Masters",
-    teamNumber: 2,
-    totalPoints: 1500,
-    questionPoints: 10,
-  };
+  // Fetch current question
+  const { data: questionData, isLoading, error } = useFetchCurrentQuestionQuery();
+  
+  // Mutation for submitting answer
+  const [sendResponse] = useSendQuestionResponseMutation();
 
-  const handleAnswerSelect = (answer: string) => {
+  const question = questionData?.data?.question;
+
+  // Check if current team is the answering team
+  const isAnsweringTeam = 
+    typeof gameState?.currentAnsweringTeam === 'object' 
+      ? gameState?.currentAnsweringTeam?._id === team?._id
+      : gameState?.currentAnsweringTeam === team?._id;
+
+  // If not the answering team, redirect to leaderboard
+  useEffect(() => {
+    if (gameState && !isAnsweringTeam && gameState.gameStatus === 'answering') {
+      navigate(`/game/${sessionId}/leaderboard`);
+    }
+  }, [gameState, isAnsweringTeam, navigate, sessionId]);
+
+  const handleAnswerSelect = async (answer: string) => {
+    if (!question || isAnswered || !team) return;
+
     console.log("Answer selected:", answer);
     setSelectedAnswer(answer);
     setIsAnswered(true);
+    setSubmittingAnswer(true);
+
+    try {
+      // Find the option ID for the selected answer text
+      const selectedOption = question.options.find(opt => opt.optionText === answer);
+      
+      if (!selectedOption) {
+        console.error("Selected option not found");
+        return;
+      }
+
+      // Submit the answer
+      const result = await sendResponse({
+        questionId: question._id,
+        responseOptionId: selectedOption._id,
+      }).unwrap();
+
+      console.log("Answer submitted:", result);
+
+      // Navigate to leaderboard after short delay
+      setTimeout(() => {
+        navigate(`/game/${sessionId}/leaderboard`);
+      }, 2000);
+    } catch (error) {
+      console.error("Failed to submit answer:", error);
+      setSubmittingAnswer(false);
+      // Still navigate to leaderboard even if submission fails
+      setTimeout(() => {
+        navigate(`/game/${sessionId}/leaderboard`);
+      }, 2000);
+    }
   };
 
-  const handleTimeUp = () => {
+  const handleTimeUp = async () => {
     console.log("Time's up!");
     setIsAnswered(true);
+    
+    // Navigate to leaderboard when time is up
+    setTimeout(() => {
+      navigate(`/game/${sessionId}/leaderboard`);
+    }, 1000);
   };
 
-  // TODO: Replace with actual RTK Query hooks
-  // const { data: questionData, isLoading: questionLoading } = useGetCurrentQuestionQuery();
-  // const { data: teamData, isLoading: teamLoading } = useGetTeamDataQuery();
-  // const { data: gameState, isLoading: gameLoading } = useGetGameStateQuery();
+  if (isLoading) {
+    return <Loader />;
+  }
+
+  if (error || !question) {
+    return <Error />;
+  }
+
+  if (!isAnsweringTeam) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          minHeight: "100vh",
+          gap: 2,
+        }}
+      >
+        <CircularProgress />
+        <Typography>Waiting for the answering team...</Typography>
+      </Box>
+    );
+  }
+
+  // Convert question to QuestionData format
+  const questionDataFormatted: QuestionData = {
+    id: question._id,
+    text: question.questionText,
+    media: question.questionImage ? {
+      url: question.questionImage,
+      alt: "Question image",
+    } : undefined,
+    options: question.options.map(opt => opt.optionText),
+  };
 
   return (
-    <QuestionRound
-      questionData={dummyQuestionData}
-      teamName={dummyTeamData.teamName}
-      teamNumber={dummyTeamData.teamNumber}
-      totalPoints={dummyTeamData.totalPoints}
-      questionPoints={dummyTeamData.questionPoints}
-      timeLimit={30}
-      selectedAnswer={selectedAnswer}
-      disabled={isAnswered}
-      onAnswerSelect={handleAnswerSelect}
-      onTimeUp={handleTimeUp}
-    />
+    <>
+      <QuestionRound
+        questionData={questionDataFormatted}
+        teamName={team?.teamName || ""}
+        teamNumber={team?.teamNumber || 0}
+        totalPoints={team?.teamScore || 0}
+        questionPoints={150} // Fixed 150 points per correct answer
+        timeLimit={30}
+        selectedAnswer={selectedAnswer}
+        disabled={isAnswered}
+        onAnswerSelect={handleAnswerSelect}
+        onTimeUp={handleTimeUp}
+      />
+      {submittingAnswer && (
+        <Box
+          sx={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: 2,
+            zIndex: 9999,
+          }}
+        >
+          <CircularProgress sx={{ color: "white" }} />
+          <Typography sx={{ color: "white" }}>
+            Submitting your answer...
+          </Typography>
+        </Box>
+      )}
+    </>
   );
 };
 

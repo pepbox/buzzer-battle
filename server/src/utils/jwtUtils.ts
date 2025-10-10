@@ -5,7 +5,7 @@ dotenv.config();
 
 export interface AccessTokenPayload {
   id: string;
-  role: "USER" | "ADMIN";
+  role: "USER" | "ADMIN" | "TEAM";
   sessionId: string;
 }
 

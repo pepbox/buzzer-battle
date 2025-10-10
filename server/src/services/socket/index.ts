@@ -3,6 +3,7 @@ import { Server, Socket } from "socket.io";
 import { socketManager } from "./socketManager";
 import { roomManager } from "./roomManager";
 import { socketAuthMiddleware } from "../../middlewares/socketAuthMiddleware";
+import { handlePressBuzzer } from "./handelers/buzzerHandler";
 
 let ioInstance: Server | null = null;
 
@@ -23,6 +24,11 @@ export function initializeSocket(server: HTTPServer): Server {
     const user = (socket as any).user;
     socketManager.addSocket(socket.id, user);
     roomManager.addSocketToSession(socket.id, user);
+
+    // Handle press-buzzer event
+    socket.on("press-buzzer", async (payload) => {
+      await handlePressBuzzer(socket, payload);
+    });
 
     socket.on("disconnect", () => {
       console.log(`Socket disconnected: ${socket.id}`);

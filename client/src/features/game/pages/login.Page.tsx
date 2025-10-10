@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-// import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Alert,
   Box,
@@ -10,39 +10,52 @@ import {
   Select,
   MenuItem,
   useTheme,
+  CircularProgress,
 } from "@mui/material";
-// import { useAppDispatch, useAppSelector } from "../../../app/hooks";
+import { useAppDispatch } from "../../../app/hooks";
 import GlobalButton from "../../../components/ui/button";
-// import { RootState } from "../../../app/store";
 import normalBg from "../../../assets/background/normal_bg.webp";
+import { useCreateTeamMutation } from "../services/teamApi";
+import { setTeam } from "../services/teamSlice";
 
 const LoginPage: React.FC = () => {
-  // const navigate = useNavigate();
-  // const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+  const { sessionId } = useParams<{ sessionId: string }>();
   const [teamName, setTeamName] = useState<string>("");
   const [selectedTeamNumber, setSelectedTeamNumber] = useState<number | "1">(
     "1"
   );
   const [showSnackbar, setShowSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
+  
+  // RTK Query mutation for creating team
+  const [createTeam, { isLoading: isCreating, error: createError }] = useCreateTeamMutation();
 
-  // TODO: Uncomment when RTK query is available
-  // const { sessionId } = useAppSelector((state: RootState) => state.game);
-  // const {
-  //   data: teams,
-  //   isError,
-  //   isLoading,
-  // } = useGetAllTeamsQuery(sessionId, {
-  //   skip: !sessionId,
-  // });
+  // Check if sessionId is present
+  useEffect(() => {
+    if (!sessionId) {
+      setSnackbarMessage("Invalid session. Please use a valid game link.");
+      setShowSnackbar(true);
+    }
+  }, [sessionId]);
 
-  // Dummy team data for now
-  const dummyTeams = [
-    { id: 1, name: "Team 1" },
-    { id: 2, name: "Team 2" },
-  ];
-  const isLoading = false;
-  const isError = false;
+  // Show error from API if any
+  useEffect(() => {
+    if (createError) {
+      const errorMessage = 'data' in createError && createError.data 
+        ? (createError.data as any).message || "Failed to create team"
+        : "Failed to create team. Please try again.";
+      setSnackbarMessage(errorMessage);
+      setShowSnackbar(true);
+    }
+  }, [createError]);
+
+  // Dummy team data for now (team numbers)
+  const dummyTeams = Array.from({ length: 10 }, (_, i) => ({
+    id: i + 1,
+    name: `Team ${i + 1}`,
+  }));
 
   const MAX_WORD_LENGTH = 15; // Maximum length per word
   const MAX_WORDS = 4; // Maximum number of words
@@ -89,14 +102,17 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  const handleStart = () => {
+  const handleStart = async () => {
     const teamNameValidation = validateTeamName(teamName);
 
-    if (
-      !teamName.trim()
-      // || selectedTeamNumber === "1"
-    ) {
-      setSnackbarMessage("Please enter team name and select team number");
+    if (!sessionId) {
+      setSnackbarMessage("Invalid session. Please use a valid game link.");
+      setShowSnackbar(true);
+      return;
+    }
+
+    if (!teamName.trim()) {
+      setSnackbarMessage("Please enter team name");
       setShowSnackbar(true);
       return;
     }
@@ -107,22 +123,30 @@ const LoginPage: React.FC = () => {
       return;
     }
 
-    // TODO: Dispatch team data to store when available
-    // dispatch(
-    //   setTeam({
-    //     name: teamName.trim(),
-    //     number: selectedTeamNumber as number,
-    //   })
-    // );
+    try {
+      // Create team via API
+      const result = await createTeam({
+        teamName: teamName.trim(),
+        teamNumber: selectedTeamNumber as number,
+        sessionId: sessionId,
+      }).unwrap();
 
-    console.log("Team Data:", {
-      name: teamName.trim(),
-      number: selectedTeamNumber,
-    });
+      // Store team data in Redux
+      dispatch(setTeam({
+        _id: result.data.team._id,
+        teamName: result.data.team.teamName,
+        teamNumber: result.data.team.teamNumber,
+        teamScore: result.data.team.teamScore,
+        joinedAt: result.data.team.joinedAt,
+        sessionId: result.data.team.sessionId,
+      }));
 
-    // TODO: Navigate to next screen
-    // navigate(`/game/${sessionId}/next-screen`);
-    console.log("Navigating to next screen...");
+      // Navigate to buzzer page (initial waiting screen)
+      navigate(`/game/${sessionId}/buzzer`);
+    } catch (error) {
+      // Error is already handled by useEffect
+      console.error("Failed to create team:", error);
+    }
   };
 
   const handleCloseSnackbar = () => {
@@ -213,7 +237,6 @@ const LoginPage: React.FC = () => {
             <Select
               value={selectedTeamNumber}
               onChange={(e) => setSelectedTeamNumber(e.target.value as number)}
-              disabled={isLoading}
               inputProps={{ "aria-label": "Without label" }}
               displayEmpty
               sx={{
@@ -231,11 +254,7 @@ const LoginPage: React.FC = () => {
                 },
               }}
             >
-              {isLoading ? (
-                <MenuItem disabled>Loading teams...</MenuItem>
-              ) : isError ? (
-                <MenuItem disabled>Error loading teams</MenuItem>
-              ) : dummyTeams && dummyTeams.length > 0 ? (
+              {dummyTeams && dummyTeams.length > 0 ? (
                 dummyTeams.map((team) => (
                   <MenuItem key={team.id} value={team.id}>
                     {team.name}
@@ -244,17 +263,6 @@ const LoginPage: React.FC = () => {
               ) : (
                 <MenuItem disabled>No teams available</MenuItem>
               )}
-
-              {/* TODO: Uncomment when RTK query is available */}
-              {/* {teams && teams.length > 0 ? (
-                teams.map((team: any, index: number) => (
-                  <MenuItem key={team.id || index} value={team.number || index + 1}>
-                    Team {team.number || index + 1}
-                  </MenuItem>
-                ))
-              ) : (
-                <MenuItem disabled>No teams available</MenuItem>
-              )} */}
             </Select>
           </FormControl>
 
@@ -263,9 +271,10 @@ const LoginPage: React.FC = () => {
             fullWidth
             onClick={handleStart}
             disabled={
+              !sessionId ||
               !teamName.trim() ||
-              // selectedTeamNumber === "" ||
-              !!getTeamNameError()
+              !!getTeamNameError() ||
+              isCreating
             }
             sx={{
               padding: "12px",
@@ -279,7 +288,14 @@ const LoginPage: React.FC = () => {
               },
             }}
           >
-            Start
+            {isCreating ? (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <CircularProgress size={20} sx={{ color: "white" }} />
+                <span>Joining...</span>
+              </Box>
+            ) : (
+              "Start"
+            )}
           </GlobalButton>
         </Box>
       </Box>

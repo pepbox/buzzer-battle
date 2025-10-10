@@ -41,7 +41,7 @@ const App: React.FC = () => {
 
   return (
     <Routes>
-      {/* <Route path="/game/:sessionId/*" element={<GameMain />} /> */}
+      <Route path="/game/:sessionId/*" element={<GameMain />} />
       <Route path="/game/*" element={<GameMain />} />
       {/* <Route path="/admin/:sessionId/*" element={<AdminMain />} /> */}
 

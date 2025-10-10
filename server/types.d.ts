@@ -6,9 +6,9 @@ declare global {
   namespace Express {
     interface Request {
       user: {
-        id: mongoose.Types.ObjectId;
-        role: 'USER' | 'ADMIN';
-        sessionId?: mongoose.Types.ObjectId;
+        id: string;
+        role: 'USER' | 'ADMIN' | 'TEAM';
+        sessionId: string;
       };
     }
     namespace Multer {
@@ -30,8 +30,9 @@ declare module "socket.io" {
   interface Socket {
     user?: {
       id: string;
-      role: "ADMIN" | "USER";
+      role: "ADMIN" | "USER" | "TEAM";
       name: string;
+      sessionId: string;
     };
   }
 }

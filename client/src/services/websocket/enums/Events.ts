@@ -1,6 +1,8 @@
 export enum Events {
-    SESSION_UPDATE = "SESSION_UPDATE",
-    PLAYERS_UPDATE = "PLAYERS_UPDATE",
-    PLAYER_STAT_UPDATE = "PLAYER_STAT_UPDATE",
-    PLAYER_SELFIE_UPDATE = "PLAYER_SELFIE_UPDATE",
+    // Buzzer Battle Events
+    GAME_STATE_CHANGED = "game-state-changed",
+    BUZZER_PRESSED = "buzzer-pressed",
+    BUZZER_PRESSED_SUCCESS = "buzzer-pressed-success",
+    BUZZER_ERROR = "buzzer-error",
+    PRESS_BUZZER = "press-buzzer",
 }
