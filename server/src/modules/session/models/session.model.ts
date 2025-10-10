@@ -9,17 +9,16 @@ const sessionSchema = new Schema<ISession>({
     status: {
         type: String,
         enum: Object.values(SessionStatus),
-        default: SessionStatus.WAITING
+        default: SessionStatus.NOT_STARTED
     },
+    sessionName: { type: String, required: true },
+    numberOfTeams: { type: Number, default: null },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
 }, {
     timestamps: true
 });
 
-// Indexes for performance
-sessionSchema.index({ sessionCode: 1 });
-sessionSchema.index({ status: 1 });
 
 export const Session = model<ISession>('Session', sessionSchema);
 export { ISession };

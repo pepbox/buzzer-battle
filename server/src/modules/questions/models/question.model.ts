@@ -8,15 +8,31 @@ const questionSchema = new Schema<IQuestion>({
         required: true,
         trim: true
     },
-    keyAspect: {
-        type: String,
-        required: true,
-        trim: true
-    },
+    options: [
+        {
+            _id: {
+                type: Schema.Types.ObjectId,
+                auto: true
+            },
+            optionText: {
+                type: String,
+                required: true,
+                trim: true
+            }
+        }
+    ],
     questionImage: {
         type: String,
         required: false,
-    }
+    },
+    quetionVideo: {
+        type: String,
+        required: false,
+    },
+    correctAnswer: {
+        type: String,
+        required: true,
+    },
 }, {
     timestamps: true
 });

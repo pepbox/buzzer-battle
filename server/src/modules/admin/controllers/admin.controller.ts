@@ -4,8 +4,8 @@ import SessionService from '../../session/services/session.service';
 import { generateAccessToken, generateRefreshToken } from '../../../utils/jwtUtils';
 import AdminServices from '../services/admin.service';
 import { setCookieOptions } from '../../../utils/cookieOptions';
-import PlayerService from '../../players/services/player.service';
-import { Player } from '../../players/models/player.model';
+// import PlayerService from '../../players/services/player.service';
+// import { Player } from '../../players/models/player.model';
 import QuestionService from '../../questions/services/question.service';
 import { Question } from '../../questions/models/question.model';
 import { SessionStatus } from '../../session/types/enums';
@@ -14,7 +14,7 @@ import TeamService from '../../teams/services/team.service';
 
 const adminService = new AdminServices();
 const sessionService = new SessionService();
-const playerService = new PlayerService(Player); // Assuming you have a player service
+// const playerService = new PlayerService(Player); // Assuming you have a player service
 const questionService = new QuestionService(Question); // Assuming you have a question service
 const fileService = new FileService();
 const teamService = new TeamService();

@@ -4,20 +4,20 @@ import { IQuestionResponse } from '../types/interfaces';
 
 const questionResponseSchema = new Schema<IQuestionResponse>(
     {
-        question: {
+        questionId: {
             type: Schema.Types.ObjectId,
             ref: 'Question',
             required: true,
         },
-        player: {
+        team: {
             type: Schema.Types.ObjectId,
-            ref: 'Player',
+            ref: 'Team',
             required: true,
         },
         response: {
-            type: String,
+            type: Schema.Types.ObjectId,
             required: true,
-            trim: true,
+            ref: 'Option'
         },
     }, {
     timestamps: true

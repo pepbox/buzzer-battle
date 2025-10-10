@@ -3,10 +3,12 @@ import { SessionStatus } from "./enums";
 
 export interface ISession extends Document {
     _id: string;
-    questionTimeLimit: number; // in seconds
-    answerTimeLimit: number; // in seconds
-    questions: string[]; // question IDs
+    sessionName: string;
+    numberOfTeams: number | null;
+    questions: string[];
     status: SessionStatus;
+    questionTimeLimit: number;
+    answerTimeLimit: number;
     createdAt: Date;
     updatedAt: Date;
 }
