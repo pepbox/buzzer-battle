@@ -11,7 +11,7 @@ const LeaderBoardPage: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
 
   // Fetch overall leaderboard
-  const { data, isLoading, error, refetch } = useFetchOverallLeaderboardQuery();
+  const { data, isLoading, error } = useFetchOverallLeaderboardQuery();
 
   // Listen for game state changes to auto-navigate
   useEffect(() => {
@@ -28,15 +28,6 @@ const LeaderBoardPage: React.FC = () => {
       websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChange);
     };
   }, [navigate, sessionId]);
-
-  // Refetch leaderboard periodically to get latest scores
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refetch();
-    }, 5000); // Refetch every 5 seconds
-
-    return () => clearInterval(interval);
-  }, [refetch]);
 
   const handleBack = () => {
     // Navigate back to buzzer round or home
@@ -68,28 +59,23 @@ const LeaderBoardPage: React.FC = () => {
           minHeight: "100vh",
         }}
       >
-        <Typography color="error">
-          Failed to load leaderboard
-        </Typography>
+        <Typography color="error">Failed to load leaderboard</Typography>
       </Box>
     );
   }
 
   // Convert API response to LeaderBoardTeam format
-  const teams: LeaderBoardTeam[] = data.data.leaderboard.map((leaderboardTeam, index) => ({
-    id: leaderboardTeam._id,
-    name: leaderboardTeam.teamName,
-    score: leaderboardTeam.teamScore,
-    scoreChange: 0, // We don't have previous scores to calculate change
-    rank: index + 1,
-  }));
-
-  return (
-    <LeaderBoard
-      teams={teams}
-      onBack={handleBack}
-    />
+  const teams: LeaderBoardTeam[] = data.data.leaderboard.map(
+    (leaderboardTeam, index) => ({
+      id: leaderboardTeam._id,
+      name: leaderboardTeam.teamName,
+      score: leaderboardTeam.teamScore,
+      scoreChange: 0, // We don't have previous scores to calculate change
+      rank: index + 1,
+    })
   );
+
+  return <LeaderBoard teams={teams} onBack={handleBack} />;
 };
 
 export default LeaderBoardPage;

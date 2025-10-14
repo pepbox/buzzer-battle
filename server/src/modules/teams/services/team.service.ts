@@ -1,6 +1,7 @@
 import mongoose, { Types } from "mongoose";
 import { Team } from "../models/team.model";
 import { ITeam } from "../types/interface";
+import { Session } from "../../session/models/session.model";
 
 export default class TeamService {
     private session?: mongoose.ClientSession;
@@ -24,7 +25,7 @@ export default class TeamService {
         if (this.session) {
             query.session(this.session);
         }
-        
+
         const existingTeam = await query;
         if (existingTeam) {
             throw new Error("Team number already exists in this session");
@@ -42,7 +43,7 @@ export default class TeamService {
         if (this.session) {
             options.session = this.session;
         }
-        
+
         await team.save(options);
         return team;
     }
@@ -53,7 +54,7 @@ export default class TeamService {
         if (this.session) {
             query.session(this.session);
         }
-        
+
         const team = await query;
         if (!team) {
             throw new Error("Team not found");
@@ -80,11 +81,11 @@ export default class TeamService {
         const query = Team.find({ session: sessionId })
             .sort({ teamScore: -1, joinedAt: 1 }) // Sort by score descending, then by joined time ascending
             .select('teamNumber teamName teamScore joinedAt');
-        
+
         if (this.session) {
             query.session(this.session);
         }
-        
+
         return await query;
     }
 
@@ -97,19 +98,19 @@ export default class TeamService {
         if (this.session) {
             query.session(this.session);
         }
-        
+
         const team = await query;
         if (!team) {
             throw new Error("Team not found");
         }
 
         team.teamScore += points;
-        
+
         const options: any = {};
         if (this.session) {
             options.session = this.session;
         }
-        
+
         await team.save(options);
         return team;
     }
@@ -124,4 +125,14 @@ export default class TeamService {
         }
         return await query;
     }
+
+    // Fetch total number of teams in a session
+    async fetchTotalTeamsInSession(sessionId: Types.ObjectId | string): Promise<number> {
+        const sessionDoc = await Session.findById(sessionId).select('numberOfTeams');
+        if (!sessionDoc || typeof sessionDoc.numberOfTeams !== 'number') {
+            throw new Error("Session not found or numberOfTeams not set");
+        }
+        return sessionDoc.numberOfTeams;
+    }
+
 }

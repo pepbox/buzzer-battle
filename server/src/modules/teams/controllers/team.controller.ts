@@ -151,3 +151,36 @@ export const fetchOverallLeaderboard = async (
         next(new AppError("Failed to fetch leaderboard.", 500));
     }
 };
+
+/**
+ * Fetch the total number of teams in a session
+ * GET /api/v1/teams/total/:sessionId
+ */
+export const fetchTotalTeamsInSession = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const { sessionId } = req.params;
+
+        if (!sessionId) {
+            return next(new AppError("Session ID is required.", 400));
+        }
+
+        const totalTeams = await teamService.fetchTotalTeamsInSession(sessionId);
+
+        res.status(200).json({
+            message: "Total number of teams fetched successfully.",
+            data: {
+                totalTeams,
+            },
+        });
+    } catch (error: any) {
+        console.error("Error fetching total teams in session:", error);
+        if (error.message === "Session not found or numberOfTeams not set") {
+            return next(new AppError(error.message, 404));
+        }
+        next(new AppError("Failed to fetch total teams in session.", 500));
+    }
+};

@@ -64,6 +64,13 @@ export const teamApi = api.injectEndpoints({
       }),
       providesTags: ['Leaderboard'],
     }),
+
+    fetchTotalTeamsInSession: builder.query<{ message: string; data: { totalTeams: number } }, { sessionId: string }>({
+      query: ({ sessionId }) => ({
+        url: `/teams/fetchTotalTeamsInSession/${sessionId}`,
+        method: 'GET',
+      }),
+    }),
   }),
 });
 
@@ -73,4 +80,5 @@ export const {
   useLazyFetchCurrentTeamQuery,
   useFetchOverallLeaderboardQuery,
   useLazyFetchOverallLeaderboardQuery,
+  useFetchTotalTeamsInSessionQuery,
 } = teamApi;

@@ -19,8 +19,36 @@ export interface BuzzerLeaderboardResponse {
   };
 }
 
+export interface PressBuzzerRequest {
+  timestamp: string;
+}
+
+export interface PressBuzzerResponse {
+  message: string;
+  data: {
+    rank: number;
+    teamId: string;
+    timestamp: string;
+    buzzerEntry: {
+      _id: string;
+      questionId: string;
+      timestamp: string;
+      createdAt: Date;
+    };
+  };
+}
+
 export const buzzerApi = api.injectEndpoints({
   endpoints: (builder) => ({
+    pressBuzzer: builder.mutation<PressBuzzerResponse, PressBuzzerRequest>({
+      query: (body) => ({
+        url: '/buzzer/press',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['BuzzerLeaderboard'],
+    }),
+
     fetchBuzzerLeaderboard: builder.query<BuzzerLeaderboardResponse, void>({
       query: () => ({
         url: '/buzzer/leaderboard',
@@ -40,6 +68,7 @@ export const buzzerApi = api.injectEndpoints({
 });
 
 export const {
+  usePressBuzzerMutation,
   useFetchBuzzerLeaderboardQuery,
   useLazyFetchBuzzerLeaderboardQuery,
   useFetchBuzzerLeaderboardByQuestionQuery,

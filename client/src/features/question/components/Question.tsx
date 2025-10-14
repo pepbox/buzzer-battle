@@ -33,7 +33,10 @@ const Question: React.FC<QuestionProps> = ({
   const currentSelectedId = selectedOptionId || internalSelectedId;
 
   const handleOptionClick = (option: string) => {
-    if (disabled) return;
+    if (disabled) {
+      console.log("Question component - Click ignored (disabled)");
+      return;
+    }
 
     if (onOptionSelect) {
       onOptionSelect(option);

@@ -5,10 +5,9 @@ import QuestionBuzzer from "../../question/components/Question_Buzzer";
 import Buzzer from "../../../components/ui/Buzzer";
 import normalBg from "../../../assets/background/question_bg.webp";
 import { useFetchCurrentQuestionQuery } from "../../question/services/questions.api";
+import { usePressBuzzerMutation } from "../services/buzzerApi";
 import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
-import { websocketService } from "../../../services/websocket/websocketService";
-import { Events } from "../../../services/websocket/enums/Events";
 import Loader from "../../../components/ui/Loader";
 import Error from "../../../components/ui/Error";
 
@@ -19,45 +18,29 @@ const BuzzerRound: React.FC = () => {
   const [isRunning, setIsRunning] = useState(true);
   const [buzzerPressed, setBuzzerPressed] = useState(false);
   const [buzzerError, setBuzzerError] = useState<string | null>(null);
+  const [timeIsUp, setTimeIsUp] = useState(false);
 
   // Get current team from Redux
   const team = useAppSelector((state: RootState) => state.team.team);
-  
-  // Fetch current question
-  const { data: questionData, isLoading, error } = useFetchCurrentQuestionQuery();
 
-  const timeLimit = 30; // 30 seconds for buzzer round
+  // Fetch current question
+  const {
+    data: questionData,
+    isLoading,
+    error,
+  } = useFetchCurrentQuestionQuery();
+
+  // Press buzzer mutation
+  const [pressBuzzer, { isLoading: isPressing }] = usePressBuzzerMutation();
+
+  const timeLimit = 30;
   const question = questionData?.data?.question;
   const currentQuestionIndex = questionData?.data?.currentQuestionIndex || 1;
 
   // Progress calculation (0 to 100)
   const progress = (timeElapsed / timeLimit) * 100;
 
-  // Listen for buzzer success/error events
-  useEffect(() => {
-    const handleBuzzerSuccess = () => {
-      setBuzzerPressed(true);
-      setBuzzerError(null);
-      // Navigate to buzzer leaderboard after short delay
-      setTimeout(() => {
-        navigate(`/game/${sessionId}/buzzer-leaderboard`);
-      }, 1000);
-    };
-
-    const handleBuzzerError = (data: { message: string }) => {
-      setBuzzerError(data.message || "Failed to press buzzer");
-      setIsRunning(true); // Resume timer if buzzer press failed
-    };
-
-    websocketService.on(Events.BUZZER_PRESSED_SUCCESS, handleBuzzerSuccess);
-    websocketService.on(Events.BUZZER_ERROR, handleBuzzerError);
-
-    return () => {
-      websocketService.off(Events.BUZZER_PRESSED_SUCCESS, handleBuzzerSuccess);
-      websocketService.off(Events.BUZZER_ERROR, handleBuzzerError);
-    };
-  }, [navigate, sessionId]);
-
+  // Timer effect
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
@@ -68,8 +51,7 @@ const BuzzerRound: React.FC = () => {
 
           if (newTime >= timeLimit) {
             setIsRunning(false);
-            // Time's up - navigate to leaderboard
-            navigate(`/game/${sessionId}/leaderboard`);
+            setTimeIsUp(true); // Set flag instead of navigating
             return timeLimit;
           }
 
@@ -83,18 +65,39 @@ const BuzzerRound: React.FC = () => {
         clearInterval(interval);
       }
     };
-  }, [isRunning, timeElapsed, timeLimit, buzzerPressed, navigate, sessionId]);
+  }, [isRunning, timeElapsed, timeLimit, buzzerPressed]);
 
-  const handleBuzzerPress = () => {
-    if (buzzerPressed || !team) return;
-    
+  // Navigate when time is up (separate effect to avoid setState during render)
+  useEffect(() => {
+    if (timeIsUp) {
+      navigate(`/game/${sessionId}/leaderboard`);
+    }
+  }, [timeIsUp, navigate, sessionId]);
+
+  const handleBuzzerPress = async () => {
+    if (buzzerPressed || !team || isPressing) return;
+
     setIsRunning(false); // Stop the timer when buzzer is pressed
     setBuzzerPressed(true);
-    
-    // Emit buzzer press event via WebSocket
-    websocketService.emit(Events.PRESS_BUZZER, {
-      timestamp: BigInt(Date.now()).toString(),
-    });
+    setBuzzerError(null);
+
+    try {
+      // Call API to press buzzer
+      const timestamp = Date.now().toString();
+      await pressBuzzer({ timestamp }).unwrap();
+
+      // Navigate to buzzer leaderboard on success
+      setTimeout(() => {
+        navigate(`/game/${sessionId}/buzzer-leaderboard`);
+      }, 500);
+    } catch (error: any) {
+      // Handle error
+      const errorMessage =
+        error?.data?.message || "Failed to press buzzer. Please try again.";
+      setBuzzerError(errorMessage);
+      setBuzzerPressed(false);
+      setIsRunning(true); // Resume timer on error
+    }
   };
 
   // Show loading state
@@ -203,7 +206,7 @@ const BuzzerRound: React.FC = () => {
             size="large"
             onPress={handleBuzzerPress}
             showPressText={true}
-            disabled={buzzerPressed}
+            disabled={buzzerPressed || isPressing}
           />
         </Box>
       </Box>

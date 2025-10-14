@@ -1,14 +1,9 @@
 import { Route, Routes } from "react-router-dom";
 import LoginPage from "../features/game/pages/login.Page";
 import BuzzerRound from "../features/game/pages/Buzzer_Round";
+import BuzzerLeaderboard from "../features/game/pages/BuzzerLeaderboard";
 import QuestionRoundPage from "../features/game/pages/Question_Round_Page";
-import {
-  CloseCall,
-  NailedIt,
-  TimesUp,
-} from "../features/question/components/StatusCard";
 import LeaderBoardPage from "../features/game/pages/LeaderBoard_Page";
-import CorrectAnswer from "../features/question/components/Correct_Answer";
 import Overlay from "../components/ui/Overlay";
 
 const GameMain = () => {
@@ -47,22 +42,9 @@ const GameMain = () => {
             <Overlay>
               <Routes>
                 <Route path="/buzzer" element={<BuzzerRound />} />
+                <Route path="/buzzer-leaderboard" element={<BuzzerLeaderboard />} />
                 <Route path="/question" element={<QuestionRoundPage />} />
-                <Route path="/times-up" element={<TimesUp />} />
-                <Route path="/nailed-it" element={<NailedIt />} />
-                <Route path="/wrong-answer" element={<CloseCall />} />
                 <Route path="/leaderboard" element={<LeaderBoardPage />} />
-                <Route
-                  path="/correct-answer"
-                  element={
-                    <CorrectAnswer
-                      pointsEarned={10}
-                      teamName="Mystery Master"
-                      teamRank={2}
-                      totalScore={15000}
-                    />
-                  }
-                />
               </Routes>
             </Overlay>
           }

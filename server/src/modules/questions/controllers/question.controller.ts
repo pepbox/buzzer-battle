@@ -109,31 +109,31 @@ export const sendQuestionResponse = async (
         }
 
         // Check if the game status is ANSWERING
-        if (gameState.gameStatus !== GameStatus.ANSWERING) {
-            return next(
-                new AppError("Questions can only be answered during the answering phase.", 403)
-            );
-        }
+        // if (gameState.gameStatus !== GameStatus.ANSWERING) {
+        //     return next(
+        //         new AppError("Questions can only be answered during the answering phase.", 403)
+        //     );
+        // }
 
-        // Check if this team is the current answering team
-        if (!gameState.currentAnsweringTeam || 
-            gameState.currentAnsweringTeam.toString() !== teamId.toString()) {
-            return next(
-                new AppError("Only the current answering team can submit a response.", 403)
-            );
-        }
+        // // Check if this team is the current answering team
+        // if (!gameState.currentAnsweringTeam || 
+        //     gameState.currentAnsweringTeam.toString() !== teamId.toString()) {
+        //     return next(
+        //         new AppError("Only the current answering team can submit a response.", 403)
+        //     );
+        // }
 
-        // Check if the question belongs to the current session
-        const currentQuestion = await questionService.fetchCurrentQuestion(
-            sessionId,
-            gameState.currentQuestionIndex
-        );
+        // // Check if the question belongs to the current session
+        // const currentQuestion = await questionService.fetchCurrentQuestion(
+        //     sessionId,
+        //     gameState.currentQuestionIndex
+        // );
 
-        if (!currentQuestion || (currentQuestion as any)._id.toString() !== questionId) {
-            return next(
-                new AppError("Question does not match the current question.", 400)
-            );
-        }
+        // if (!currentQuestion || (currentQuestion as any)._id.toString() !== questionId) {
+        //     return next(
+        //         new AppError("Question does not match the current question.", 400)
+        //     );
+        // }
 
         // Create question response
         const questionResponse = await questionService.createQuestionResponse(

@@ -21,7 +21,7 @@ export default class QuestionService {
         if (this.session) {
             sessionQuery.session(this.session);
         }
-        
+
         const sessionData = await sessionQuery;
         if (!sessionData) {
             throw new Error("Session not found");
@@ -36,7 +36,7 @@ export default class QuestionService {
         if (this.session) {
             questionQuery.session(this.session);
         }
-        
+
         return await questionQuery;
     }
 
@@ -48,7 +48,7 @@ export default class QuestionService {
         if (this.session) {
             query.session(this.session);
         }
-        
+
         return await query;
     }
 
@@ -60,7 +60,7 @@ export default class QuestionService {
         if (this.session) {
             query.session(this.session);
         }
-        
+
         return await query;
     }
 
@@ -78,7 +78,7 @@ export default class QuestionService {
         if (this.session) {
             existingResponseQuery.session(this.session);
         }
-        
+
         const existingResponse = await existingResponseQuery;
         if (existingResponse) {
             throw new Error("Team has already responded to this question");
@@ -94,7 +94,7 @@ export default class QuestionService {
         if (this.session) {
             options.session = this.session;
         }
-        
+
         await questionResponse.save(options);
         return questionResponse;
     }
@@ -111,7 +111,7 @@ export default class QuestionService {
         if (this.session) {
             questionQuery.session(this.session);
         }
-        
+
         const question = await questionQuery;
         if (!question) {
             throw new Error("Question not found");
@@ -138,7 +138,7 @@ export default class QuestionService {
         if (this.session) {
             sessionQuery.session(this.session);
         }
-        
+
         const sessionData = await sessionQuery;
         if (!sessionData) {
             throw new Error("Session not found");
@@ -159,7 +159,7 @@ export default class QuestionService {
         if (this.session) {
             query.session(this.session);
         }
-        
+
         const response = await query;
         return response !== null;
     }

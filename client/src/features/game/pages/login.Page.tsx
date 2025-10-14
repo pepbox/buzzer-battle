@@ -15,22 +15,40 @@ import {
 import { useAppDispatch } from "../../../app/hooks";
 import GlobalButton from "../../../components/ui/button";
 import normalBg from "../../../assets/background/normal_bg.webp";
-import { useCreateTeamMutation } from "../services/teamApi";
+import {
+  useCreateTeamMutation,
+  useFetchTotalTeamsInSessionQuery,
+} from "../services/teamApi";
 import { setTeam } from "../services/teamSlice";
+import Loader from "../../../components/ui/Loader";
+import ErrorLayout from "../../../components/ui/Error";
 
 const LoginPage: React.FC = () => {
+  const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { sessionId } = useParams<{ sessionId: string }>();
+  const theme = useTheme();
+
+  // All hooks must be called before any conditional returns
+  const {
+    data: totalTeams,
+    isLoading,
+    error,
+  } = useFetchTotalTeamsInSessionQuery(
+    { sessionId: sessionId || "" },
+    { skip: !sessionId }
+  );
+
   const [teamName, setTeamName] = useState<string>("");
   const [selectedTeamNumber, setSelectedTeamNumber] = useState<number | "1">(
     "1"
   );
   const [showSnackbar, setShowSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
-  
+
   // RTK Query mutation for creating team
-  const [createTeam, { isLoading: isCreating, error: createError }] = useCreateTeamMutation();
+  const [createTeam, { isLoading: isCreating, error: createError }] =
+    useCreateTeamMutation();
 
   // Check if sessionId is present
   useEffect(() => {
@@ -43,16 +61,27 @@ const LoginPage: React.FC = () => {
   // Show error from API if any
   useEffect(() => {
     if (createError) {
-      const errorMessage = 'data' in createError && createError.data 
-        ? (createError.data as any).message || "Failed to create team"
-        : "Failed to create team. Please try again.";
+      const errorMessage =
+        "data" in createError && createError.data
+          ? (createError.data as any).message || "Failed to create team"
+          : "Failed to create team. Please try again.";
       setSnackbarMessage(errorMessage);
       setShowSnackbar(true);
     }
   }, [createError]);
 
+  // Conditional returns AFTER all hooks
+  if (isLoading) {
+    return <Loader />;
+  }
+
+  if (error) {
+    return <ErrorLayout />;
+  }
+
   // Dummy team data for now (team numbers)
-  const dummyTeams = Array.from({ length: 10 }, (_, i) => ({
+  const totalTeamsNumber = totalTeams?.data?.totalTeams || 0;
+  const dummyTeams = Array.from({ length: totalTeamsNumber }, (_, i) => ({
     id: i + 1,
     name: `Team ${i + 1}`,
   }));
@@ -132,14 +161,16 @@ const LoginPage: React.FC = () => {
       }).unwrap();
 
       // Store team data in Redux
-      dispatch(setTeam({
-        _id: result.data.team._id,
-        teamName: result.data.team.teamName,
-        teamNumber: result.data.team.teamNumber,
-        teamScore: result.data.team.teamScore,
-        joinedAt: result.data.team.joinedAt,
-        sessionId: result.data.team.sessionId,
-      }));
+      dispatch(
+        setTeam({
+          _id: result.data.team._id,
+          teamName: result.data.team.teamName,
+          teamNumber: result.data.team.teamNumber,
+          teamScore: result.data.team.teamScore,
+          joinedAt: result.data.team.joinedAt,
+          sessionId: result.data.team.sessionId,
+        })
+      );
 
       // Navigate to buzzer page (initial waiting screen)
       navigate(`/game/${sessionId}/buzzer`);
@@ -157,7 +188,6 @@ const LoginPage: React.FC = () => {
     if (!teamName) return "";
     return validateTeamName(teamName);
   };
-  const theme = useTheme();
 
   return (
     <Box
