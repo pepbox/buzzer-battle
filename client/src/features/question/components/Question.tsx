@@ -1,14 +1,17 @@
 import React, { useState } from "react";
 import { Box, Typography, Button } from "@mui/material";
 
+export interface QuestionOption {
+  optionId: string;
+  optionText: string;
+}
+
 export interface QuestionData {
   id: string;
   text?: string;
-  media?: {
-    url: string;
-    alt?: string;
-  };
-  options: string[];
+  image?: string;
+  video?: string;
+  options: QuestionOption[];
 }
 
 interface QuestionProps {
@@ -32,16 +35,17 @@ const Question: React.FC<QuestionProps> = ({
 
   const currentSelectedId = selectedOptionId || internalSelectedId;
 
-  const handleOptionClick = (option: string) => {
+  const handleOptionClick = (optionId: string) => {
     if (disabled) {
       console.log("Question component - Click ignored (disabled)");
       return;
     }
 
     if (onOptionSelect) {
-      onOptionSelect(option);
+      console.log("Question component - Option selected:", optionId);
+      onOptionSelect(optionId);
     } else {
-      setInternalSelectedId(option);
+      setInternalSelectedId(optionId);
     }
   };
 
@@ -104,10 +108,11 @@ const Question: React.FC<QuestionProps> = ({
   };
 
   const renderMedia = () => {
-    if (!questionData.media) return null;
+    const mediaUrl = questionData.image || questionData.video;
 
-    const { url, alt } = questionData.media;
-    const mediaType = getMediaType(url);
+    if (!mediaUrl) return null;
+
+    const mediaType = getMediaType(mediaUrl);
 
     const mediaStyles = {
       width: "100%",
@@ -122,8 +127,8 @@ const Question: React.FC<QuestionProps> = ({
         return (
           <Box
             component="img"
-            src={url}
-            alt={alt || "Question media"}
+            src={mediaUrl}
+            alt="Question media"
             sx={mediaStyles}
           />
         );
@@ -131,7 +136,7 @@ const Question: React.FC<QuestionProps> = ({
         return (
           <Box
             component="video"
-            src={url}
+            src={mediaUrl}
             controls
             sx={{
               ...mediaStyles,
@@ -175,7 +180,8 @@ const Question: React.FC<QuestionProps> = ({
             fontWeight: 700,
             textAlign: "center",
             lineHeight: 1.4,
-            marginBottom: questionData.media ? "20px" : "24px",
+            marginBottom:
+              questionData.image || questionData.video ? "20px" : "24px",
             wordBreak: "break-word",
           }}
         >
@@ -193,12 +199,12 @@ const Question: React.FC<QuestionProps> = ({
       >
         {questionData.options.map((option, index) => (
           <Button
-            key={index}
-            onClick={() => handleOptionClick(option)}
+            key={option.optionId}
+            onClick={() => handleOptionClick(option.optionId)}
             disabled={disabled}
             sx={{
-              backgroundColor: getOptionBackgroundColor(option),
-              color: getOptionTextColor(option),
+              backgroundColor: getOptionBackgroundColor(option.optionId),
+              color: getOptionTextColor(option.optionId),
               border: "1.5px solid #72BFFF",
               borderRadius: "12px",
               padding: "8px",
@@ -211,8 +217,8 @@ const Question: React.FC<QuestionProps> = ({
               transition: "all 0.2s ease-in-out",
               "&:hover": {
                 backgroundColor: disabled
-                  ? getOptionBackgroundColor(option)
-                  : option === currentSelectedId
+                  ? getOptionBackgroundColor(option.optionId)
+                  : option.optionId === currentSelectedId
                   ? "#1976D2"
                   : "#F1F5F9",
               },
@@ -220,8 +226,8 @@ const Question: React.FC<QuestionProps> = ({
                 transform: disabled ? "none" : "translateY(0px)",
               },
               "&.Mui-disabled": {
-                backgroundColor: getOptionBackgroundColor(option),
-                color: getOptionTextColor(option),
+                backgroundColor: getOptionBackgroundColor(option.optionId),
+                color: getOptionTextColor(option.optionId),
                 opacity: 0.8,
               },
             }}
@@ -261,7 +267,7 @@ const Question: React.FC<QuestionProps> = ({
                   textAlign: "left",
                 }}
               >
-                {option}
+                {option.optionText}
               </Typography>
             </Box>
           </Button>

@@ -47,7 +47,10 @@ export const fetchCurrentQuestion = async (
             questionText: question.questionText,
             questionImage: question.questionImage,
             quetionVideo: question.quetionVideo,
-            options: question.options,
+            options: question.options.map(opt => ({
+                optionId: opt.optionId,
+                optionText: opt.optionText,
+            })),
             createdAt: question.createdAt,
             updatedAt: question.updatedAt,
         };
@@ -84,6 +87,7 @@ export const sendQuestionResponse = async (
         const { responseOptionId } = req.body;
         const teamId = req.user?.id;
         const sessionId = req.user?.sessionId;
+        console.log("Received responseOptionId:", responseOptionId);
 
         // Validation
         if (!teamId || !sessionId) {
@@ -94,12 +98,13 @@ export const sendQuestionResponse = async (
             return next(new AppError("Response option ID is required.", 400));
         }
 
-        if (!mongoose.Types.ObjectId.isValid(questionId)) {
-            return next(new AppError("Invalid question ID.", 400));
+        // Validate responseOptionId format (should be a single lowercase letter)
+        if (typeof responseOptionId !== 'string' || !/^[a-z]$/.test(responseOptionId)) {
+            return next(new AppError("Invalid response option ID. Must be a single lowercase letter (a-z).", 400));
         }
 
-        if (!mongoose.Types.ObjectId.isValid(responseOptionId)) {
-            return next(new AppError("Invalid response option ID.", 400));
+        if (!mongoose.Types.ObjectId.isValid(questionId)) {
+            return next(new AppError("Invalid question ID.", 400));
         }
 
         // Fetch game state

@@ -2,7 +2,7 @@ import { Schema, model } from 'mongoose';
 import { ITeam } from '../types/interface';
 
 const TeamSchema = new Schema<ITeam>({
-    teamNumber: { type: Number, required: true, unique: true },
+    teamNumber: { type: Number, required: true },
     teamName: { type: String, required: true },
     joinedAt: { type: Date, required: true, default: Date.now },
     teamScore: { type: Number, required: true, default: 0 },

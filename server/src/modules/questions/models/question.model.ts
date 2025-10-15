@@ -10,9 +10,10 @@ const questionSchema = new Schema<IQuestion>({
     },
     options: [
         {
-            _id: {
-                type: Schema.Types.ObjectId,
-                auto: true
+            optionId: {
+                type: String,
+                required: true,
+                // Should be 'a', 'b', 'c', 'd', etc.
             },
             optionText: {
                 type: String,
@@ -32,6 +33,7 @@ const questionSchema = new Schema<IQuestion>({
     correctAnswer: {
         type: String,
         required: true,
+        // This should be the optionId of the correct option (e.g., 'a', 'b', 'c', 'd')
     },
 }, {
     timestamps: true

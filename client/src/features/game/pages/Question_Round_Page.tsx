@@ -35,7 +35,7 @@ const QuestionRoundPage: React.FC = () => {
   } | null>(null);
 
   // Get team from Redux
-  const team = useAppSelector((state: RootState) => state.team.team);
+  const team = useAppSelector((state: RootState) => state.team?.team);
   const gameState = useAppSelector(
     (state: RootState) => state.gameState.gameState
   );
@@ -73,23 +73,13 @@ const QuestionRoundPage: React.FC = () => {
     setSubmittingAnswer(true);
 
     try {
-      // Find the option ID for the selected answer text
-      const selectedOption = question.options.find(
-        (opt) => opt.optionText === answer
-      );
-
-      if (!selectedOption) {
-        console.error("Selected option not found. Answer:", answer);
-        console.error("Available options:", question.options);
-        setSubmittingAnswer(false);
-        setIsAnswered(false);
-        return;
-      }
+      // The answer is already the optionId, so we can use it directly
+      console.log("Submitting answer with optionId:", answer);
 
       // Submit the answer
       const result = await sendResponse({
         questionId: question._id,
-        responseOptionId: selectedOption._id,
+        responseOptionId: answer,
       }).unwrap();
 
       console.log("Answer submitted successfully:", result);
@@ -181,13 +171,9 @@ const QuestionRoundPage: React.FC = () => {
   const questionDataFormatted: QuestionData = {
     id: question._id,
     text: question.questionText,
-    media: question.questionImage
-      ? {
-          url: question.questionImage,
-          alt: "Question image",
-        }
-      : undefined,
-    options: question.options.map((opt) => opt.optionText),
+    image: question.questionImage,
+    video: question.quetionVideo,
+    options: question.options,
   };
 
   return (

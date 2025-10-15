@@ -68,7 +68,7 @@ export default class QuestionService {
     async createQuestionResponse(
         questionId: Types.ObjectId | string,
         teamId: Types.ObjectId | string,
-        responseOptionId: Types.ObjectId | string
+        responseOptionId: string
     ): Promise<IQuestionResponse> {
         // Check if team has already responded to this question
         const existingResponseQuery = QuestionResponse.findOne({
@@ -103,7 +103,7 @@ export default class QuestionService {
     async validateAndUpdateScore(
         questionId: Types.ObjectId | string,
         teamId: Types.ObjectId | string,
-        responseOptionId: Types.ObjectId | string,
+        responseOptionId: string,
         points: number = 150
     ): Promise<{ isCorrect: boolean; pointsAwarded: number }> {
         // Fetch the question
@@ -117,7 +117,7 @@ export default class QuestionService {
             throw new Error("Question not found");
         }
 
-        // Check if the answer is correct
+        // Check if the answer is correct by comparing optionId with correctAnswer
         const isCorrect = question.correctAnswer === responseOptionId.toString();
 
         // Update team score if correct

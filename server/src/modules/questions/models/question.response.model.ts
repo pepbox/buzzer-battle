@@ -15,9 +15,8 @@ const questionResponseSchema = new Schema<IQuestionResponse>(
             required: true,
         },
         response: {
-            type: Schema.Types.ObjectId,
+            type: String,
             required: true,
-            ref: 'Option'
         },
     }, {
     timestamps: true

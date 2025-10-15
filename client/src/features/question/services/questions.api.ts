@@ -1,7 +1,7 @@
 import { api } from "../../../app/api";
 
 export interface QuestionOption {
-    _id: string;
+    optionId: string;
     optionText: string;
 }
 
