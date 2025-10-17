@@ -1,30 +1,31 @@
 import React, { useState } from "react";
 import Dashboard from "../components/Dashboard";
+import TeamResponsesModal from "../components/TeamResponsesModal";
 import {
-  useFetchDashboardDataQuery,
-  useLazyGetPlayerWithResponsesQuery,
-  useUpdatePlayerMutation,
+  useFetchTeamDashboardQuery,
+  useLazyFetchTeamResponsesQuery,
+  useUpdateTeamMutation,
 } from "../services/admin.Api";
 import ErrorLayout from "../../../components/ui/Error";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
+import { TeamResponse, Team } from "../types/interfaces";
 
 const DashboardPage: React.FC = () => {
-  const { data, isError } = useFetchDashboardDataQuery({});
-  const [UpdatePlayer] = useUpdatePlayerMutation();
-  const [getPlayerWithResponses, { isLoading: loadingResponses }] =
-    useLazyGetPlayerWithResponsesQuery();
+  const { data, isError, isLoading } = useFetchTeamDashboardQuery();
+  const [UpdateTeam] = useUpdateTeamMutation();
+  const [getTeamResponses, { isLoading: loadingResponses }] =
+    useLazyFetchTeamResponsesQuery();
 
-  const [playerWithResponses, setPlayerWithResponses] = useState<{
-    player: {
-      id: string;
-      name: string;
-      profilePhoto: string;
-      score: number;
-      team: number;
-    };
-    responses: any[];
-  } | null>(null);
+  const [teamResponsesModal, setTeamResponsesModal] = useState<{
+    open: boolean;
+    team: Team | null;
+    responses: TeamResponse[];
+  }>({
+    open: false,
+    team: null,
+    responses: [],
+  });
 
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
@@ -36,71 +37,59 @@ const DashboardPage: React.FC = () => {
     setSnackbar((prev) => ({ ...prev, open: false }));
   };
 
+  const handleCloseModal = () => {
+    setTeamResponsesModal({
+      open: false,
+      team: null,
+      responses: [],
+    });
+  };
+
   const handlers = {
-    onChangeName: (playerId: string, name: string) => {
-      UpdatePlayer({ playerId, name })
+    onUpdateTeam: (teamId: string, updateData: { teamName?: string; teamScore?: number }) => {
+      UpdateTeam({ teamId, data: updateData })
         .unwrap()
         .then(() => {
           setSnackbar({
             open: true,
-            message: "Player name updated successfully",
+            message: updateData.teamName
+              ? "Team name updated successfully"
+              : "Team score updated successfully",
             severity: "success",
           });
         })
         .catch((error) => {
           setSnackbar({
             open: true,
-            message: "Failed to update player name",
+            message: updateData.teamName
+              ? "Failed to update team name"
+              : "Failed to update team score",
             severity: "error",
           });
-          console.error("Failed to update player name:", error);
+          console.error("Failed to update team:", error);
         });
-      console.log("Change name for player:", playerId);
     },
 
-    onChangeScore: (playerId: string, newScore: number) => {
-      UpdatePlayer({ playerId, score: newScore })
-        .unwrap()
-        .then(() => {
-          setSnackbar({
-            open: true,
-            message: "Player score updated successfully",
-            severity: "success",
-          });
-        })
-        .catch((error) => {
-          setSnackbar({
-            open: true,
-            message: "Failed to update player score",
-            severity: "error",
-          });
-          console.error("Failed to update player score:", error);
-        });
-      console.log("Change score for player:", playerId, "New score:", newScore);
-    },
+    onViewResponses: (teamId: string) => {
+      const team = data?.data?.teams.find((t) => t._id === teamId);
+      if (!team) return;
 
-    onViewResponses: (playerId: string) => {
-      getPlayerWithResponses(playerId)
+      getTeamResponses(teamId)
         .unwrap()
         .then((response) => {
-          setPlayerWithResponses({
-            player: {
-              id: response.player.id,
-              name: response.player.name,
-              profilePhoto: response.player.profilePhoto,
-              score: response.player.score,
-              team: response.player.team,
-            },
+          setTeamResponsesModal({
+            open: true,
+            team: team,
             responses: response.responses,
           });
         })
         .catch((error) => {
           setSnackbar({
             open: true,
-            message: "Failed to fetch player responses",
+            message: "Failed to fetch team responses",
             severity: "error",
           });
-          console.error("Failed to fetch player responses:", error);
+          console.error("Failed to fetch team responses:", error);
         });
     },
   };
@@ -108,17 +97,43 @@ const DashboardPage: React.FC = () => {
   if (isError) {
     return <ErrorLayout />;
   }
+
+  if (isLoading || !data) {
+    return <div>Loading...</div>;
+  }
+  console.log("DashboardPage data:", data);
+  
+  // Construct header data
+  const headerData = {
+    gameStatus: data.data.gameState.gameStatus,
+    sessionName: data.data.session.sessionName,
+    teamsRegistered: data.data.statistics.totalTeamsRegistered,
+    totalTeams: data.data.session.numberOfTeams,
+    currentQuestion: data.data.statistics.currentQuestion,
+    totalQuestions: data.data.statistics.totalQuestions,
+  };
+
   return (
     <>
       <Dashboard
-        headerData={data?.headerData}
-        players={data?.players}
-        onChangeName={handlers?.onChangeName}
-        onChangeScore={handlers?.onChangeScore}
-        onViewResponses={handlers?.onViewResponses}
-        playerWithResponses={playerWithResponses}
-        loadingResponses={loadingResponses}
+        headerData={headerData}
+        teams={data.data.teams}
+        onUpdateTeam={handlers.onUpdateTeam}
+        onViewResponses={handlers.onViewResponses}
       />
+
+      {/* Team Responses Modal */}
+      <TeamResponsesModal
+        open={teamResponsesModal.open}
+        onClose={handleCloseModal}
+        teamName={teamResponsesModal.team?.teamName || ""}
+        teamNumber={teamResponsesModal.team?.teamNumber || 0}
+        teamScore={teamResponsesModal.team?.teamScore || 0}
+        responses={teamResponsesModal.responses}
+        loading={loadingResponses}
+      />
+
+      {/* Snackbar for notifications */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={3000}

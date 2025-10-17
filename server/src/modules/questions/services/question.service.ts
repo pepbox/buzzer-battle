@@ -147,7 +147,7 @@ export default class QuestionService {
         return sessionData.questions as any;
     }
 
-    // Check if team has responded to a question
+        // Check if team has responded to a question
     async hasTeamResponded(
         questionId: Types.ObjectId | string,
         teamId: Types.ObjectId | string
@@ -162,5 +162,21 @@ export default class QuestionService {
 
         const response = await query;
         return response !== null;
+    }
+
+    // Fetch all responses by team ID (for admin dashboard)
+    async fetchResponsesByTeamId(
+        teamId: Types.ObjectId | string
+    ): Promise<IQuestionResponse[]> {
+        const query = QuestionResponse.find({ team: teamId })
+            .populate('questionId')
+            .populate('team')
+            .sort({ createdAt: 1 }); // Oldest first
+
+        if (this.session) {
+            query.session(this.session);
+        }
+
+        return await query;
     }
 }

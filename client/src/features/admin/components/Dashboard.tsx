@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { DashboardProps } from "../types/interfaces";
 import {
   Box,
@@ -10,52 +10,38 @@ import {
   Button,
 } from "@mui/material";
 import DashboardHeader from "./DashboardHeader";
-import PlayerTable from "./PlayerTable";
-import ForceStartModal from "./ForceStartModal";
-import { useUpdateSessionMutation, useLazyCheckPlayersReadinessQuery } from "../services/admin.Api";
+import TeamTable from "./TeamTable";
+import {
+  useUpdateSessionMutation,
+  useLazyCheckPlayersReadinessQuery,
+} from "../services/admin.Api";
 
 const Dashboard: React.FC<DashboardProps> = ({
   headerData,
-  players,
-  onChangeName,
-  onChangeScore,
+  teams,
+  onUpdateTeam,
   onViewResponses,
-  playerWithResponses = null,
 }) => {
   const [UpdateSession] = useUpdateSessionMutation();
   const [checkPlayersReadiness] = useLazyCheckPlayersReadinessQuery();
-  const [gameStatus, setGameStatus] = useState<string>("pending");
   const [transaction, setTransaction] = useState<boolean>(false);
 
   // Dialog state for transactions
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [pendingTransaction, setPendingTransaction] = useState<boolean>(false);
 
-  // Force start modal state
-  const [forceStartModalOpen, setForceStartModalOpen] = useState(false);
-  const [pendingPlayers, setPendingPlayers] = useState<any[]>([]);
-  const [totalPlayers, setTotalPlayers] = useState<number>(0);
   const [isCheckingReadiness, setIsCheckingReadiness] = useState(false);
-
-  useEffect(() => {
-    setGameStatus(headerData?.gameStatus);
-  }, [headerData?.gameStatus]);
 
   const onGameStatusChange = async () => {
     try {
       setIsCheckingReadiness(true);
-      
+
       // First check if all players are ready
       const readinessResult = await checkPlayersReadiness({}).unwrap();
-      
+
       if (readinessResult.allReady) {
         // All players are ready, start game immediately
         startGame();
-      } else {
-        // Some players aren't ready, show force start modal
-        setPendingPlayers(readinessResult.pendingPlayers || []);
-        setTotalPlayers(readinessResult.totalPlayers || 0);
-        setForceStartModalOpen(true);
       }
     } catch (error) {
       console.error("Failed to check players readiness:", error);
@@ -71,21 +57,11 @@ const Dashboard: React.FC<DashboardProps> = ({
     UpdateSession({ status: "playing" })
       .unwrap()
       .then(() => {
-        setGameStatus("playing");
         console.log("Session updated successfully");
       })
       .catch((error) => {
         console.error("Failed to update session:", error);
       });
-  };
-
-  const handleForceStartWait = () => {
-    setForceStartModalOpen(false);
-  };
-
-  const handleForceStartConfirm = () => {
-    setForceStartModalOpen(false);
-    startGame();
   };
 
   const onTransactionsChange = (status: boolean) => {
@@ -112,17 +88,14 @@ const Dashboard: React.FC<DashboardProps> = ({
         isCheckingReadiness={isCheckingReadiness}
       />
       <Box sx={{ px: 4 }}>
-        <PlayerTable
-          players={players}
-          gameStatus={gameStatus}
-          transaction={transaction}
-          onChangeName={onChangeName}
-          onChangeScore={onChangeScore}
+        <TeamTable
+          teams={teams}
+          transactionMode={transaction}
+          onUpdateTeam={onUpdateTeam}
           onViewResponses={onViewResponses}
-          playerWithResponses={playerWithResponses}
         />
       </Box>
-      
+
       {/* Transaction Confirmation Dialog */}
       <Dialog open={confirmDialogOpen} onClose={handleDialogClose}>
         <DialogTitle>Confirm Transaction Change</DialogTitle>
@@ -145,16 +118,6 @@ const Dashboard: React.FC<DashboardProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Force Start Modal */}
-      <ForceStartModal
-        open={forceStartModalOpen}
-        onClose={handleForceStartWait}
-        onWait={handleForceStartWait}
-        onForceStart={handleForceStartConfirm}
-        pendingPlayers={pendingPlayers}
-        totalPlayers={totalPlayers}
-      />
     </Box>
   );
 };

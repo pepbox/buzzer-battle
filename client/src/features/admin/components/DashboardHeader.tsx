@@ -6,12 +6,18 @@ import {
   Switch,
   FormControlLabel,
   Button,
+  Divider,
+  useTheme,
+  useMediaQuery,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { DashboardHeaderProps } from "../types/interfaces";
 import { useAdminAuth } from "../services/useAdminAuth";
 import LogoutIcon from "@mui/icons-material/Logout";
 import LeaderboardIcon from "@mui/icons-material/Leaderboard";
+import SettingsRemoteIcon from "@mui/icons-material/SettingsRemote";
+import GroupIcon from "@mui/icons-material/Group";
+import QuizIcon from "@mui/icons-material/Quiz";
 import {
   useAdminLogoutMutation,
   useUpdateSessionMutation,
@@ -33,8 +39,11 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   const [UpdateSession] = useUpdateSessionMutation();
   const { admin } = useAdminAuth();
   const navigate = useNavigate();
-  const { sessionId } = useAppSelector((state: RootState) => state.game);
+  const { sessionId } = useAppSelector((state: RootState) => state.session);
   const dispatch = useAppDispatch();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  console.log("DashboardHeader data:", data);
 
   const handleLogout = () => {
     AdminLogout({})
@@ -47,6 +56,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         console.error("Logout failed:", error);
       });
   };
+
   const handleSesssionEnd = () => {
     UpdateSession({ status: "ended" })
       .unwrap()
@@ -63,20 +73,46 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     navigate(`/admin/${sessionId}/leaderboard`);
   };
 
+  const handleRemoteControl = () => {
+    navigate(`/admin/${sessionId}/remote-control`);
+  };
+
   return (
     <>
+      {/* Top Navigation Bar */}
       <Box
         display="flex"
         justifyContent="space-between"
         alignItems="center"
-        px={4}
+        px={isMobile ? 2 : 4}
         py={2}
       >
-        <Typography variant="h6" fontWeight="bold">
+        <Typography variant={isMobile ? "h6" : "h5"} fontWeight="bold">
           Admin Dashboard
         </Typography>
 
-        <Box display="flex" gap={2} alignItems="center">
+        <Box display="flex" gap={1} alignItems="center">
+          <Button
+            variant="outlined"
+            color="secondary"
+            startIcon={<SettingsRemoteIcon />}
+            onClick={handleRemoteControl}
+            sx={{
+              textTransform: "none",
+              borderRadius: "8px",
+              fontWeight: 500,
+              minWidth: isMobile ? "auto" : "fit-content",
+            }}
+          >
+            <Box
+              sx={{
+                display: { xs: "none", sm: "inline" },
+              }}
+            >
+              Remote Control
+            </Box>
+          </Button>
+
           <Button
             variant="outlined"
             color="primary"
@@ -86,6 +122,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               textTransform: "none",
               borderRadius: "8px",
               fontWeight: 500,
+              minWidth: isMobile ? "auto" : "fit-content",
             }}
           >
             <Box
@@ -108,6 +145,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               border: "1px solid #FF6363",
               fontWeight: 500,
               color: "#FF6363",
+              minWidth: isMobile ? "auto" : "fit-content",
             }}
           >
             <Box
@@ -120,15 +158,18 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           </Button>
         </Box>
       </Box>
+
+      {/* Main Header Section */}
       <Paper
         sx={{
-          p: 3,
-          px: 4,
+          p: isMobile ? 2 : 3,
+          px: isMobile ? 2 : 4,
           mb: 2,
           backgroundColor: "rgba(252, 166, 30, 0.10)",
           dropShadow: "0px 2px 4px rgba(0, 0, 0, 0.1)",
         }}
       >
+        {/* Admin Name */}
         <Box
           sx={{
             display: "flex",
@@ -138,25 +179,147 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           }}
         >
           <Typography
-            variant="h3"
+            variant={isMobile ? "h5" : "h3"}
             fontWeight="bold"
             color="black"
             textAlign={"center"}
           >
-            Admin Name - {admin?.name || data?.adminName || "Admin"}
+            {admin?.name || data?.adminName || "Admin"}
           </Typography>
         </Box>
 
+        {/* Session Information */}
+        {(data?.sessionName ||
+          data?.teamsRegistered !== undefined ||
+          data?.currentQuestion !== undefined) && (
+          <>
+            <Box sx={{ mb: 3 }}>
+              <Box
+                display="flex"
+                flexDirection={isMobile ? "column" : "row"}
+                gap={isMobile ? 2 : 4}
+                justifyContent="space-around"
+              >
+                {data?.sessionName && (
+                  <Box textAlign="center" flex={1}>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      Session Name
+                    </Typography>
+                    <Typography variant="h6" fontWeight="bold">
+                      {data.sessionName}
+                    </Typography>
+                  </Box>
+                )}
+
+                {data?.teamsRegistered !== undefined && (
+                  <Box textAlign="center" flex={1}>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      Teams Registered
+                    </Typography>
+                    <Box
+                      display="flex"
+                      justifyContent="center"
+                      alignItems="center"
+                      gap={1}
+                    >
+                      <GroupIcon color="primary" />
+                      <Typography variant="h6" fontWeight="bold">
+                        {data.teamsRegistered}
+                        {data.totalTeams ? ` / ${data.totalTeams}` : ""}
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+
+                {data?.currentQuestion !== undefined && (
+                  <Box textAlign="center" flex={1}>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      Current Question
+                    </Typography>
+                    <Box
+                      display="flex"
+                      justifyContent="center"
+                      alignItems="center"
+                      gap={1}
+                    >
+                      <QuizIcon color="primary" />
+                      <Typography variant="h6" fontWeight="bold">
+                        {data.currentQuestion}
+                        {data.totalQuestions ? ` / ${data.totalQuestions}` : ""}
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+                {/* Game Status Chip */}
+                <Box textAlign="center" flex={1}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    gutterBottom
+                  >
+                    Status
+                  </Typography>
+                  <Box
+                    display="flex"
+                    justifyContent="center"
+                    alignItems="center"
+                    gap={1}
+                  >
+                    <Typography
+                      variant="h6"
+                      fontWeight="bold"
+                      color={
+                        data?.gameStatus === "playing"
+                          ? "success"
+                          : data?.gameStatus === "paused"
+                          ? "warning"
+                          : "default"
+                      }
+                    >
+                      {(() => {
+                        const raw = data?.gameStatus || "idle";
+                        const spaced = raw
+                          .replace(/[_-]/g, " ")
+                          .replace(/([a-z])([A-Z])/g, "$1 $2");
+                        return spaced
+                          .split(" ")
+                          .filter(Boolean)
+                          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                          .join(" ");
+                      })()}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+            <Divider sx={{ mb: 3 }} />
+          </>
+        )}
+
+        {/* Action Buttons */}
         <Box
           sx={{
             display: "flex",
-            gap: 4,
+            gap: isMobile ? 1 : 2,
             alignItems: "center",
             flexWrap: "wrap",
+            justifyContent: isMobile ? "center" : "flex-start",
           }}
         >
           <GlobalButton
-            fullWidth={false}
+            fullWidth={isMobile}
             sx={{
               display: data?.gameStatus === "playing" ? "none" : "block",
             }}
@@ -169,13 +332,14 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           </GlobalButton>
 
           <GlobalButton
-            fullWidth={false}
+            fullWidth={isMobile}
             onClick={() => {
               handleSesssionEnd();
             }}
           >
             End Session
           </GlobalButton>
+
           <FormControlLabel
             control={
               <Switch
@@ -189,6 +353,10 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                 Enable Transactions
               </Typography>
             }
+            sx={{
+              ml: isMobile ? 0 : 1,
+              mt: isMobile ? 1 : 0,
+            }}
           />
         </Box>
       </Paper>

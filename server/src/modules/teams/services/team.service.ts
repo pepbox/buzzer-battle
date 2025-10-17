@@ -135,4 +135,30 @@ export default class TeamService {
         return sessionDoc.numberOfTeams;
     }
 
+    // Update team by ID (for admin)
+    async updateTeamById(
+        teamId: Types.ObjectId | string,
+        updateData: Partial<ITeam>
+    ): Promise<ITeam> {
+        const options: any = {
+            new: true, // Return updated document
+            runValidators: true,
+        };
+        if (this.session) {
+            options.session = this.session;
+        }
+
+        const team = await Team.findByIdAndUpdate(
+            teamId,
+            updateData,
+            options
+        );
+
+        if (!team) {
+            throw new Error("Team not found");
+        }
+
+        return team;
+    }
+
 }

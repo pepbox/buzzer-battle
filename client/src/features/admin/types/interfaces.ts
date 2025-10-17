@@ -9,6 +9,45 @@ export interface AdminUser {
     name: string;
 }
 
+// Team-based Dashboard Types
+export interface Team {
+    _id: string;
+    teamNumber: number;
+    teamName: string;
+    teamScore: number;
+    joinedAt: string;
+    rank: number;
+    status: 'idle' | 'answering' | 'active';
+    responsesCount: number;
+}
+
+export interface TeamTableProps {
+    teams: Team[];
+    transactionMode: boolean;
+    onUpdateTeam: (teamId: string, data: { teamName?: string; teamScore?: number }) => void;
+    onViewResponses: (teamId: string) => void;
+}
+
+export interface TeamResponse {
+    questionId: string;
+    questionText: string;
+    questionImage?: string;
+    questionVideo?: string;
+    options: Array<{
+        optionId: string;
+        optionText: string;
+    }>;
+    teamResponse: string;
+    teamResponseText: string;
+    correctAnswer: string;
+    correctAnswerText: string;
+    isCorrect: boolean;
+    pointsEarned: number;
+    timeElapsed?: number;
+    answeredAt: string;
+}
+
+// Keep old Player types for backward compatibility (if needed)
 export interface PlayerTableProps {
     players: Player[];
     gameStatus: string;
@@ -37,6 +76,11 @@ export interface PlayerTableProps {
 export interface HeaderData {
     gameStatus: string;
     adminName?: string;
+    sessionName?: string;
+    teamsRegistered?: number;
+    totalTeams?: number;
+    currentQuestion?: number;
+    totalQuestions?: number;
 }
 
 export interface Player {
@@ -63,26 +107,9 @@ export interface DashboardHeaderProps {
 
 export interface DashboardProps {
     headerData: HeaderData;
-    playerWithResponses?: {
-        player: {
-            id: string;
-            name: string;
-            profilePhoto?: string;
-            score: number;
-        };
-        responses: {
-            questionId: string;
-            keyAspect: string;
-            questionText: string;
-            response: string;
-        }[];
-    } | null;
-    players: Player[];
-    onGameStatusChange?: (status: boolean) => void;
-    onChangeName?: (playerId: string, name: string) => void;
-    onChangeScore?: (playerId: string, newScore: number) => void;
-    onViewResponses?: (playerId: string) => void;
-    loadingResponses?: boolean;
+    teams: Team[];
+    onUpdateTeam: (teamId: string, data: { teamName?: string; teamScore?: number }) => void;
+    onViewResponses: (teamId: string) => void;
 }
 
 // Leaderboard Types
