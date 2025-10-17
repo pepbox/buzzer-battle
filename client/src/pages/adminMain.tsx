@@ -1,7 +1,8 @@
-import { Route, Routes, useParams } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import DashboardPage from "../features/admin/Pages/DshboardPage";
 import LeaderboardPage from "../features/admin/Pages/LeaderboardPage";
 import AdminLogin from "../features/admin/Pages/AdminLogin";
+import RemoteControl from "../features/admin/pages/RemoteControl";
 import Box from "@mui/material/Box";
 import { useLazyFetchAdminQuery } from "../features/admin/services/admin.Api";
 import { useAppSelector } from "../app/hooks";
@@ -9,20 +10,12 @@ import { RootState } from "../app/store";
 import { useEffect } from "react";
 import Loader from "../components/ui/Loader";
 import AuthWrapper from "../components/auth/AuthWrapper";
-import { useAppDispatch } from "../app/rootReducer";
-import { setSessionId } from "../features/game/services/gameSlice";
 
 const AdminMain = () => {
   const [FetchAdmin] = useLazyFetchAdminQuery();
   const { isLoading, isAuthenticated } = useAppSelector(
-    (state: RootState) => state.player
+    (state: RootState) => state.admin
   );
-  const dispatch = useAppDispatch();
-  const sessionId = useParams<{ sessionId: string }>().sessionId;
-
-  useEffect(() => {
-    dispatch(setSessionId(sessionId ?? ""));
-  }, [sessionId, dispatch]);
 
   useEffect(() => {
     FetchAdmin({});
@@ -35,20 +28,26 @@ const AdminMain = () => {
   return (
     <Box sx={{ maxWidth: "100%", minHeight: "100vh" }}>
       <Routes>
+        {/* Public Routes */}
         <Route path="/login" element={<AdminLogin />} />
+        <Route path="/:sessionId" element={<AdminLogin />} />
+        
+        {/* Remote Control - No Authentication Required */}
+        <Route path="/remote-control" element={<RemoteControl />} />
+        
+        {/* Protected Admin Routes */}
         <Route
           path="/"
           element={
             <AuthWrapper
               userType={"admin"}
-              redirection={`/admin/${sessionId}/login`}
+              redirection={`/admin/login`}
             />
           }
         >
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
         </Route>
-        <Route path={`/${sessionId}`} element={<AdminLogin />} />
       </Routes>
     </Box>
   );

@@ -2,6 +2,10 @@ import mongoose, { Types } from "mongoose";
 import { GameState } from "../models/gameState.model";
 import { IGameState } from "../types/interfaces";
 import { GameStatus } from "../types/enums";
+import { Session } from "../../session/models/session.model";
+import { SessionStatus } from "../../session/types/enums";
+import BuzzerQueueService from "../../buzzerQueue/services/buzzerQueue.service";
+import QuestionService from "../../questions/services/question.service";
 
 export default class GameStateService {
     private session?: mongoose.ClientSession;
@@ -168,5 +172,232 @@ export default class GameStateService {
         
         await gameState.save(options);
         return gameState;
+    }
+
+    // Start buzzer round
+    async startBuzzerRound(sessionId: Types.ObjectId | string): Promise<IGameState> {
+        const query = GameState.findOne({ sessionId });
+        if (this.session) {
+            query.session(this.session);
+        }
+        
+        const gameState = await query;
+        if (!gameState) {
+            throw new Error("Game state not found");
+        }
+
+        gameState.gameStatus = GameStatus.BUZZER_ROUND;
+        gameState.currentAnsweringTeam = undefined;
+        
+        const options: any = {};
+        if (this.session) {
+            options.session = this.session;
+        }
+        
+        await gameState.save(options);
+        return gameState;
+    }
+
+    // Pause game
+    async pauseGame(sessionId: Types.ObjectId | string): Promise<IGameState> {
+        const query = GameState.findOne({ sessionId });
+        if (this.session) {
+            query.session(this.session);
+        }
+        
+        const gameState = await query;
+        if (!gameState) {
+            throw new Error("Game state not found");
+        }
+
+        gameState.gameStatus = GameStatus.PAUSED;
+        
+        const options: any = {};
+        if (this.session) {
+            options.session = this.session;
+        }
+        
+        await gameState.save(options);
+        return gameState;
+    }
+
+    // Resume game (go back to buzzer round)
+    async resumeGame(sessionId: Types.ObjectId | string): Promise<IGameState> {
+        const query = GameState.findOne({ sessionId });
+        if (this.session) {
+            query.session(this.session);
+        }
+        
+        const gameState = await query;
+        if (!gameState) {
+            throw new Error("Game state not found");
+        }
+
+        // Resume to BUZZER_ROUND by default
+        gameState.gameStatus = GameStatus.BUZZER_ROUND;
+        
+        const options: any = {};
+        if (this.session) {
+            options.session = this.session;
+        }
+        
+        await gameState.save(options);
+        return gameState;
+    }
+
+    // Show leaderboard (set to paused)
+    async showLeaderboard(sessionId: Types.ObjectId | string): Promise<IGameState> {
+        return await this.pauseGame(sessionId);
+    }
+
+    // Move to next question with auto-end game check
+    async moveToNextQuestionWithCheck(
+        sessionId: Types.ObjectId | string
+    ): Promise<{ gameState: IGameState; gameEnded: boolean }> {
+        const query = GameState.findOne({ sessionId }).populate('sessionId');
+        if (this.session) {
+            query.session(this.session);
+        }
+        
+        const gameState = await query;
+        if (!gameState) {
+            throw new Error("Game state not found");
+        }
+
+        const session = await Session.findById(sessionId);
+        if (!session) {
+            throw new Error("Session not found");
+        }
+
+        const totalQuestions = session.questions.length;
+        const nextIndex = gameState.currentQuestionIndex + 1;
+
+        if (nextIndex >= totalQuestions) {
+            // Last question completed - End game
+            session.status = SessionStatus.ENDED;
+            await session.save();
+
+            gameState.gameStatus = GameStatus.PAUSED;
+            gameState.currentAnsweringTeam = undefined;
+            
+            const options: any = {};
+            if (this.session) {
+                options.session = this.session;
+            }
+            
+            await gameState.save(options);
+            
+            return { gameState, gameEnded: true };
+        } else {
+            // Move to next question
+            gameState.currentQuestionIndex = nextIndex;
+            gameState.currentAnsweringTeam = undefined;
+            gameState.gameStatus = GameStatus.BUZZER_ROUND;
+            
+            const options: any = {};
+            if (this.session) {
+                options.session = this.session;
+            }
+            
+            await gameState.save(options);
+            
+            return { gameState, gameEnded: false };
+        }
+    }
+
+    // Pass question to second team
+    async passToSecondTeam(
+        sessionId: Types.ObjectId | string,
+        currentQuestionId: Types.ObjectId | string
+    ): Promise<IGameState> {
+        const buzzerQueueService = new BuzzerQueueService(this.session);
+        
+        // Get buzzer leaderboard for current question
+        const leaderboard = await buzzerQueueService.fetchBuzzerLeaderboard(
+            currentQuestionId,
+            sessionId
+        );
+
+        if (leaderboard.length < 2) {
+            throw new Error("No second team available in buzzer queue");
+        }
+
+        // Get 2nd place team
+        const secondTeam = leaderboard[1];
+
+        const query = GameState.findOne({ sessionId });
+        if (this.session) {
+            query.session(this.session);
+        }
+        
+        const gameState = await query;
+        if (!gameState) {
+            throw new Error("Game state not found");
+        }
+
+        // Set 2nd team as answering team
+        gameState.currentAnsweringTeam = (secondTeam.teamId as any)._id;
+        gameState.gameStatus = GameStatus.ANSWERING;
+        
+        const options: any = {};
+        if (this.session) {
+            options.session = this.session;
+        }
+        
+        await gameState.save(options);
+        return gameState;
+    }
+
+    // Set specific team as answering team (used by auto-selection)
+    async setAnsweringTeam(
+        sessionId: Types.ObjectId | string,
+        teamId: Types.ObjectId | string
+    ): Promise<IGameState> {
+        const query = GameState.findOne({ sessionId });
+        if (this.session) {
+            query.session(this.session);
+        }
+        
+        const gameState = await query;
+        if (!gameState) {
+            throw new Error("Game state not found");
+        }
+
+        gameState.currentAnsweringTeam = teamId as Types.ObjectId;
+        gameState.gameStatus = GameStatus.ANSWERING;
+        
+        const options: any = {};
+        if (this.session) {
+            options.session = this.session;
+        }
+        
+        await gameState.save(options);
+        return gameState;
+    }
+
+    // Auto-select fastest team from buzzer leaderboard
+    async autoSelectFastestTeam(
+        sessionId: Types.ObjectId | string,
+        questionId: Types.ObjectId | string
+    ): Promise<IGameState> {
+        const buzzerQueueService = new BuzzerQueueService(this.session);
+        
+        // Get buzzer leaderboard
+        const leaderboard = await buzzerQueueService.fetchBuzzerLeaderboard(
+            questionId,
+            sessionId
+        );
+
+        if (leaderboard.length === 0) {
+            throw new Error("No teams in buzzer queue");
+        }
+
+        // Get fastest team (1st place)
+        const fastestTeam = leaderboard[0];
+
+        return await this.setAnsweringTeam(
+            sessionId,
+            (fastestTeam.teamId as any)._id
+        );
     }
 }

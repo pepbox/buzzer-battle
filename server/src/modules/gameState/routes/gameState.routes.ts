@@ -1,6 +1,7 @@
 import express from 'express';
 import { 
     fetchGameState, 
+    updateGameStateUnified,
     updateGameStatus, 
     moveToNextQuestion 
 } from '../controllers/gameState.controller';
@@ -11,7 +12,10 @@ const router = express.Router();
 // Team and Admin can fetch game state
 router.get('/current', authenticateUser, fetchGameState);
 
-// Admin only routes
+// UNIFIED ENDPOINT - Admin only (NEW - RECOMMENDED)
+router.patch('/', authenticateUser, authorizeRoles('ADMIN'), updateGameStateUnified);
+
+// Legacy endpoints (Deprecated - kept for backward compatibility)
 router.patch('/status', authenticateUser, authorizeRoles('ADMIN'), updateGameStatus);
 router.post('/next-question', authenticateUser, authorizeRoles('ADMIN'), moveToNextQuestion);
 

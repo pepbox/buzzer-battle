@@ -2,17 +2,17 @@ import React from "react";
 import "./App.css";
 import { Routes, Route } from "react-router-dom";
 import GameMain from "./pages/gameMain";
-// import AdminMain from "./pages/adminMain";
+import AdminMain from "./pages/adminMain";
 // import { initializeWebSocket } from "./services/websocket/websocketConfig";
 // import { websocketService } from "./services/websocket/websocketService";
 // import { useAdminAuth } from "./features/admin/services/useAdminAuth";
 // import { useAppSelector } from "./app/rootReducer";
 // import { RootState } from "./app/store";
-// import { useGetSessionQuery } from "./features/game/services/gameArena.Api";
 import Default from "./components/ui/Default";
+import { useFetchSessionQuery } from "./features/session/services/session.api";
 
 const App: React.FC = () => {
-  // useGetSessionQuery();
+  useFetchSessionQuery();
   // const { isAuthenticated: isAdminAuthenticated } = useAdminAuth();
   // const { isAuthenticated: isUserAuthenticated } = useAppSelector(
   //   (state: RootState) => state.player
@@ -43,7 +43,7 @@ const App: React.FC = () => {
     <Routes>
       <Route path="/game/:sessionId/*" element={<GameMain />} />
       <Route path="/game/*" element={<GameMain />} />
-      {/* <Route path="/admin/:sessionId/*" element={<AdminMain />} /> */}
+      <Route path="/admin/:sessionId/*" element={<AdminMain />} />
 
       {/* Redirect to game main if no specific path is matched */}
       <Route path="*" element={<Default />} />

@@ -6,17 +6,14 @@ import SessionService from "../services/session.service";
 import { SessionEmitters } from "../../../services/socket/sessionEmitters";
 import { Events } from "../../../services/socket/enums/Events";
 import AdminServices from "../../admin/services/admin.service";
-import { Types } from "mongoose";
 import axios from "axios";
 // import PlayerService from "../../players/services/player.service";
 // import { Player } from "../../players/models/player.model";
-import TeamService from "../../teams/services/team.service";
 
 
 const sessionService = new SessionService();
 const adminService = new AdminServices();
 // const playerService = new PlayerService(Player);
-const teamService = new TeamService();
 
 
 export const updateSession = async (

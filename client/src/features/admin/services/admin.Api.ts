@@ -47,7 +47,6 @@ export const adminApi = api.injectEndpoints({
         method: 'PUT',
         body: updateData,
       }),
-      invalidatesTags: ["AdminPlayer"],
     }),
 
     fetchDashboardData: builder.query({
@@ -56,7 +55,6 @@ export const adminApi = api.injectEndpoints({
         method: 'GET',
       }),
       transformResponse: (response: any) => response.data,
-      providesTags: ["AdminPlayer"],
     }),
 
     fetchLeaderboardData: builder.query({
@@ -65,7 +63,6 @@ export const adminApi = api.injectEndpoints({
         method: 'GET',
       }),
       transformResponse: (response: any) => response.data,
-      providesTags: ["Selfie"],
     }),
 
     updatePlayer: builder.mutation({
@@ -74,7 +71,6 @@ export const adminApi = api.injectEndpoints({
         method: 'PUT',
         body: updateData,
       }),
-      invalidatesTags: ["AdminPlayer"],
     }),
 
     getPlayerWithResponses: builder.query({

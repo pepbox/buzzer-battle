@@ -10,6 +10,7 @@ import teamReducer from '../features/game/services/teamSlice';
 import gameStateReducer from '../features/game/services/gameStateSlice';
 import buzzerReducer from '../features/game/services/buzzerSlice';
 import questionReducer from '../features/question/services/questions.slice';
+import sessionReducer from '../features/session/services/sessionSlice';
 
 export const store = configureStore({
   reducer: {
@@ -22,6 +23,7 @@ export const store = configureStore({
     gameState: gameStateReducer,
     buzzer: buzzerReducer,
     question: questionReducer,
+    session: sessionReducer,
     [api.reducerPath]: api.reducer,
   },
   middleware: (getDefaultMiddleware) =>

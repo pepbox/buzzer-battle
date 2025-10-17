@@ -82,6 +82,7 @@ export const api = createApi({
         "GameState",
         "Question",
         "BuzzerLeaderboard",
+        "Session",
     ],
     endpoints: () => ({}),
 });
