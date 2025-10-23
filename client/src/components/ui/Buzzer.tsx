@@ -81,7 +81,7 @@ const Buzzer: React.FC<BuzzerProps> = ({
           backgroundSize: "contain",
           backgroundRepeat: "no-repeat",
           backgroundPosition: "center",
-          cursor: disabled ? "not-allowed" : "pointer",
+          cursor: disabled ? "default" : "pointer",
           userSelect: "none",
           display: "flex",
           alignItems: "center",

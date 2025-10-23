@@ -14,7 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { DashboardHeaderProps } from "../types/interfaces";
 import { useAdminAuth } from "../services/useAdminAuth";
 import LogoutIcon from "@mui/icons-material/Logout";
-import LeaderboardIcon from "@mui/icons-material/Leaderboard";
+import SlideshowIcon from "@mui/icons-material/Slideshow";
 import SettingsRemoteIcon from "@mui/icons-material/SettingsRemote";
 import GroupIcon from "@mui/icons-material/Group";
 import QuizIcon from "@mui/icons-material/Quiz";
@@ -69,12 +69,14 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       });
   };
 
-  const handleViewLeaderboard = () => {
-    navigate(`/admin/${sessionId}/leaderboard`);
-  };
-
   const handleRemoteControl = () => {
     navigate(`/admin/${sessionId}/remote-control`);
+  };
+
+  const handlePresenterView = () => {
+    // Open presenter view in new window for dual-screen setup
+    const presenterUrl = `/admin/${sessionId}/presenter`;
+    navigate(presenterUrl);
   };
 
   return (
@@ -116,8 +118,8 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           <Button
             variant="outlined"
             color="primary"
-            startIcon={<LeaderboardIcon />}
-            onClick={handleViewLeaderboard}
+            startIcon={<SlideshowIcon />}
+            onClick={handlePresenterView}
             sx={{
               textTransform: "none",
               borderRadius: "8px",
@@ -130,7 +132,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                 display: { xs: "none", sm: "inline" },
               }}
             >
-              Leaderboard
+              Presenter View
             </Box>
           </Button>
 

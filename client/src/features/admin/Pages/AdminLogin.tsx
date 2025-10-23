@@ -15,6 +15,7 @@ import { RootState } from "../../../app/store";
 import { useAppSelector } from "../../../app/hooks";
 import { setSessionId, selectSessionId } from "../../session/services/sessionSlice";
 import ControlCameraIcon from '@mui/icons-material/ControlCamera';
+import SlideshowIcon from '@mui/icons-material/Slideshow';
 
 const AdminLogin: React.FC = () => {
   const [pin, setPin] = useState<string[]>(["", "", "", ""]);
@@ -147,6 +148,15 @@ const AdminLogin: React.FC = () => {
     }
     // Navigate to remote control without authentication
     navigate(`/admin/remote-control/${sessionId}`);
+  };
+
+  const handlePresenterMode = () => {
+    if (!sessionId) {
+      setLocalError("Session ID is required to access Presenter Mode");
+      return;
+    }
+    // Navigate to presenter view - requires admin authentication
+    navigate(`/admin/${sessionId}/presenter`);
   };
 
   if (isAuthenticated) {
@@ -326,6 +336,38 @@ const AdminLogin: React.FC = () => {
             >
               <ControlCameraIcon sx={{ fontSize: "1.2rem" }} />
               Enter as Remote Control
+            </GlobalButton>
+
+            {/* Presenter Mode Button */}
+            <GlobalButton
+              onClick={handlePresenterMode}
+              disabled={!sessionId}
+              sx={{
+                mt: 2,
+                py: { xs: 1.25, sm: 1.5 },
+                fontSize: { xs: "0.9rem", sm: "1rem" },
+                fontWeight: 600,
+                borderRadius: 2,
+                minHeight: { xs: "44px", sm: "48px" },
+                border: "2px solid #9c27b0",
+                color: "#9c27b0",
+                bgcolor: "white",
+                "&:hover": {
+                  bgcolor: "rgba(156, 39, 176, 0.04)",
+                  borderColor: "#7b1fa2",
+                },
+                "&.Mui-disabled": {
+                  borderColor: "#e0e0e0",
+                  color: "#999",
+                  border: "2px solid #e0e0e0",
+                },
+                display: "flex",
+                gap: 1,
+                alignItems: "center",
+              }}
+            >
+              <SlideshowIcon sx={{ fontSize: "1.2rem" }} />
+              Enter as Presenter
             </GlobalButton>
 
             {!sessionId && (

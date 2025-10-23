@@ -8,7 +8,7 @@ import { authenticateUser, authorizeRoles } from '../../../middlewares/authMiddl
 const router = express.Router();
 
 // Team routes
-router.get('/current', authenticateUser, authorizeRoles('TEAM'), fetchCurrentQuestion);
+router.get('/current', authenticateUser, fetchCurrentQuestion);
 router.post('/:questionId/response', authenticateUser, authorizeRoles('TEAM'), sendQuestionResponse);
 
 export default router;

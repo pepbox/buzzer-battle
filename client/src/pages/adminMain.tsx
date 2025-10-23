@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router-dom";
 import DashboardPage from "../features/admin/Pages/DshboardPage";
 import AdminLogin from "../features/admin/Pages/AdminLogin";
 import RemoteControl from "../features/admin/pages/RemoteControl";
+import PresenterView from "../features/admin/pages/PresenterView";
 import Box from "@mui/material/Box";
 import { useLazyFetchAdminQuery } from "../features/admin/services/admin.Api";
 import { useAppSelector } from "../app/hooks";
@@ -34,6 +35,16 @@ const AdminMain = () => {
         {/* Remote Control - No Authentication Required */}
         <Route path="/remote-control" element={<RemoteControl />} />
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/presenter" element={<PresenterView />} />
+
+        {/* Presenter View - Protected Route (Requires Admin Auth) */}
+        {/* <Route
+          element={
+            <AuthWrapper userType={"admin"} redirection={`/admin/login`} />
+          }
+        >
+          <Route path="/:sessionId/presenter" element={<PresenterView />} />
+        </Route> */}
 
         {/* Protected Admin Routes */}
         {/* <Route
