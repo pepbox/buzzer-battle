@@ -6,6 +6,7 @@ import { GameStatus } from '../../gameState/types/enums';
 import mongoose from 'mongoose';
 import { SessionEmitters } from '../../../services/socket/sessionEmitters';
 import { Events } from '../../../services/socket/enums/Events';
+import { timerManager } from '../../../services/timerManager';
 
 const questionService = new QuestionService();
 const gameStateService = new GameStateService();
@@ -157,6 +158,12 @@ export const sendQuestionResponse = async (
             150 // Points for correct answer
         );
 
+        // Cancel the answering timer since answer was submitted
+        timerManager.cancelTimer(`answering-${sessionId.toString()}-${teamId.toString()}`);
+
+        // Transition to IDLE state after answer is submitted
+        const idleGameState = await gameStateService.transitionToIdle(sessionId);
+
         // Emit ANSWER_SUBMITTED event to admins and presenter
         try {
             SessionEmitters.toSessionAdmins(sessionId, Events.ANSWER_SUBMITTED, {
@@ -170,6 +177,18 @@ export const sendQuestionResponse = async (
         } catch (socketError) {
             console.error("Error emitting ANSWER_SUBMITTED event:", socketError);
             // Don't fail the request if socket emission fails
+        }
+
+        // Emit game state change to IDLE
+        try {
+            SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+                gameStatus: idleGameState.gameStatus,
+                currentQuestionIndex: idleGameState.currentQuestionIndex,
+                currentAnsweringTeam: idleGameState.currentAnsweringTeam,
+                idleStartTime: idleGameState.idleStartTime,
+            });
+        } catch (socketError) {
+            console.error("Error emitting GAME_STATE_CHANGED event:", socketError);
         }
 
         res.status(201).json({

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Box, LinearProgress, Alert } from "@mui/material";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import QuestionBuzzer from "../../question/components/Question_Buzzer";
 import Buzzer from "../../../components/ui/Buzzer";
 import normalBg from "../../../assets/background/question_bg.webp";
@@ -10,18 +10,19 @@ import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
 import Loader from "../../../components/ui/Loader";
 import Error from "../../../components/ui/Error";
+import { useTimerSync } from "../../../hooks/useTimerSync";
 
 const BuzzerRound: React.FC = () => {
-  const navigate = useNavigate();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { sessionId } = useParams<{ sessionId: string }>();
-  const [timeElapsed, setTimeElapsed] = useState(0);
-  const [isRunning, setIsRunning] = useState(true);
   const [buzzerPressed, setBuzzerPressed] = useState(false);
   const [buzzerError, setBuzzerError] = useState<string | null>(null);
-  const [timeIsUp, setTimeIsUp] = useState(false);
 
-  // Get current team from Redux
+  // Get current team and game state from Redux
   const team = useAppSelector((state: RootState) => state.team.team);
+  const gameState = useAppSelector(
+    (state: RootState) => state.gameState.gameState
+  );
 
   // Fetch current question
   const {
@@ -35,49 +36,23 @@ const BuzzerRound: React.FC = () => {
 
   const timeLimit = 30;
   const question = questionData?.data?.question;
-  const currentQuestionIndex = questionData?.data?.currentQuestionIndex || 1;
+  const currentQuestionIndex = questionData?.data?.currentQuestionIndex;
 
-  // Progress calculation (0 to 100)
-  const progress = (timeElapsed / timeLimit) * 100;
+  // Use synced timer with server timestamp
+  const { progress, isExpired } = useTimerSync(
+    gameState?.buzzerRoundStartTime,
+    timeLimit
+  );
 
-  // Timer effect
+  // Reset buzzer state when question changes
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-
-    if (isRunning && timeElapsed < timeLimit && !buzzerPressed) {
-      interval = setInterval(() => {
-        setTimeElapsed((prev) => {
-          const newTime = prev + 0.1; // Update every 100ms for smooth animation
-
-          if (newTime >= timeLimit) {
-            setIsRunning(false);
-            setTimeIsUp(true); // Set flag instead of navigating
-            return timeLimit;
-          }
-
-          return newTime;
-        });
-      }, 100);
-    }
-
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, [isRunning, timeElapsed, timeLimit, buzzerPressed]);
-
-  // Navigate when time is up (separate effect to avoid setState during render)
-  useEffect(() => {
-    if (timeIsUp) {
-      navigate(`/game/${sessionId}/leaderboard`);
-    }
-  }, [timeIsUp, navigate, sessionId]);
+    setBuzzerPressed(false);
+    setBuzzerError(null);
+  }, [currentQuestionIndex]);
 
   const handleBuzzerPress = async () => {
-    if (buzzerPressed || !team || isPressing) return;
+    if (buzzerPressed || !team || isPressing || isExpired) return;
 
-    setIsRunning(false); // Stop the timer when buzzer is pressed
     setBuzzerPressed(true);
     setBuzzerError(null);
 
@@ -86,17 +61,14 @@ const BuzzerRound: React.FC = () => {
       const timestamp = Date.now().toString();
       await pressBuzzer({ timestamp }).unwrap();
 
-      // Navigate to buzzer leaderboard on success
-      setTimeout(() => {
-        navigate(`/game/${sessionId}/buzzer-leaderboard`);
-      }, 500);
+      // GameStateRouter will handle navigation to buzzer-leaderboard
+      // based on the updated buzzer queue data
     } catch (error: any) {
       // Handle error
       const errorMessage =
         error?.data?.message || "Failed to press buzzer. Please try again.";
       setBuzzerError(errorMessage);
       setBuzzerPressed(false);
-      setIsRunning(true); // Resume timer on error
     }
   };
 
@@ -184,7 +156,7 @@ const BuzzerRound: React.FC = () => {
           }}
         >
           <QuestionBuzzer
-            questionNumber={currentQuestionIndex}
+            questionNumber={(currentQuestionIndex || 0) + 1}
             questionText={question?.questionText || ""}
           />
         </Box>

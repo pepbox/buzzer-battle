@@ -6,6 +6,9 @@ export interface IGameState extends Document {
     currentQuestionIndex: number;
     gameStatus: GameStatus;
     currentAnsweringTeam?: Types.ObjectId;
+    buzzerRoundStartTime?: number;
+    answeringRoundStartTime?: number;
+    idleStartTime?: number;
     createdAt: Date;
     updatedAt: Date;
 }

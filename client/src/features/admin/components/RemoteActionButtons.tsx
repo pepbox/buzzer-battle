@@ -7,11 +7,11 @@ import LeaderboardIcon from "@mui/icons-material/Leaderboard";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 
 interface RemoteActionButtonsProps {
-  gameStatus: "paused" | "buzzer_round" | "answering";
-  onStartBuzzerRound: () => void;
+  gameStatus: "paused" | "buzzer_round" | "answering" | "idle";
+  currentQuestionIndex: number;
+  onNextQuestion: () => void;
   onPauseGame: () => void;
   onResumeGame: () => void;
-  onNextQuestion: () => void;
   onShowLeaderboard: () => void;
   onPassToSecondTeam: () => void;
   canPassToSecondTeam: boolean;
@@ -21,10 +21,10 @@ interface RemoteActionButtonsProps {
 
 const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
   gameStatus,
-  onStartBuzzerRound,
+  currentQuestionIndex,
+  onNextQuestion,
   onPauseGame,
   onResumeGame,
-  onNextQuestion,
   onShowLeaderboard,
   onPassToSecondTeam,
   canPassToSecondTeam,
@@ -63,24 +63,24 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
         gap: "12px",
       }}
     >
-      {/* Start Buzzer Round Button */}
+      {/* Start Game / Next Question Button */}
       <Button
         variant="contained"
         startIcon={
-          isLoading ? <CircularProgress size={20} /> : <PlayArrowIcon />
+          isLoading ? <CircularProgress size={20} /> : currentQuestionIndex === -1 ? <PlayArrowIcon /> : <SkipNextIcon />
         }
-        onClick={onStartBuzzerRound}
-        disabled={isLoading || gameStatus === "buzzer_round"}
+        onClick={onNextQuestion}
+        disabled={isLoading}
         sx={{
           ...buttonBaseStyles,
-          backgroundColor: "#10B981",
+          backgroundColor: currentQuestionIndex === -1 ? "#10B981" : "#3B82F6",
           "&:hover": {
-            backgroundColor: "#059669",
+            backgroundColor: currentQuestionIndex === -1 ? "#059669" : "#2563EB",
             ...buttonBaseStyles["&:hover"],
           },
         }}
       >
-        🎯 Start Buzzer Round
+        {currentQuestionIndex === -1 ? "➡️ Start Game" : "➡️ Next Question"}
       </Button>
 
       {/* Pause/Resume Button */}
@@ -121,26 +121,6 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
           ▶️ Resume Game
         </Button>
       )}
-
-      {/* Next Question Button */}
-      <Button
-        variant="contained"
-        startIcon={
-          isLoading ? <CircularProgress size={20} /> : <SkipNextIcon />
-        }
-        onClick={onNextQuestion}
-        disabled={isLoading}
-        sx={{
-          ...buttonBaseStyles,
-          backgroundColor: "#3B82F6",
-          "&:hover": {
-            backgroundColor: "#2563EB",
-            ...buttonBaseStyles["&:hover"],
-          },
-        }}
-      >
-        ➡️ Next Question
-      </Button>
 
       {/* Show Leaderboard Button */}
       <Button

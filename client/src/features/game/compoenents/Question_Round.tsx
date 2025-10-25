@@ -13,6 +13,7 @@ interface QuestionRoundProps {
   totalPoints: number;
   questionPoints: number;
   timeLimit?: number; // in seconds
+  timeRemaining?: number; // externally controlled time remaining (overrides internal timer)
   onTimeUp?: () => void;
   onAnswerSelect?: (answer: string) => void;
   selectedAnswer?: string;
@@ -26,13 +27,17 @@ const QuestionRound: React.FC<QuestionRoundProps> = ({
   totalPoints,
   questionPoints,
   timeLimit = 30,
+  timeRemaining: externalTimeRemaining,
   onTimeUp,
   onAnswerSelect,
   selectedAnswer,
   disabled = false,
 }) => {
-  const [timeRemaining, setTimeRemaining] = useState(timeLimit);
+  const [internalTimeRemaining, setInternalTimeRemaining] = useState(timeLimit);
   const [isRunning, setIsRunning] = useState(true);
+
+  // Use external time if provided, otherwise use internal
+  const timeRemaining = externalTimeRemaining !== undefined ? externalTimeRemaining : internalTimeRemaining;
 
   // Progress calculation (100 to 0 as time decreases)
   const progress = (timeRemaining / timeLimit) * 100;
@@ -47,11 +52,16 @@ const QuestionRound: React.FC<QuestionRoundProps> = ({
   };
 
   useEffect(() => {
+    // Only run internal timer if external time is not provided
+    if (externalTimeRemaining !== undefined) {
+      return;
+    }
+
     let interval: NodeJS.Timeout;
 
-    if (isRunning && timeRemaining > 0) {
+    if (isRunning && internalTimeRemaining > 0) {
       interval = setInterval(() => {
-        setTimeRemaining((prev) => {
+        setInternalTimeRemaining((prev) => {
           const newTime = prev - 0.1; // Update every 100ms for smooth animation
 
           if (newTime <= 0) {
@@ -72,7 +82,7 @@ const QuestionRound: React.FC<QuestionRoundProps> = ({
         clearInterval(interval);
       }
     };
-  }, [isRunning, timeRemaining, onTimeUp]);
+  }, [isRunning, internalTimeRemaining, onTimeUp, externalTimeRemaining]);
 
   const handleAnswerSelect = (answer: string) => {
     setIsRunning(false); // Stop timer when answer is selected

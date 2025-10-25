@@ -2,7 +2,6 @@ import { api } from '../../../app/api';
 
 // Admin Remote Control Actions
 export type GameStateAction =
-  | 'START_BUZZER_ROUND'
   | 'PAUSE'
   | 'RESUME'
   | 'NEXT_QUESTION'
@@ -59,14 +58,6 @@ export const {
 } = adminRemoteApi;
 
 // Helper hooks for each action
-export const useStartBuzzerRound = () => {
-  const [update, result] = useUpdateGameStateMutation();
-  return {
-    startBuzzerRound: () => update({ action: 'START_BUZZER_ROUND' }),
-    ...result,
-  };
-};
-
 export const usePauseGame = () => {
   const [update, result] = useUpdateGameStateMutation();
   return {

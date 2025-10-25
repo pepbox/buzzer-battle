@@ -5,16 +5,14 @@ import normalBg from "../../../assets/background/question_bg.webp";
 import { useFetchCurrentQuestionQuery } from "../../question/services/questions.api";
 import Loader from "../../../components/ui/Loader";
 import Error from "../../../components/ui/Error";
+import { useAppSelector } from "../../../app/hooks";
+import { RootState } from "../../../app/store";
+import { useTimerSync } from "../../../hooks/useTimerSync";
 
-interface PresenterBuzzerRoundProps {
-  timeElapsed?: number;
-  timeLimit?: number;
-}
+const PresenterBuzzerRound: React.FC = () => {
+  // Get game state from Redux
+  const gameState = useAppSelector((state: RootState) => state.gameState.gameState);
 
-const PresenterBuzzerRound: React.FC<PresenterBuzzerRoundProps> = ({
-  timeElapsed = 0,
-  timeLimit = 30,
-}) => {
   // Fetch current question
   const {
     data: questionData,
@@ -25,8 +23,13 @@ const PresenterBuzzerRound: React.FC<PresenterBuzzerRoundProps> = ({
   const question = questionData?.data?.question;
   const currentQuestionIndex = questionData?.data?.currentQuestionIndex || 1;
 
-  // Progress calculation (0 to 100)
-  const progress = (timeElapsed / timeLimit) * 100;
+  const timeLimit = 30;
+
+  // Use synced timer with server timestamp
+  const { progress } = useTimerSync(
+    gameState?.buzzerRoundStartTime,
+    timeLimit
+  );
 
   // Show loading state
   if (isLoading) {

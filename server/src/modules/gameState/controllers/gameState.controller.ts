@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
+import { Types } from 'mongoose';
 import AppError from '../../../utils/appError';
 import GameStateService from '../services/gameState.service';
 import QuestionService from '../../questions/services/question.service';
@@ -6,6 +7,8 @@ import TeamService from '../../teams/services/team.service';
 import { GameStatus } from '../types/enums';
 import { SessionEmitters } from '../../../services/socket/sessionEmitters';
 import { Events } from '../../../services/socket/enums/Events';
+import { timerManager } from '../../../services/timerManager';
+import { Session } from '../../session/models/session.model';
 
 const gameStateService = new GameStateService();
 const questionService = new QuestionService();
@@ -74,34 +77,10 @@ export const updateGameStateUnified = async (
         let additionalData: any = {};
 
         switch (action) {
-            case 'START_BUZZER_ROUND':
-                const startTime = Date.now();
-                gameState = await gameStateService.startBuzzerRound(sessionId);
-                
-                // Get current question
-                const currentQuestion = await questionService.fetchCurrentQuestion(
-                    sessionId,
-                    gameState.currentQuestionIndex
-                );
-                
-                // Emit BUZZER_ROUND_STARTED with timestamp for synced timer
-                SessionEmitters.toSession(sessionId, Events.BUZZER_ROUND_STARTED, {
-                    questionId: currentQuestion?._id,
-                    questionIndex: gameState.currentQuestionIndex,
-                    startTime,
-                    duration: 30000, // 30 seconds for buzzer round
-                });
-                
-                // Also emit general game state change
-                SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
-                    gameStatus: gameState.gameStatus,
-                    currentQuestionIndex: gameState.currentQuestionIndex,
-                    currentAnsweringTeam: gameState.currentAnsweringTeam,
-                    buzzerStartTime: startTime,
-                });
-                break;
-
             case 'PAUSE':
+                // Cancel any active timers for this session
+                timerManager.cancelSessionTimers(sessionId);
+                
                 gameState = await gameStateService.pauseGame(sessionId);
                 
                 // Emit socket event
@@ -124,6 +103,9 @@ export const updateGameStateUnified = async (
                 break;
 
             case 'NEXT_QUESTION':
+                // Cancel any active timers for this session
+                timerManager.cancelSessionTimers(sessionId);
+                
                 const result = await gameStateService.moveToNextQuestionWithCheck(sessionId);
                 gameState = result.gameState;
                 additionalData.gameEnded = result.gameEnded;
@@ -138,11 +120,91 @@ export const updateGameStateUnified = async (
                         finalLeaderboard,
                     });
                 } else {
-                    // Emit normal game state change
+                    // Game is continuing - start buzzer round for this question
+                    const buzzerStartTime = Date.now();
+                    
+                    // Update to BUZZER_ROUND status and save timestamp
+                    gameState = await gameStateService.startBuzzerRound(sessionId);
+                    
+                    // Get current question
+                    const currentQuestion = await questionService.fetchCurrentQuestion(
+                        sessionId,
+                        gameState.currentQuestionIndex
+                    );
+
+                    // Get session to fetch questionTimeLimit
+                    const session = await Session.findById(sessionId);
+                    const buzzerDuration = session?.questionTimeLimit || 30; // Default 30 seconds
+                    
+                    // Schedule auto-transition to ANSWERING after buzzer duration
+                    timerManager.scheduleBuzzerTimer(
+                        sessionId,
+                        buzzerDuration,
+                        async () => {
+                            try {
+                                const updatedGameState = await gameStateService.transitionToAnswering(
+                                    sessionId,
+                                    currentQuestion?._id as Types.ObjectId
+                                );
+
+                                // Get answer duration from session
+                                const answerDuration = session?.answerTimeLimit || 60;
+
+                                // Emit ANSWERING_ROUND_STARTED
+                                SessionEmitters.toSession(sessionId, Events.ANSWERING_ROUND_STARTED, {
+                                    questionId: currentQuestion?._id as Types.ObjectId,
+                                    teamId: updatedGameState.currentAnsweringTeam,
+                                    startTime: updatedGameState.answeringRoundStartTime,
+                                    duration: answerDuration * 1000,
+                                });
+
+                                // Emit game state change
+                                SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+                                    gameStatus: updatedGameState.gameStatus,
+                                    currentQuestionIndex: updatedGameState.currentQuestionIndex,
+                                    currentAnsweringTeam: updatedGameState.currentAnsweringTeam,
+                                    answeringStartTime: updatedGameState.answeringRoundStartTime,
+                                });
+
+                                // Schedule auto-transition to IDLE after answer duration
+                                if (updatedGameState.currentAnsweringTeam) {
+                                    timerManager.scheduleAnsweringTimer(
+                                        sessionId,
+                                        updatedGameState.currentAnsweringTeam,
+                                        answerDuration,
+                                        async () => {
+                                            const idleGameState = await gameStateService.transitionToIdle(sessionId);
+                                            
+                                            // Emit transition to IDLE
+                                            SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+                                                gameStatus: idleGameState.gameStatus,
+                                                currentQuestionIndex: idleGameState.currentQuestionIndex,
+                                                currentAnsweringTeam: idleGameState.currentAnsweringTeam,
+                                                idleStartTime: idleGameState.idleStartTime,
+                                            });
+                                        }
+                                    );
+                                }
+                            } catch (error) {
+                                console.error('Error in auto-transition to ANSWERING:', error);
+                            }
+                        }
+                    );
+                    
+                    // Emit BUZZER_ROUND_STARTED with timestamp for synced timer
+                    SessionEmitters.toSession(sessionId, Events.BUZZER_ROUND_STARTED, {
+                        questionId: currentQuestion?._id,
+                        questionIndex: gameState.currentQuestionIndex,
+                        startTime: buzzerStartTime,
+                        duration: buzzerDuration * 1000,
+                    });
+                    
+                    // Also emit general game state change
                     SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
                         gameStatus: gameState.gameStatus,
                         currentQuestionIndex: gameState.currentQuestionIndex,
                         currentAnsweringTeam: gameState.currentAnsweringTeam,
+                        buzzerStartTime: buzzerStartTime,
                     });
                 }
                 break;
@@ -172,6 +234,9 @@ export const updateGameStateUnified = async (
                     return next(new AppError("Question ID is required for PASS_TO_SECOND_TEAM action.", 400));
                 }
 
+                // Cancel previous answering timer
+                timerManager.cancelTimer(`answering-${sessionId.toString()}-*`);
+
                 gameState = await gameStateService.passToSecondTeam(
                     sessionId,
                     payload.questionId
@@ -179,19 +244,43 @@ export const updateGameStateUnified = async (
 
                 const secondChanceStartTime = Date.now();
 
+                // Get session to fetch answerTimeLimit
+                const sessionForSecond = await Session.findById(sessionId);
+                const secondAnswerDuration = sessionForSecond?.answerTimeLimit || 60;
+
+                // Schedule auto-transition to IDLE for second team
+                if (gameState.currentAnsweringTeam) {
+                    timerManager.scheduleAnsweringTimer(
+                        sessionId,
+                        gameState.currentAnsweringTeam,
+                        secondAnswerDuration,
+                        async () => {
+                            const idleGameState = await gameStateService.transitionToIdle(sessionId);
+                            
+                            // Emit transition to IDLE
+                            SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+                                gameStatus: idleGameState.gameStatus,
+                                currentQuestionIndex: idleGameState.currentQuestionIndex,
+                                currentAnsweringTeam: idleGameState.currentAnsweringTeam,
+                                idleStartTime: idleGameState.idleStartTime,
+                            });
+                        }
+                    );
+                }
+
                 // Emit socket event with second chance info and timestamp
                 SessionEmitters.toSession(sessionId, Events.SECOND_CHANCE, {
                     teamId: gameState.currentAnsweringTeam,
                     gameStatus: gameState.gameStatus,
                     startTime: secondChanceStartTime,
-                    duration: 60000, // 60 seconds for answering
+                    duration: secondAnswerDuration * 1000,
                 });
 
                 // Emit answering round started to the specific team
                 SessionEmitters.toTeam(sessionId, gameState.currentAnsweringTeam?.toString() || '', Events.ANSWERING_ROUND_STARTED, {
                     questionId: payload.questionId,
                     startTime: secondChanceStartTime,
-                    duration: 60000,
+                    duration: secondAnswerDuration * 1000,
                 });
 
                 SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
@@ -207,12 +296,37 @@ export const updateGameStateUnified = async (
                     return next(new AppError("Team ID is required for SET_ANSWERING_TEAM action.", 400));
                 }
 
+                // Cancel buzzer timer since we're manually selecting a team
+                timerManager.cancelTimer(`buzzer-${sessionId.toString()}`);
+
                 gameState = await gameStateService.setAnsweringTeam(
                     sessionId,
                     payload.teamId
                 );
 
                 const answeringStartTime = Date.now();
+
+                // Get session to fetch answerTimeLimit
+                const sessionForAnswering = await Session.findById(sessionId);
+                const answerDuration = sessionForAnswering?.answerTimeLimit || 60;
+
+                // Schedule auto-transition to IDLE
+                timerManager.scheduleAnsweringTimer(
+                    sessionId,
+                    payload.teamId,
+                    answerDuration,
+                    async () => {
+                        const idleGameState = await gameStateService.transitionToIdle(sessionId);
+                        
+                        // Emit transition to IDLE
+                        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+                            gameStatus: idleGameState.gameStatus,
+                            currentQuestionIndex: idleGameState.currentQuestionIndex,
+                            currentAnsweringTeam: idleGameState.currentAnsweringTeam,
+                            idleStartTime: idleGameState.idleStartTime,
+                        });
+                    }
+                );
 
                 // Emit team selected event
                 SessionEmitters.toSession(sessionId, Events.TEAM_SELECTED, {
@@ -229,7 +343,7 @@ export const updateGameStateUnified = async (
                 SessionEmitters.toTeam(sessionId, payload.teamId, Events.ANSWERING_ROUND_STARTED, {
                     questionId: questionForAnswering?._id,
                     startTime: answeringStartTime,
-                    duration: 60000, // 60 seconds
+                    duration: answerDuration * 1000,
                 });
 
                 SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
@@ -411,5 +525,122 @@ export const moveToNextQuestion = async (
             return next(new AppError(error.message, 404));
         }
         next(new AppError("Failed to move to next question.", 500));
+    }
+};
+
+/**
+ * Validate timer expiration and update state if needed
+ * GET /api/v1/game-state/validate-timer
+ * Checks if current timer has expired and updates game state accordingly
+ * Requires team/admin authentication
+ */
+export const validateTimerExpiration = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const sessionId = req.user?.sessionId;
+
+        if (!sessionId) {
+            return next(new AppError("Session ID not found in token.", 401));
+        }
+
+        const session = await Session.findById(sessionId);
+        if (!session) {
+            return next(new AppError("Session not found.", 404));
+        }
+
+        const gameState = await gameStateService.fetchGameStateBySessionId(sessionId);
+        if (!gameState) {
+            return next(new AppError("Game state not found.", 404));
+        }
+
+        const currentTime = Date.now();
+        let stateChanged = false;
+        let action = '';
+
+        // Check buzzer round timer
+        if (
+            gameState.gameStatus === GameStatus.BUZZER_ROUND &&
+            gameState.buzzerRoundStartTime
+        ) {
+            const elapsedTime = currentTime - gameState.buzzerRoundStartTime;
+            const timeLimit = (session.questionTimeLimit || 30) * 1000;
+
+            if (elapsedTime >= timeLimit) {
+                // Buzzer round expired - transition to answering or idle
+                console.log('⏰ Buzzer round timer expired - triggering transition');
+                
+                // Cancel existing timers first
+                timerManager.cancelTimer(`buzzer-${sessionId.toString()}`);
+                
+                // Get current question to pass to transition
+                const currentQuestion = await questionService.fetchCurrentQuestion(
+                    sessionId,
+                    gameState.currentQuestionIndex
+                );
+                
+                if (!currentQuestion) {
+                    return next(new AppError("Current question not found.", 404));
+                }
+                
+                // Transition to answering (will auto-select fastest team)
+                await gameStateService.transitionToAnswering(
+                    sessionId,
+                    currentQuestion._id as Types.ObjectId
+                );
+                
+                stateChanged = true;
+                action = 'BUZZER_EXPIRED_TO_ANSWERING';
+            }
+        }
+
+        // Check answering round timer
+        if (
+            gameState.gameStatus === GameStatus.ANSWERING &&
+            gameState.answeringRoundStartTime &&
+            gameState.currentAnsweringTeam
+        ) {
+            const elapsedTime = currentTime - gameState.answeringRoundStartTime;
+            const timeLimit = (session.answerTimeLimit || 60) * 1000;
+
+            if (elapsedTime >= timeLimit) {
+                // Answering round expired - transition to idle
+                console.log('⏰ Answering round timer expired - triggering transition');
+                
+                const teamId = typeof gameState.currentAnsweringTeam === 'string'
+                    ? gameState.currentAnsweringTeam
+                    : gameState.currentAnsweringTeam._id.toString();
+                
+                // Cancel existing timers first
+                timerManager.cancelTimer(`answering-${sessionId.toString()}-${teamId}`);
+                
+                // Transition to idle
+                await gameStateService.transitionToIdle(sessionId);
+                
+                stateChanged = true;
+                action = 'ANSWERING_EXPIRED_TO_IDLE';
+            }
+        }
+
+        // Fetch updated game state if changed
+        const finalGameState = stateChanged
+            ? await gameStateService.fetchGameStateBySessionId(sessionId)
+            : gameState;
+
+        res.status(200).json({
+            message: stateChanged
+                ? "Timer expired - game state updated"
+                : "Timer validation successful - no update needed",
+            data: {
+                gameState: finalGameState,
+                stateChanged,
+                action,
+            },
+        });
+    } catch (error: any) {
+        console.error("Error validating timer expiration:", error);
+        next(new AppError("Failed to validate timer.", 500));
     }
 };

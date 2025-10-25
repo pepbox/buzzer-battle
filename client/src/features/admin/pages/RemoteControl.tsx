@@ -7,7 +7,6 @@ import RemoteGameStatus from "../components/RemoteGameStatus";
 import RemoteTeamInfo from "../components/RemoteTeamInfo";
 import RemoteActionButtons from "../components/RemoteActionButtons";
 import {
-  useStartBuzzerRound,
   usePauseGame,
   useResumeGame,
   useNextQuestion,
@@ -46,7 +45,6 @@ const RemoteControl: React.FC = () => {
   const { data: buzzerLeaderboardData } = useFetchBuzzerLeaderboardQuery();
 
   // Action hooks
-  const { startBuzzerRound, isLoading: startLoading } = useStartBuzzerRound();
   const { pauseGame, isLoading: pauseLoading } = usePauseGame();
   const { resumeGame, isLoading: resumeLoading } = useResumeGame();
   const { nextQuestion, isLoading: nextLoading } = useNextQuestion();
@@ -55,7 +53,6 @@ const RemoteControl: React.FC = () => {
   const { passToSecondTeam, isLoading: passLoading } = usePassToSecondTeam();
 
   const isAnyLoading =
-    startLoading ||
     pauseLoading ||
     resumeLoading ||
     nextLoading ||
@@ -81,7 +78,7 @@ const RemoteControl: React.FC = () => {
 
   // Listen for answer results via WebSocket
   useEffect(() => {
-    const handleAnswerResult = (data: any) => {
+    const handleAnswerSubmitted = (data: any) => {
       if (data.isCorrect === false) {
         setLastAnswerWasWrong(true);
         showSnackbar(
@@ -100,28 +97,16 @@ const RemoteControl: React.FC = () => {
       }
     };
 
-    websocketService.on(Events.ANSWER_RESULT, handleAnswerResult);
+    websocketService.on(Events.ANSWER_SUBMITTED, handleAnswerSubmitted);
     websocketService.on(Events.GAME_STATE_CHANGED, handleGameStateChanged);
 
     return () => {
-      websocketService.off(Events.ANSWER_RESULT, handleAnswerResult);
+      websocketService.off(Events.ANSWER_SUBMITTED, handleAnswerSubmitted);
       websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChanged);
     };
   }, []);
 
   // Handlers
-  const handleStartBuzzerRound = async () => {
-    try {
-      await startBuzzerRound().unwrap();
-      showSnackbar("Buzzer round started!", "success");
-    } catch (error: any) {
-      showSnackbar(
-        error?.data?.message || "Failed to start buzzer round",
-        "error"
-      );
-    }
-  };
-
   const handlePauseGame = async () => {
     try {
       await pauseGame().unwrap();
@@ -151,7 +136,12 @@ const RemoteControl: React.FC = () => {
           navigate(`/admin/${sessionId}/completion`);
         }, 2000);
       } else {
-        showSnackbar("Moved to next question", "success");
+        // Check if this was the first question (game start)
+        if (currentQuestionIndex === -1) {
+          showSnackbar("Game started! Buzzer round active.", "success");
+        } else {
+          showSnackbar("Moved to next question", "success");
+        }
         setLastAnswerWasWrong(false);
       }
     } catch (error: any) {
@@ -302,10 +292,10 @@ const RemoteControl: React.FC = () => {
           {/* Action Buttons */}
           <RemoteActionButtons
             gameStatus={gameStatus}
-            onStartBuzzerRound={handleStartBuzzerRound}
+            currentQuestionIndex={currentQuestionIndex}
+            onNextQuestion={handleNextQuestion}
             onPauseGame={handlePauseGame}
             onResumeGame={handleResumeGame}
-            onNextQuestion={handleNextQuestion}
             onShowLeaderboard={handleShowLeaderboard}
             onPassToSecondTeam={handlePassToSecondTeam}
             canPassToSecondTeam={canPassToSecondTeam}

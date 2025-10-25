@@ -3,7 +3,7 @@ import { Box, Typography } from "@mui/material";
 import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
 
 interface RemoteGameStatusProps {
-  gameStatus: "paused" | "buzzer_round" | "answering";
+  gameStatus: "paused" | "buzzer_round" | "answering" | "idle";
 }
 
 const RemoteGameStatus: React.FC<RemoteGameStatusProps> = ({ gameStatus }) => {
@@ -29,6 +29,13 @@ const RemoteGameStatus: React.FC<RemoteGameStatusProps> = ({ gameStatus }) => {
           color: "#F59E0B",
           icon: "⏸️",
           bgColor: "rgba(245, 158, 11, 0.1)",
+        };
+      case "idle":
+        return {
+          label: "RESULTS",
+          color: "#8B5CF6",
+          icon: "📊",
+          bgColor: "rgba(139, 92, 246, 0.1)",
         };
       default:
         return {

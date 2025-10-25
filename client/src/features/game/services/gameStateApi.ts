@@ -1,6 +1,6 @@
 import { api } from '../../../app/api';
 
-export type GameStatus = 'paused' | 'buzzer_round' | 'answering';
+export type GameStatus = 'paused' | 'buzzer_round' | 'answering' | 'idle';
 
 export interface GameState {
   _id: string;
@@ -13,6 +13,9 @@ export interface GameState {
     teamName: string;
     teamScore: number;
   } | string;
+  buzzerRoundStartTime?: number;
+  answeringRoundStartTime?: number;
+  idleStartTime?: number;
   createdAt: Date;
   updatedAt: Date;
 }

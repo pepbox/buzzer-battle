@@ -120,6 +120,8 @@ export default class GameStateService {
 
         gameState.currentQuestionIndex += 1;
         gameState.currentAnsweringTeam = undefined;
+        gameState.buzzerRoundStartTime = undefined; // Clear timestamps
+        gameState.answeringRoundStartTime = undefined;
         
         const options: any = {};
         if (this.session) {
@@ -188,6 +190,8 @@ export default class GameStateService {
 
         gameState.gameStatus = GameStatus.BUZZER_ROUND;
         gameState.currentAnsweringTeam = undefined;
+        gameState.buzzerRoundStartTime = Date.now();
+        gameState.answeringRoundStartTime = undefined; // Clear answering time
         
         const options: any = {};
         if (this.session) {
@@ -195,6 +199,25 @@ export default class GameStateService {
         }
         
         await gameState.save(options);
+
+        // Clear buzzer queue for the current question (cleanup from previous question)
+        const questionService = new QuestionService(this.session);
+        try {
+            const currentQuestion = await questionService.fetchCurrentQuestion(
+                sessionId,
+                gameState.currentQuestionIndex
+            );
+            
+            if (currentQuestion) {
+                const buzzerQueueService = new BuzzerQueueService(this.session);
+                await buzzerQueueService.clearBuzzerQueueForQuestion(currentQuestion._id);
+                console.log(`🧹 Cleared buzzer queue for question ${currentQuestion._id}`);
+            }
+        } catch (error) {
+            console.error("Error clearing buzzer queue:", error);
+            // Don't throw - this is cleanup, game should continue
+        }
+
         return gameState;
     }
 
@@ -211,6 +234,8 @@ export default class GameStateService {
         }
 
         gameState.gameStatus = GameStatus.PAUSED;
+        gameState.buzzerRoundStartTime = undefined; // Clear timestamps
+        gameState.answeringRoundStartTime = undefined;
         
         const options: any = {};
         if (this.session) {
@@ -279,6 +304,8 @@ export default class GameStateService {
 
             gameState.gameStatus = GameStatus.PAUSED;
             gameState.currentAnsweringTeam = undefined;
+            gameState.buzzerRoundStartTime = undefined; // Clear timestamps
+            gameState.answeringRoundStartTime = undefined;
             
             const options: any = {};
             if (this.session) {
@@ -293,6 +320,8 @@ export default class GameStateService {
             gameState.currentQuestionIndex = nextIndex;
             gameState.currentAnsweringTeam = undefined;
             gameState.gameStatus = GameStatus.BUZZER_ROUND;
+            gameState.buzzerRoundStartTime = undefined; // Clear timestamps
+            gameState.answeringRoundStartTime = undefined;
             
             const options: any = {};
             if (this.session) {
@@ -338,6 +367,8 @@ export default class GameStateService {
         // Set 2nd team as answering team
         gameState.currentAnsweringTeam = (secondTeam.teamId as any)._id;
         gameState.gameStatus = GameStatus.ANSWERING;
+        gameState.answeringRoundStartTime = Date.now();
+        gameState.buzzerRoundStartTime = undefined; // Clear buzzer time
         
         const options: any = {};
         if (this.session) {
@@ -365,6 +396,8 @@ export default class GameStateService {
 
         gameState.currentAnsweringTeam = teamId as Types.ObjectId;
         gameState.gameStatus = GameStatus.ANSWERING;
+        gameState.answeringRoundStartTime = Date.now();
+        gameState.buzzerRoundStartTime = undefined; // Clear buzzer time
         
         const options: any = {};
         if (this.session) {
@@ -399,5 +432,72 @@ export default class GameStateService {
             sessionId,
             (fastestTeam.teamId as any)._id
         );
+    }
+
+    /**
+     * Auto-transition from BUZZER_ROUND to ANSWERING
+     * Selects the fastest team from buzzer queue
+     */
+    async transitionToAnswering(
+        sessionId: Types.ObjectId | string,
+        questionId: Types.ObjectId | string
+    ): Promise<IGameState> {
+        console.log(`🔄 Auto-transitioning to ANSWERING for session ${sessionId}`);
+        
+        const gameState = await this.fetchGameStateBySessionId(sessionId);
+        if (!gameState) {
+            throw new Error("Game state not found");
+        }
+
+        // Only transition if still in buzzer round
+        if (gameState.gameStatus !== GameStatus.BUZZER_ROUND) {
+            console.log(`⚠️ Game state is ${gameState.gameStatus}, skipping transition to ANSWERING`);
+            return gameState;
+        }
+
+        // Auto-select fastest team
+        try {
+            return await this.autoSelectFastestTeam(sessionId, questionId);
+        } catch (error: any) {
+            if (error.message === "No teams in buzzer queue") {
+                // No teams pressed buzzer, transition to IDLE
+                console.log('⚠️ No teams pressed buzzer, transitioning to IDLE');
+                return await this.transitionToIdle(sessionId);
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Auto-transition from ANSWERING to IDLE
+     * Called when answering time expires
+     */
+    async transitionToIdle(sessionId: Types.ObjectId | string): Promise<IGameState> {
+        console.log(`🔄 Auto-transitioning to IDLE for session ${sessionId}`);
+        
+        const query = GameState.findOne({ sessionId });
+        if (this.session) {
+            query.session(this.session);
+        }
+        
+        const gameState = await query;
+        if (!gameState) {
+            throw new Error("Game state not found");
+        }
+
+        gameState.gameStatus = GameStatus.IDLE;
+        gameState.idleStartTime = Date.now();
+        gameState.buzzerRoundStartTime = undefined;
+        gameState.answeringRoundStartTime = undefined;
+        
+        const options: any = {};
+        if (this.session) {
+            options.session = this.session;
+        }
+        
+        await gameState.save(options);
+        console.log(`✅ Transitioned to IDLE for session ${sessionId}`);
+        
+        return gameState;
     }
 }

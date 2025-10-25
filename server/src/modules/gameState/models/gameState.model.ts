@@ -11,7 +11,7 @@ const gameStateSchema = new Schema<IGameState>({
     currentQuestionIndex: {
         type: Number,
         required: true,
-        default: 0
+        default: -1  // Start at -1, first NEXT_QUESTION will move to 0
     },
     gameStatus: {
         type: String,
@@ -22,6 +22,18 @@ const gameStateSchema = new Schema<IGameState>({
     currentAnsweringTeam: {
         type: Schema.Types.ObjectId,
         ref: 'Team',
+        required: false
+    },
+    buzzerRoundStartTime: {
+        type: Number,
+        required: false
+    },
+    answeringRoundStartTime: {
+        type: Number,
+        required: false
+    },
+    idleStartTime: {
+        type: Number,
         required: false
     }
 }, {

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { Box, Typography, Button } from "@mui/material";
-import { useNavigate, useParams } from "react-router-dom";
+import React from "react";
+import { Box, Typography } from "@mui/material";
+import { useParams } from "react-router-dom";
 import { useFetchBuzzerLeaderboardQuery } from "../services/buzzerApi";
 import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
@@ -17,12 +17,12 @@ import positionFour from "../../../assets/leaderboard/four.webp";
 import positionFive from "../../../assets/leaderboard/five.webp";
 
 const BuzzerLeaderboard: React.FC = () => {
-  const navigate = useNavigate();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { sessionId } = useParams<{ sessionId: string }>();
-  const [autoSkipTimer, setAutoSkipTimer] = useState(10);
 
-  // Get current team from Redux
+  // Get current team and game state from Redux
   const team = useAppSelector((state: RootState) => state.team.team);
+  const gameState = useAppSelector((state: RootState) => state.gameState.gameState);
 
   // Fetch buzzer leaderboard
   const {
@@ -33,6 +33,16 @@ const BuzzerLeaderboard: React.FC = () => {
 
   const leaderboard = leaderboardData?.data?.leaderboard || [];
 
+  // Get current answering team
+  const currentAnsweringTeam = gameState?.currentAnsweringTeam;
+  const answeringTeamId =
+    typeof currentAnsweringTeam === "string"
+      ? currentAnsweringTeam
+      : currentAnsweringTeam?._id;
+
+  // Check if we're in answering state
+  const isAnsweringState = gameState?.gameStatus === "answering";
+
   // Position badge images
   const positionBadges: { [key: number]: string } = {
     1: positionOne,
@@ -40,26 +50,6 @@ const BuzzerLeaderboard: React.FC = () => {
     3: positionThree,
     4: positionFour,
     5: positionFive,
-  };
-
-  // Auto-skip timer (10 seconds)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setAutoSkipTimer((prev) => {
-        if (prev <= 1) {
-          handleSkip();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleSkip = () => {
-    // Navigate back to question screen
-    navigate(`/game/${sessionId}/question`);
   };
 
   // Format timestamp to show seconds with 2 decimal places (e.g., "02.44")
@@ -108,13 +98,32 @@ const BuzzerLeaderboard: React.FC = () => {
         sx={{
           color: "white",
           fontWeight: "bold",
-          marginBottom: "24px",
+          marginBottom: "16px",
           textAlign: "center",
           textShadow: "2px 2px 4px rgba(0,0,0,0.3)",
         }}
       >
         Fastest Solvers
       </Typography>
+
+      {/* Answering Team Indicator */}
+      {isAnsweringState && answeringTeamId && (
+        <Typography
+          variant="h6"
+          sx={{
+            color: "#FFD700",
+            fontWeight: "bold",
+            marginBottom: "16px",
+            textAlign: "center",
+            textShadow: "2px 2px 4px rgba(0,0,0,0.5)",
+            backgroundColor: "rgba(0, 0, 0, 0.3)",
+            padding: "8px 16px",
+            borderRadius: "8px",
+          }}
+        >
+          🎯 {leaderboard.find((e) => e.teamId === answeringTeamId)?.teamName || "Team"} is answering...
+        </Typography>
+      )}
 
       {/* Leaderboard Container */}
       <Box
@@ -153,17 +162,26 @@ const BuzzerLeaderboard: React.FC = () => {
                   padding: "12px 16px",
                   marginBottom: "12px",
                   borderRadius: "12px",
-                  backgroundColor: isCurrentTeam
-                    ? "rgba(255, 215, 0, 0.2)" // Highlight current team with golden tint
-                    : "rgba(240, 240, 240, 0.5)",
-                  border: isCurrentTeam
-                    ? "2px solid #FFD700"
-                    : "1px solid transparent",
+                  backgroundColor:
+                    entry.teamId === answeringTeamId
+                      ? "rgba(76, 175, 80, 0.2)" // Green tint for answering team
+                      : isCurrentTeam
+                      ? "rgba(255, 215, 0, 0.2)" // Golden tint for current team
+                      : "rgba(240, 240, 240, 0.5)",
+                  border:
+                    entry.teamId === answeringTeamId
+                      ? "2px solid #4CAF50" // Green border for answering team
+                      : isCurrentTeam
+                      ? "2px solid #FFD700" // Golden border for current team
+                      : "1px solid transparent",
                   transition: "all 0.3s ease",
                   "&:hover": {
-                    backgroundColor: isCurrentTeam
-                      ? "rgba(255, 215, 0, 0.3)"
-                      : "rgba(240, 240, 240, 0.8)",
+                    backgroundColor:
+                      entry.teamId === answeringTeamId
+                        ? "rgba(76, 175, 80, 0.3)"
+                        : isCurrentTeam
+                        ? "rgba(255, 215, 0, 0.3)"
+                        : "rgba(240, 240, 240, 0.8)",
                   },
                 }}
               >
@@ -209,12 +227,16 @@ const BuzzerLeaderboard: React.FC = () => {
                 <Box sx={{ flex: 1, marginLeft: "16px" }}>
                   <Typography
                     sx={{
-                      fontWeight: isCurrentTeam ? "bold" : "600",
+                      fontWeight:
+                        entry.teamId === answeringTeamId || isCurrentTeam
+                          ? "bold"
+                          : "600",
                       fontSize: "16px",
                       color: "#333",
                     }}
                   >
                     {entry.teamName}
+                    {entry.teamId === answeringTeamId && " 📝"}
                   </Typography>
                 </Box>
 
@@ -250,28 +272,6 @@ const BuzzerLeaderboard: React.FC = () => {
           })
         )}
       </Box>
-
-      {/* Skip Button with Auto-skip Timer */}
-      <Button
-        variant="contained"
-        onClick={handleSkip}
-        sx={{
-          marginTop: "24px",
-          backgroundColor: "white",
-          color: "#3f51b5",
-          fontWeight: "bold",
-          fontSize: "16px",
-          padding: "12px 48px",
-          borderRadius: "25px",
-          textTransform: "none",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-          "&:hover": {
-            backgroundColor: "#f5f5f5",
-          },
-        }}
-      >
-        Skip {autoSkipTimer > 0 && `(${autoSkipTimer}s)`}
-      </Button>
     </Box>
   );
 };

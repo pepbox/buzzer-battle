@@ -63,7 +63,7 @@ const PresenterGameView: React.FC<PresenterGameViewProps> = ({ session }) => {
       );
 
     case "buzzer_round":
-      return <PresenterBuzzerRound timeElapsed={0} timeLimit={30} />;
+      return <PresenterBuzzerRound />;
 
     case "answering":
       // TODO: Show question component here

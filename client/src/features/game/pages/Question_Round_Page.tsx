@@ -17,6 +17,7 @@ import {
   TimesUp,
 } from "../../question/components/StatusCard";
 import CorrectAnswer from "../../question/components/Correct_Answer";
+import { useRemainingTimer } from "../../../hooks/useTimerSync";
 
 const QuestionRoundPage: React.FC = () => {
   const navigate = useNavigate();
@@ -51,6 +52,9 @@ const QuestionRoundPage: React.FC = () => {
   const [sendResponse] = useSendQuestionResponseMutation();
 
   const question = questionData?.data?.question;
+  const currentQuestionIndex = questionData?.data?.currentQuestionIndex;
+
+  const timeLimit = 60; // 60 seconds for answering
 
   // Check if current team is the answering team
   const isAnsweringTeam =
@@ -58,12 +62,74 @@ const QuestionRoundPage: React.FC = () => {
       ? gameState?.currentAnsweringTeam?._id === team?._id
       : gameState?.currentAnsweringTeam === team?._id;
 
+  // Reset answer state when question changes
+  useEffect(() => {
+    setSelectedAnswer("");
+    setIsAnswered(false);
+    setSubmittingAnswer(false);
+    setAnswerStatus(null);
+    setAnswerResult(null);
+  }, [currentQuestionIndex]);
+
+  // Handle time up callback
+  const handleTimeUp = async () => {
+    console.log("Time's up!");
+    setIsAnswered(true);
+
+    // Show TimesUp status screen
+    setAnswerStatus("status");
+
+    // After 10 seconds, navigate to leaderboard
+    setTimeout(() => {
+      navigate(`/game/${sessionId}/leaderboard`);
+    }, 10000);
+  };
+
+  // Use synced timer with server timestamp
+  const { timeRemaining } = useRemainingTimer(
+    gameState?.answeringRoundStartTime,
+    timeLimit,
+    handleTimeUp
+  );
+
   // If not the answering team, redirect to leaderboard
   useEffect(() => {
     if (gameState && !isAnsweringTeam && gameState.gameStatus === "answering") {
       navigate(`/game/${sessionId}/leaderboard`);
     }
   }, [gameState, isAnsweringTeam, navigate, sessionId]);
+
+  // Handle IDLE state transition - show result then redirect to leaderboard
+  useEffect(() => {
+    if (gameState?.gameStatus === "idle" && isAnsweringTeam) {
+      console.log("🔵 Game transitioned to IDLE - showing result");
+      
+      // If we haven't already set the answer status, show the result
+      if (answerStatus === null || answerStatus === "answering") {
+        // Check if answer was submitted (we have answerResult)
+        if (answerResult) {
+          // Show the appropriate status screen
+          setAnswerStatus("status");
+          
+          // After 5 seconds, redirect to leaderboard
+          setTimeout(() => {
+            console.log("⏰ Result timeout - navigating to leaderboard");
+            navigate(`/game/${sessionId}/leaderboard`);
+          }, 5000);
+        } else {
+          // Time expired without answer - show TimesUp
+          setIsAnswered(true);
+          setAnswerStatus("status");
+          
+          // After 5 seconds, redirect to leaderboard
+          setTimeout(() => {
+            console.log("⏰ TimesUp timeout - navigating to leaderboard");
+            navigate(`/game/${sessionId}/leaderboard`);
+          }, 5000);
+        }
+      }
+    }
+  }, [gameState?.gameStatus, isAnsweringTeam, answerResult, answerStatus, navigate, sessionId]);
 
   const handleAnswerSelect = async (answer: string) => {
     if (!question || isAnswered) return;
@@ -96,49 +162,19 @@ const QuestionRoundPage: React.FC = () => {
       // Move to status phase (show NailedIt or CloseCall)
       setAnswerStatus("status");
 
-      // After 10 seconds, move to next phase
-      setTimeout(() => {
-        if (result.data.isCorrect) {
-          // Show CorrectAnswer component
-          setAnswerStatus("result");
-
-          // After another 10 seconds, navigate to leaderboard
-          setTimeout(() => {
-            navigate(`/game/${sessionId}/leaderboard`);
-          }, 10000);
-        } else {
-          // Wrong answer → Go directly to leaderboard
-          navigate(`/game/${sessionId}/leaderboard`);
-        }
-      }, 10000);
+      // The IDLE state transition will handle navigation to leaderboard
+      // No need to set timeouts here
     } catch (error) {
       console.error("Failed to submit answer:", error);
       setSubmittingAnswer(false);
       
-      // On error, still show an error status and navigate
+      // On error, still show an error status
       setAnswerResult({
         isCorrect: false,
         pointsAwarded: 0,
       });
       setAnswerStatus("status");
-      
-      setTimeout(() => {
-        navigate(`/game/${sessionId}/leaderboard`);
-      }, 10000);
     }
-  };
-
-  const handleTimeUp = async () => {
-    console.log("Time's up!");
-    setIsAnswered(true);
-
-    // Show TimesUp status screen
-    setAnswerStatus("status");
-
-    // After 10 seconds, navigate to leaderboard
-    setTimeout(() => {
-      navigate(`/game/${sessionId}/leaderboard`);
-    }, 10000);
   };
 
   if (isLoading) {
@@ -186,7 +222,8 @@ const QuestionRoundPage: React.FC = () => {
           teamNumber={team?.teamNumber || 0}
           totalPoints={team?.teamScore || 0}
           questionPoints={150} // Fixed 150 points per correct answer
-          timeLimit={30}
+          timeLimit={timeLimit}
+          timeRemaining={timeRemaining}
           selectedAnswer={selectedAnswer}
           disabled={isAnswered}
           onAnswerSelect={handleAnswerSelect}
