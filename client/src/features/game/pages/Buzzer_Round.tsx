@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { Box, LinearProgress, Alert } from "@mui/material";
-import { useParams } from "react-router-dom";
 import QuestionBuzzer from "../../question/components/Question_Buzzer";
 import Buzzer from "../../../components/ui/Buzzer";
 import normalBg from "../../../assets/background/question_bg.webp";
@@ -14,7 +13,6 @@ import { useTimerSync } from "../../../hooks/useTimerSync";
 
 const BuzzerRound: React.FC = () => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { sessionId } = useParams<{ sessionId: string }>();
   const [buzzerPressed, setBuzzerPressed] = useState(false);
   const [buzzerError, setBuzzerError] = useState<string | null>(null);
 

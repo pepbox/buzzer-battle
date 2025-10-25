@@ -1,6 +1,6 @@
 import { Route, Routes } from "react-router-dom";
-import DashboardPage from "../features/admin/Pages/DshboardPage";
-import AdminLogin from "../features/admin/Pages/AdminLogin";
+import DashboardPage from "../features/admin/pages/DshboardPage";
+import AdminLogin from "../features/admin/pages/AdminLogin";
 import RemoteControl from "../features/admin/pages/RemoteControl";
 import PresenterView from "../features/admin/pages/PresenterView";
 import Box from "@mui/material/Box";

@@ -1,6 +1,5 @@
 import React from "react";
 import { Box, Typography } from "@mui/material";
-import { useParams } from "react-router-dom";
 import { useFetchBuzzerLeaderboardQuery } from "../services/buzzerApi";
 import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
@@ -18,7 +17,6 @@ import positionFive from "../../../assets/leaderboard/five.webp";
 
 const BuzzerLeaderboard: React.FC = () => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { sessionId } = useParams<{ sessionId: string }>();
 
   // Get current team and game state from Redux
   const team = useAppSelector((state: RootState) => state.team.team);
