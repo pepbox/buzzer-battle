@@ -4,7 +4,8 @@ import GameStateService from '../services/gameState.service';
 import QuestionService from '../../questions/services/question.service';
 import TeamService from '../../teams/services/team.service';
 import { GameStatus } from '../types/enums';
-import { getSocketIO } from '../../../services/socket';
+import { SessionEmitters } from '../../../services/socket/sessionEmitters';
+import { Events } from '../../../services/socket/enums/Events';
 
 const gameStateService = new GameStateService();
 const questionService = new QuestionService();
@@ -71,17 +72,32 @@ export const updateGameStateUnified = async (
 
         let gameState;
         let additionalData: any = {};
-        const io = getSocketIO();
 
         switch (action) {
             case 'START_BUZZER_ROUND':
+                const startTime = Date.now();
                 gameState = await gameStateService.startBuzzerRound(sessionId);
                 
-                // Emit socket event
-                io.to(`session:${sessionId}`).emit('game-state-changed', {
+                // Get current question
+                const currentQuestion = await questionService.fetchCurrentQuestion(
+                    sessionId,
+                    gameState.currentQuestionIndex
+                );
+                
+                // Emit BUZZER_ROUND_STARTED with timestamp for synced timer
+                SessionEmitters.toSession(sessionId, Events.BUZZER_ROUND_STARTED, {
+                    questionId: currentQuestion?._id,
+                    questionIndex: gameState.currentQuestionIndex,
+                    startTime,
+                    duration: 30000, // 30 seconds for buzzer round
+                });
+                
+                // Also emit general game state change
+                SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
                     gameStatus: gameState.gameStatus,
                     currentQuestionIndex: gameState.currentQuestionIndex,
                     currentAnsweringTeam: gameState.currentAnsweringTeam,
+                    buzzerStartTime: startTime,
                 });
                 break;
 
@@ -89,7 +105,7 @@ export const updateGameStateUnified = async (
                 gameState = await gameStateService.pauseGame(sessionId);
                 
                 // Emit socket event
-                io.to(`session:${sessionId}`).emit('game-state-changed', {
+                SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
                     gameStatus: gameState.gameStatus,
                     currentQuestionIndex: gameState.currentQuestionIndex,
                     currentAnsweringTeam: gameState.currentAnsweringTeam,
@@ -100,7 +116,7 @@ export const updateGameStateUnified = async (
                 gameState = await gameStateService.resumeGame(sessionId);
                 
                 // Emit socket event
-                io.to(`session:${sessionId}`).emit('game-state-changed', {
+                SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
                     gameStatus: gameState.gameStatus,
                     currentQuestionIndex: gameState.currentQuestionIndex,
                     currentAnsweringTeam: gameState.currentAnsweringTeam,
@@ -118,12 +134,12 @@ export const updateGameStateUnified = async (
                     additionalData.finalLeaderboard = finalLeaderboard;
 
                     // Emit game ended event
-                    io.to(`session:${sessionId}`).emit('game-ended', {
+                    SessionEmitters.toSession(sessionId, Events.GAME_ENDED, {
                         finalLeaderboard,
                     });
                 } else {
                     // Emit normal game state change
-                    io.to(`session:${sessionId}`).emit('game-state-changed', {
+                    SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
                         gameStatus: gameState.gameStatus,
                         currentQuestionIndex: gameState.currentQuestionIndex,
                         currentAnsweringTeam: gameState.currentAnsweringTeam,
@@ -138,8 +154,13 @@ export const updateGameStateUnified = async (
                 const leaderboard = await teamService.fetchOverallLeaderboard(sessionId);
                 additionalData.leaderboard = leaderboard;
 
-                // Emit socket event
-                io.to(`session:${sessionId}`).emit('game-state-changed', {
+                // Emit show leaderboard event
+                SessionEmitters.toSession(sessionId, Events.SHOW_LEADERBOARD, {
+                    leaderboard,
+                });
+                
+                // Also emit game state change
+                SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
                     gameStatus: gameState.gameStatus,
                     currentQuestionIndex: gameState.currentQuestionIndex,
                     currentAnsweringTeam: gameState.currentAnsweringTeam,
@@ -156,16 +177,28 @@ export const updateGameStateUnified = async (
                     payload.questionId
                 );
 
-                // Emit socket event with second chance info
-                io.to(`session:${sessionId}`).emit('second-chance', {
+                const secondChanceStartTime = Date.now();
+
+                // Emit socket event with second chance info and timestamp
+                SessionEmitters.toSession(sessionId, Events.SECOND_CHANCE, {
                     teamId: gameState.currentAnsweringTeam,
                     gameStatus: gameState.gameStatus,
+                    startTime: secondChanceStartTime,
+                    duration: 60000, // 60 seconds for answering
                 });
 
-                io.to(`session:${sessionId}`).emit('game-state-changed', {
+                // Emit answering round started to the specific team
+                SessionEmitters.toTeam(sessionId, gameState.currentAnsweringTeam?.toString() || '', Events.ANSWERING_ROUND_STARTED, {
+                    questionId: payload.questionId,
+                    startTime: secondChanceStartTime,
+                    duration: 60000,
+                });
+
+                SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
                     gameStatus: gameState.gameStatus,
                     currentQuestionIndex: gameState.currentQuestionIndex,
                     currentAnsweringTeam: gameState.currentAnsweringTeam,
+                    answeringStartTime: secondChanceStartTime,
                 });
                 break;
 
@@ -179,15 +212,31 @@ export const updateGameStateUnified = async (
                     payload.teamId
                 );
 
-                // Emit socket event
-                io.to(`session:${sessionId}`).emit('team-selected', {
+                const answeringStartTime = Date.now();
+
+                // Emit team selected event
+                SessionEmitters.toSession(sessionId, Events.TEAM_SELECTED, {
                     teamId: gameState.currentAnsweringTeam,
+                    startTime: answeringStartTime,
                 });
 
-                io.to(`session:${sessionId}`).emit('game-state-changed', {
+                // Emit answering round started to the specific team
+                const questionForAnswering = await questionService.fetchCurrentQuestion(
+                    sessionId,
+                    gameState.currentQuestionIndex
+                );
+                
+                SessionEmitters.toTeam(sessionId, payload.teamId, Events.ANSWERING_ROUND_STARTED, {
+                    questionId: questionForAnswering?._id,
+                    startTime: answeringStartTime,
+                    duration: 60000, // 60 seconds
+                });
+
+                SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
                     gameStatus: gameState.gameStatus,
                     currentQuestionIndex: gameState.currentQuestionIndex,
                     currentAnsweringTeam: gameState.currentAnsweringTeam,
+                    answeringStartTime,
                 });
                 break;
 
@@ -201,15 +250,26 @@ export const updateGameStateUnified = async (
                     payload.questionId
                 );
 
-                // Emit socket event
-                io.to(`session:${sessionId}`).emit('team-selected', {
+                const autoSelectStartTime = Date.now();
+
+                // Emit team selected event
+                SessionEmitters.toSession(sessionId, Events.TEAM_SELECTED, {
                     teamId: gameState.currentAnsweringTeam,
+                    startTime: autoSelectStartTime,
                 });
 
-                io.to(`session:${sessionId}`).emit('game-state-changed', {
+                // Emit answering round started to the selected team
+                SessionEmitters.toTeam(sessionId, gameState.currentAnsweringTeam?.toString() || '', Events.ANSWERING_ROUND_STARTED, {
+                    questionId: payload.questionId,
+                    startTime: autoSelectStartTime,
+                    duration: 60000,
+                });
+
+                SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
                     gameStatus: gameState.gameStatus,
                     currentQuestionIndex: gameState.currentQuestionIndex,
                     currentAnsweringTeam: gameState.currentAnsweringTeam,
+                    answeringStartTime: autoSelectStartTime,
                 });
                 break;
 
@@ -284,8 +344,7 @@ export const updateGameStatus = async (
 
         // Emit socket event to all users in the session
         try {
-            const io = getSocketIO();
-            io.to(`session:${sessionId}`).emit('game-state-changed', {
+            SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
                 gameStatus: gameState.gameStatus,
                 currentQuestionIndex: gameState.currentQuestionIndex,
                 currentAnsweringTeam: gameState.currentAnsweringTeam,
@@ -331,8 +390,7 @@ export const moveToNextQuestion = async (
 
         // Emit socket event to all users in the session
         try {
-            const io = getSocketIO();
-            io.to(`session:${sessionId}`).emit('game-state-changed', {
+            SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
                 gameStatus: gameState.gameStatus,
                 currentQuestionIndex: gameState.currentQuestionIndex,
                 currentAnsweringTeam: gameState.currentAnsweringTeam,

@@ -13,9 +13,12 @@ import {
 } from "../services/adminSlice";
 import { RootState } from "../../../app/store";
 import { useAppSelector } from "../../../app/hooks";
-import { setSessionId, selectSessionId } from "../../session/services/sessionSlice";
-import ControlCameraIcon from '@mui/icons-material/ControlCamera';
-import SlideshowIcon from '@mui/icons-material/Slideshow';
+import {
+  setSessionId,
+  selectSessionId,
+} from "../../session/services/sessionSlice";
+import ControlCameraIcon from "@mui/icons-material/ControlCamera";
+import SlideshowIcon from "@mui/icons-material/Slideshow";
 
 const AdminLogin: React.FC = () => {
   const [pin, setPin] = useState<string[]>(["", "", "", ""]);
@@ -24,7 +27,7 @@ const AdminLogin: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
-  
+
   // Get sessionId from Redux store or URL
   const storedSessionId = useAppSelector(selectSessionId);
   const sessionId = urlSessionId || storedSessionId;
@@ -46,14 +49,14 @@ const AdminLogin: React.FC = () => {
   // Initialize auth state and redirect if already authenticated
   useEffect(() => {
     dispatch(initializeAuth());
-    
+
     // Store sessionId in Redux if available from URL
     if (urlSessionId) {
       dispatch(setSessionId(urlSessionId));
     }
-    
+
     if (isAuthenticated) {
-      navigate(`/admin/dashboard`);
+      navigate(`/admin/${urlSessionId}/dashboard`);
     }
   }, [dispatch, isAuthenticated, navigate, urlSessionId]);
 
@@ -290,7 +293,6 @@ const AdminLogin: React.FC = () => {
             >
               {isLoading ? "Logging in..." : "Login"}
             </GlobalButton>
-
             {/* Divider */}
             <Box sx={{ my: 3, display: "flex", alignItems: "center" }}>
               <Box sx={{ flex: 1, height: "1px", bgcolor: "#e0e0e0" }} />
@@ -306,7 +308,6 @@ const AdminLogin: React.FC = () => {
               </Typography>
               <Box sx={{ flex: 1, height: "1px", bgcolor: "#e0e0e0" }} />
             </Box>
-
             {/* Remote Control Button */}
             <GlobalButton
               onClick={handleRemoteControl}
@@ -337,7 +338,6 @@ const AdminLogin: React.FC = () => {
               <ControlCameraIcon sx={{ fontSize: "1.2rem" }} />
               Enter as Remote Control
             </GlobalButton>
-
             {/* Presenter Mode Button */}
             <GlobalButton
               onClick={handlePresenterMode}
@@ -369,7 +369,6 @@ const AdminLogin: React.FC = () => {
               <SlideshowIcon sx={{ fontSize: "1.2rem" }} />
               Enter as Presenter
             </GlobalButton>
-
             {!sessionId && (
               <Typography
                 sx={{

@@ -28,7 +28,7 @@ if (process.env.NODE_ENV === "development") {
 const server = http.createServer(app);
 
 // Initialize Socket.IO with the HTTP server
-const io = initializeSocket(server);
+initializeSocket(server);
 
 const corsOptions = {
   origin: process.env.FRONTEND_URL || "http://localhost:5173",

@@ -27,6 +27,7 @@ export const authenticateUser = (req: Request, res: Response, next: NextFunction
 
 export const authorizeRoles = (...roles: ('USER' | 'ADMIN' | 'TEAM')[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
+    console.log("for user:", req.user.role);
     if (!req.user || !roles.includes(req.user.role)) {
       res.status(403).json({ success: false, message: 'Forbidden: Insufficient permissions' });
       return;
@@ -34,6 +35,3 @@ export const authorizeRoles = (...roles: ('USER' | 'ADMIN' | 'TEAM')[]) => {
     next();
   };
 };
-
-
-

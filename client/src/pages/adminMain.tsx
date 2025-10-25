@@ -8,12 +8,12 @@ import { useLazyFetchAdminQuery } from "../features/admin/services/admin.Api";
 import { useAppSelector } from "../app/hooks";
 import { RootState } from "../app/store";
 import { useEffect } from "react";
-import Loader from "../components/ui/Loader";
+// import Loader from "../components/ui/Loader";
 // import AuthWrapper from "../components/auth/AuthWrapper";
 
 const AdminMain = () => {
   const [FetchAdmin] = useLazyFetchAdminQuery();
-  const { isLoading, isAuthenticated } = useAppSelector(
+  const { isAuthenticated } = useAppSelector(
     (state: RootState) => state.admin
   );
 
@@ -21,9 +21,9 @@ const AdminMain = () => {
     FetchAdmin({});
   }, [isAuthenticated, FetchAdmin]);
 
-  if (isLoading) {
-    return <Loader />;
-  }
+  // if (isLoading) {
+  //   return <Loader />;
+  // }
 
   return (
     <Box sx={{ maxWidth: "100%", minHeight: "100vh" }}>

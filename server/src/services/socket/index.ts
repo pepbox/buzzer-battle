@@ -22,8 +22,27 @@ export function initializeSocket(server: HTTPServer): Server {
     console.log(`Socket connected: ${socket.id}`);
 
     const user = (socket as any).user;
+    const sessionId = user.sessionId;
+    
+    // Add to socket manager and room manager
     socketManager.addSocket(socket.id, user);
     roomManager.addSocketToSession(socket.id, user);
+
+    // Join session room
+    socket.join(`session:${sessionId}`);
+    console.log(`Socket ${socket.id} joined room: session:${sessionId}`);
+    
+    // Join role-specific room
+    const roleRoom = `session:${sessionId}:${user.role.toLowerCase()}`;
+    socket.join(roleRoom);
+    console.log(`Socket ${socket.id} joined room: ${roleRoom}`);
+    
+    // Join team room if user is a team
+    if (user.role === 'TEAM' || user.role === 'USER') {
+      const teamRoom = `session:${sessionId}:team:${user.id}`;
+      socket.join(teamRoom);
+      console.log(`Socket ${socket.id} joined team room: ${teamRoom}`);
+    }
 
     // Handle press-buzzer event
     socket.on("press-buzzer", async (payload) => {

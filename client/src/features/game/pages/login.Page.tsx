@@ -12,7 +12,8 @@ import {
   useTheme,
   CircularProgress,
 } from "@mui/material";
-import { useAppDispatch } from "../../../app/hooks";
+import { useAppDispatch, useAppSelector } from "../../../app/hooks";
+import { RootState } from "../../../app/store";
 import GlobalButton from "../../../components/ui/button";
 import normalBg from "../../../assets/background/normal_bg.webp";
 import {
@@ -28,6 +29,12 @@ const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const theme = useTheme();
+
+  // Get authentication state
+  const { isAuthenticated, team } = useAppSelector(
+    (state: RootState) => state.team
+  );
+  const { gameState } = useAppSelector((state: RootState) => state.gameState);
 
   // All hooks must be called before any conditional returns
   const {
@@ -49,6 +56,28 @@ const LoginPage: React.FC = () => {
   // RTK Query mutation for creating team
   const [createTeam, { isLoading: isCreating, error: createError }] =
     useCreateTeamMutation();
+
+  // Redirect authenticated users to appropriate game screen
+  useEffect(() => {
+    if (isAuthenticated && team && gameState) {
+      console.log("✅ Already authenticated, redirecting to game...");
+
+      // Redirect based on current game state
+      const status = gameState.gameStatus;
+      const answeringTeamId =
+        typeof gameState.currentAnsweringTeam === "string"
+          ? gameState.currentAnsweringTeam
+          : gameState.currentAnsweringTeam?._id;
+
+      if (status === "buzzer_round") {
+        navigate(`/game/${sessionId}/buzzer`, { replace: true });
+      } else if (status === "answering" && answeringTeamId === team._id) {
+        navigate(`/game/${sessionId}/question`, { replace: true });
+      } else {
+        navigate(`/game/${sessionId}/leaderboard`, { replace: true });
+      }
+    }
+  }, [isAuthenticated, team, gameState, navigate, sessionId]);
 
   // Check if sessionId is present
   useEffect(() => {

@@ -5,6 +5,7 @@ import { Events } from "./enums/Events";
 import { gameStateApi } from "../../features/game/services/gameStateApi";
 import { buzzerApi } from "../../features/game/services/buzzerApi";
 import { setGameState } from "../../features/game/services/gameStateSlice";
+import { adminApi } from "../../features/admin/services/admin.Api";
 
 export const setupGlobalListeners = () => {
   // Game State Changed Event
@@ -48,6 +49,94 @@ export const setupGlobalListeners = () => {
     (data: any) => {
       console.error("Buzzer error:", data);
       // You can dispatch a toast notification here
+    },
+    "redux"
+  );
+
+  // Team Joined Event (for admins)
+  websocketService.addGlobalListener(
+    Events.TEAM_JOINED,
+    (data: any) => {
+      console.log("New team joined:", data);
+      // Invalidate teams list and dashboard data
+      // Note: You'll need to add these API tags to your teams API
+      store.dispatch(adminApi.util.invalidateTags(['Team']));
+    },
+    "redux"
+  );
+
+  // Buzzer Round Started Event
+  websocketService.addGlobalListener(
+    Events.BUZZER_ROUND_STARTED,
+    (data: any) => {
+      console.log("Buzzer round started:", data);
+      // Component-specific handlers will manage the timer
+      // This is just for global state updates
+      store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
+    },
+    "redux"
+  );
+
+  // Answering Round Started Event
+  websocketService.addGlobalListener(
+    Events.ANSWERING_ROUND_STARTED,
+    (data: any) => {
+      console.log("Answering round started:", data);
+      // Component-specific handlers will manage the timer
+    },
+    "redux"
+  );
+
+  // Team Selected Event
+  websocketService.addGlobalListener(
+    Events.TEAM_SELECTED,
+    (data: any) => {
+      console.log("Team selected to answer:", data);
+      store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
+    },
+    "redux"
+  );
+
+  // Second Chance Event
+  websocketService.addGlobalListener(
+    Events.SECOND_CHANCE,
+    (data: any) => {
+      console.log("Second chance given:", data);
+      store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
+    },
+    "redux"
+  );
+
+  // Game Ended Event
+  websocketService.addGlobalListener(
+    Events.GAME_ENDED,
+    (data: any) => {
+      console.log("Game ended:", data);
+      store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
+      // Invalidate leaderboard to show final results
+      // store.dispatch(teamsApi.util.invalidateTags(["Leaderboard"]));
+    },
+    "redux"
+  );
+
+  // Show Leaderboard Event
+  websocketService.addGlobalListener(
+    Events.SHOW_LEADERBOARD,
+    (data: any) => {
+      console.log("Show leaderboard:", data);
+      // Component will handle showing the leaderboard UI
+    },
+    "redux"
+  );
+
+  // Answer Submitted Event
+  websocketService.addGlobalListener(
+    Events.ANSWER_SUBMITTED,
+    (data: any) => {
+      console.log("Answer submitted:", data);
+      store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
+      // Invalidate teams and leaderboard
+      // store.dispatch(teamsApi.util.invalidateTags(["Teams", "Leaderboard"]));
     },
     "redux"
   );

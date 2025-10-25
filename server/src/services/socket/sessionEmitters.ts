@@ -9,58 +9,40 @@ export class SessionEmitters {
 
   static toSession(sessionId: string, event: string, data: any) {
     const io = this.getIO();
-    const sockets = roomManager.getSessionSockets(sessionId);
-    sockets.forEach((socketId) => {
-      io.to(socketId).emit(event, data);
-    });
-    console.log(
-      `Emitted ${event} to ${sockets.length} sockets in session ${sessionId}`
-    );
+    // Use Socket.IO rooms for efficient broadcasting
+    io.to(`session:${sessionId}`).emit(event, data);
+    console.log(`Emitted ${event} to session room: session:${sessionId}`);
   }
 
   static toSessionPlayers(sessionId: string, event: string, data: any) {
     const io = this.getIO();
-
-    const sockets = roomManager.getSessionPlayers(sessionId);
-    sockets.forEach((socketId) => {
-      io.to(socketId).emit(event, data);
-    });
-    console.log(
-      `Emitted ${event} to ${sockets.length} players in session ${sessionId}`
-    );
+    // Broadcast to all players (teams) in the session
+    io.to(`session:${sessionId}:user`).to(`session:${sessionId}:team`).emit(event, data);
+    console.log(`Emitted ${event} to players in session ${sessionId}`);
   }
 
   static toSessionAdmins(sessionId: string, event: string, data: any) {
     const io = this.getIO();
-
-    const sockets = roomManager.getSessionAdmins(sessionId);
-    sockets.forEach((socketId) => {
-      io.to(socketId).emit(event, data);
-    });
-    console.log(
-      `Emitted ${event} to ${sockets.length} admins in session ${sessionId}`
-    );
+    // Broadcast to all admins in the session
+    io.to(`session:${sessionId}:admin`).emit(event, data);
+    console.log(`Emitted ${event} to admins in session ${sessionId}`);
   }
 
   // Emit to specific team
   static toTeam(sessionId: string, teamId: string, event: string, data: any) {
     const io = this.getIO();
-
-    const sockets = roomManager.getTeamSockets(sessionId, teamId);
-    sockets.forEach((socketId) => {
-      io.to(socketId).emit(event, data);
-    });
-    console.log(
-      `Emitted ${event} to team ${teamId} (${sockets.length} members)`
-    );
+    // Use team-specific room
+    io.to(`session:${sessionId}:team:${teamId}`).emit(event, data);
+    console.log(`Emitted ${event} to team ${teamId} in session ${sessionId}`);
   }
 
   static toUser(userId: string, event: string, data: any) {
     const io = this.getIO();
-
+    // Fallback to socket manager for user-specific events
     const sockets = socketManager.getUserSockets(userId);
     sockets.forEach((socketId) => {
       io.to(socketId).emit(event, data);
     });
+    console.log(`Emitted ${event} to user ${userId} (${sockets.length} sockets)`);
   }
 }

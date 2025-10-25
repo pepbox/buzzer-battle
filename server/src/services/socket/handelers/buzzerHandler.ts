@@ -3,7 +3,8 @@ import BuzzerQueueService from "../../../modules/buzzerQueue/services/buzzerQueu
 import GameStateService from "../../../modules/gameState/services/gameState.service";
 import QuestionService from "../../../modules/questions/services/question.service";
 import { GameStatus } from "../../../modules/gameState/types/enums";
-import { getSocketIO } from "../index";
+import { SessionEmitters } from "../sessionEmitters";
+import { Events } from "../enums/Events";
 
 const buzzerQueueService = new BuzzerQueueService();
 const gameStateService = new GameStateService();
@@ -24,7 +25,7 @@ export const handlePressBuzzer = async (
         const user = (socket as any).user;
         
         if (!user || !user.id || !user.sessionId) {
-            socket.emit("buzzer-error", {
+            socket.emit(Events.BUZZER_ERROR, {
                 message: "Unauthorized: User information not found.",
             });
             return;
@@ -37,7 +38,7 @@ export const handlePressBuzzer = async (
         // Fetch game state
         const gameState = await gameStateService.fetchGameStateBySessionId(sessionId);
         if (!gameState) {
-            socket.emit("buzzer-error", {
+            socket.emit(Events.BUZZER_ERROR, {
                 message: "Game state not found.",
             });
             return;
@@ -45,7 +46,7 @@ export const handlePressBuzzer = async (
 
         // Check if game status is BUZZER_ROUND
         if (gameState.gameStatus !== GameStatus.BUZZER_ROUND) {
-            socket.emit("buzzer-error", {
+            socket.emit(Events.BUZZER_ERROR, {
                 message: "Buzzer can only be pressed during the buzzer round.",
             });
             return;
@@ -58,7 +59,7 @@ export const handlePressBuzzer = async (
         );
 
         if (!currentQuestion) {
-            socket.emit("buzzer-error", {
+            socket.emit(Events.BUZZER_ERROR, {
                 message: "Current question not found.",
             });
             return;
@@ -73,7 +74,7 @@ export const handlePressBuzzer = async (
         );
 
         if (hasPressed) {
-            socket.emit("buzzer-error", {
+            socket.emit(Events.BUZZER_ERROR, {
                 message: "You have already pressed the buzzer for this question.",
             });
             return;
@@ -94,7 +95,7 @@ export const handlePressBuzzer = async (
         });
 
         // Emit to the team that their buzzer press was successful
-        socket.emit("buzzer-pressed-success", {
+        socket.emit(Events.BUZZER_PRESSED_SUCCESS, {
             message: "Buzzer pressed successfully!",
             data: {
                 timestamp: buzzerEntry.timestamp.toString(),
@@ -103,8 +104,7 @@ export const handlePressBuzzer = async (
         });
 
         // Emit to all users in the session that a buzzer was pressed
-        const io = getSocketIO();
-        io.to(`session:${sessionId}`).emit("buzzer-pressed", {
+        SessionEmitters.toSession(sessionId, Events.BUZZER_PRESSED, {
             teamId,
             timestamp: buzzerEntry.timestamp.toString(),
             questionId: buzzerEntry.questionId,
@@ -113,7 +113,7 @@ export const handlePressBuzzer = async (
         console.log(`Buzzer pressed by team ${teamId} at ${timestamp}`);
     } catch (error: any) {
         console.error("Error handling buzzer press:", error);
-        socket.emit("buzzer-error", {
+        socket.emit(Events.BUZZER_ERROR, {
             message: "Failed to process buzzer press. Please try again.",
             error: error.message,
         });

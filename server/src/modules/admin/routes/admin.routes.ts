@@ -10,6 +10,7 @@ const router = express.Router();
 
 // Admin authentication
 router.post('/login', asyncHandeler(adminControllers.loginAdmin));
+router.post('/logout', asyncHandeler(adminControllers.logoutAdmin));
 router.get('/fetchAdmin', authenticateUser, authorizeRoles("ADMIN"), asyncHandeler(adminControllers.fetchAdmin));
 
 // Admin dashboard endpoints (team-based)

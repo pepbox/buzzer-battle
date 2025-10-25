@@ -1,10 +1,11 @@
 import React, { useState, useEffect, ReactNode } from "react";
 import { Box, Typography, Fade } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+import { useAppSelector } from "../../app/hooks";
+import { RootState } from "../../app/store";
 
 interface OverlayProps {
   children: ReactNode;
-  isGamePaused?: boolean;
   startCountdown?: boolean;
   onCountdownComplete?: () => void;
 }
@@ -13,14 +14,27 @@ type OverlayState = "paused" | "ready" | "countdown" | "go" | "hidden";
 
 const Overlay: React.FC<OverlayProps> = ({
   children,
-  isGamePaused = false,
-  startCountdown = true,
+  startCountdown = false,
   onCountdownComplete,
 }) => {
   const theme = useTheme();
   const [overlayState, setOverlayState] = useState<OverlayState>("ready");
   const [countdownNumber, setCountdownNumber] = useState<number>(3);
   const [showOverlay, setShowOverlay] = useState<boolean>(false);
+  const [isGamePaused, setIsGamePaused] = useState<boolean>(false); // Simulated game pause state
+  const { gameState } = useAppSelector((state: RootState) => state.gameState);
+
+  useEffect(() => {
+    if (gameState?.gameStatus === "paused") {
+      setIsGamePaused(true);
+      setShowOverlay(true);
+      setOverlayState("paused");
+    } else {
+      setIsGamePaused(false);
+      setShowOverlay(false);
+      setOverlayState("hidden");
+    }
+  }, [gameState]);
 
   useEffect(() => {
     if (isGamePaused) {

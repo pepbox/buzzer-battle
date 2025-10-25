@@ -4,6 +4,8 @@ import QuestionService from '../services/question.service';
 import GameStateService from '../../gameState/services/gameState.service';
 import { GameStatus } from '../../gameState/types/enums';
 import mongoose from 'mongoose';
+import { SessionEmitters } from '../../../services/socket/sessionEmitters';
+import { Events } from '../../../services/socket/enums/Events';
 
 const questionService = new QuestionService();
 const gameStateService = new GameStateService();
@@ -154,6 +156,21 @@ export const sendQuestionResponse = async (
             responseOptionId,
             150 // Points for correct answer
         );
+
+        // Emit ANSWER_SUBMITTED event to admins and presenter
+        try {
+            SessionEmitters.toSessionAdmins(sessionId, Events.ANSWER_SUBMITTED, {
+                teamId,
+                questionId,
+                responseOptionId,
+                isCorrect: result.isCorrect,
+                pointsAwarded: result.pointsAwarded,
+                timestamp: Date.now(),
+            });
+        } catch (socketError) {
+            console.error("Error emitting ANSWER_SUBMITTED event:", socketError);
+            // Don't fail the request if socket emission fails
+        }
 
         res.status(201).json({
             message: "Response submitted successfully.",

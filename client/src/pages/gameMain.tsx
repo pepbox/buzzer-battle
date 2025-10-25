@@ -1,30 +1,42 @@
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useParams } from "react-router-dom";
 import LoginPage from "../features/game/pages/login.Page";
 import BuzzerRound from "../features/game/pages/Buzzer_Round";
 import BuzzerLeaderboard from "../features/game/pages/BuzzerLeaderboard";
 import QuestionRoundPage from "../features/game/pages/Question_Round_Page";
 import LeaderBoardPage from "../features/game/pages/LeaderBoard_Page";
 import Overlay from "../components/ui/Overlay";
+import { useLazyFetchCurrentTeamQuery } from "../features/game/services/teamApi";
+import { useEffect } from "react";
+import { setSessionId } from "../features/session/services/sessionSlice";
+import { useAppDispatch } from "../app/hooks";
+import { RootState } from "../app/store";
+import { useAppSelector } from "../app/rootReducer";
+import Loader from "../components/ui/Loader";
+// import AuthWrapper from "../components/auth/AuthWrapper";
+import GameStateRouter from "../features/game/components/GameStateRouter";
 
 const GameMain = () => {
-  // const [fetchUser] = useLazyFetchPlayerQuery();
-  // const { isLoading, isAuthenticated } = useAppSelector(
-  //   (state: RootState) => state.player
-  // );
-  // const dispatch = useAppDispatch();
-  // const sessionId = useParams<{ sessionId: string }>().sessionId;
+  const [FetchCurrentTeam] = useLazyFetchCurrentTeamQuery();
+  const { isLoading, isAuthenticated } = useAppSelector(
+    (state: RootState) => state.team
+  );
+  const dispatch = useAppDispatch();
+  const { sessionId } = useParams<{ sessionId: string }>();
 
-  // useEffect(() => {
-  //   dispatch(setSessionId(sessionId ?? ""));
-  // }, [dispatch, sessionId]);
+  useEffect(() => {
+    dispatch(setSessionId(sessionId ?? ""));
+  }, [dispatch, sessionId]);
 
-  // useEffect(() => {
-  //   fetchUser({});
-  // }, [isAuthenticated]);
+  useEffect(() => {
+    if (isAuthenticated) {
+      FetchCurrentTeam();
+    }
+  }, [isAuthenticated, FetchCurrentTeam]);
 
-  // if (isLoading) {
-  //   return <Loader />;
-  // }
+  if (isLoading) {
+    return <Loader />;
+  }
+
   return (
     <div
       style={{
@@ -35,40 +47,29 @@ const GameMain = () => {
       }}
     >
       <Routes>
+        {/* Public Route - Login Page */}
         <Route path="/" element={<LoginPage />} />
+
+        {/* Protected Routes - Require Authentication */}
+        {/* <Route
+          element={
+            <AuthWrapper userType="team" redirection={`/game/${sessionId}/`} />
+          }
+        > */}
+        {/* Wrap protected routes with Overlay and GameStateRouter */}
         <Route
-          path="/*"
           element={
             <Overlay>
-              <Routes>
-                <Route path="/buzzer" element={<BuzzerRound />} />
-                <Route path="/buzzer-leaderboard" element={<BuzzerLeaderboard />} />
-                <Route path="/question" element={<QuestionRoundPage />} />
-                <Route path="/leaderboard" element={<LeaderBoardPage />} />
-              </Routes>
+              <GameStateRouter />
             </Overlay>
           }
-        />
-
-        {/* <Route
-          path="/"
-          element={
-            <AuthWrapper
-              userType={"player"}
-              redirection={`/game/${sessionId}`}
-            />
-          }
         >
-          <Route path="/intro" element={<IntroScreen />} />
-          <Route path="/questionnaire" element={<Questionnaire />} />
-          <Route
-            path="/questionnaire/:questionIndex"
-            element={<Questionnaire />}
-          />
-          <Route path="/waiting" element={<WaitingAreaScreen />} />
-          <Route path="/arena" element={<GameArenaPage />} />
-          <Route path="/completion" element={<GameCompletionPage />} />
-        </Route> */}
+          <Route path="/buzzer" element={<BuzzerRound />} />
+          <Route path="/buzzer-leaderboard" element={<BuzzerLeaderboard />} />
+          <Route path="/question" element={<QuestionRoundPage />} />
+          <Route path="/leaderboard" element={<LeaderBoardPage />} />
+          {/* </Route> */}
+        </Route>
       </Routes>
     </div>
   );

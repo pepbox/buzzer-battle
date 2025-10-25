@@ -5,6 +5,8 @@ import { generateAccessToken } from '../../../utils/jwtUtils';
 import { setCookieOptions } from '../../../utils/cookieOptions';
 import SessionService from '../../session/services/session.service';
 import { SessionStatus } from '../../session/types/enums';
+import { SessionEmitters } from '../../../services/socket/sessionEmitters';
+import { Events } from '../../../services/socket/enums/Events';
 
 const teamService = new TeamService();
 const sessionService = new SessionService();
@@ -56,6 +58,22 @@ export const createTeam = async (
 
         // Set cookie
         res.cookie("accessToken", accessToken, setCookieOptions);
+
+        // Emit TEAM_JOINED event to admins in the session
+        try {
+            SessionEmitters.toSessionAdmins(team.session.toString(), Events.TEAM_JOINED, {
+                team: {
+                    _id: team._id,
+                    teamNumber: team.teamNumber,
+                    teamName: team.teamName,
+                    teamScore: team.teamScore,
+                    joinedAt: team.joinedAt,
+                },
+            });
+        } catch (socketError) {
+            console.error("Error emitting TEAM_JOINED event:", socketError);
+            // Don't fail the request if socket emission fails
+        }
 
         res.status(201).json({
             message: "Team created successfully.",
