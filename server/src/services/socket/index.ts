@@ -22,7 +22,7 @@ export function initializeSocket(server: HTTPServer): Server {
     console.log(`Socket connected: ${socket.id}`);
 
     const user = (socket as any).user;
-    const sessionId = user.sessionId;
+    const sessionId = user?.sessionId;
     
     // Add to socket manager and room manager
     socketManager.addSocket(socket.id, user);

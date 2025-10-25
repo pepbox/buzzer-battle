@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import {
   Alert,
   Box,
@@ -34,7 +34,7 @@ const LoginPage: React.FC = () => {
   const { isAuthenticated, team } = useAppSelector(
     (state: RootState) => state.team
   );
-  const { gameState } = useAppSelector((state: RootState) => state.gameState);
+  // const { gameState } = useAppSelector((state: RootState) => state.gameState);
 
   // All hooks must be called before any conditional returns
   const {
@@ -57,27 +57,28 @@ const LoginPage: React.FC = () => {
   const [createTeam, { isLoading: isCreating, error: createError }] =
     useCreateTeamMutation();
 
-  // Redirect authenticated users to appropriate game screen
-  useEffect(() => {
-    if (isAuthenticated && team && gameState) {
-      console.log("✅ Already authenticated, redirecting to game...");
+  // // Redirect authenticated users to appropriate game screen
+  // useEffect(() => {
+  //   console.log({ isAuthenticated, team, gameState });
+  //   if (isAuthenticated && team && gameState) {
+  //     console.log("✅ Already authenticated, redirecting to game...");
 
-      // Redirect based on current game state
-      const status = gameState.gameStatus;
-      const answeringTeamId =
-        typeof gameState.currentAnsweringTeam === "string"
-          ? gameState.currentAnsweringTeam
-          : gameState.currentAnsweringTeam?._id;
+  //     // Redirect based on current game state
+  //     const status = gameState.gameStatus;
+  //     const answeringTeamId =
+  //       typeof gameState.currentAnsweringTeam === "string"
+  //         ? gameState.currentAnsweringTeam
+  //         : gameState.currentAnsweringTeam?._id;
 
-      if (status === "buzzer_round") {
-        navigate(`/game/${sessionId}/buzzer`, { replace: true });
-      } else if (status === "answering" && answeringTeamId === team._id) {
-        navigate(`/game/${sessionId}/question`, { replace: true });
-      } else {
-        navigate(`/game/${sessionId}/leaderboard`, { replace: true });
-      }
-    }
-  }, [isAuthenticated, team, gameState, navigate, sessionId]);
+  //     if (status === "buzzer_round") {
+  //       navigate(`/game/${sessionId}/buzzer`, { replace: true });
+  //     } else if (status === "answering" && answeringTeamId === team._id) {
+  //       navigate(`/game/${sessionId}/question`, { replace: true });
+  //     } else {
+  //       navigate(`/game/${sessionId}/leaderboard`, { replace: true });
+  //     }
+  //   }
+  // }, [isAuthenticated, team, gameState, navigate, sessionId]);
 
   // Check if sessionId is present
   useEffect(() => {
@@ -218,6 +219,9 @@ const LoginPage: React.FC = () => {
     return validateTeamName(teamName);
   };
 
+  if (isAuthenticated && team) {
+    return <Navigate to={`/game/${sessionId}/leaderboard`} />;
+  }
   return (
     <Box
       sx={{

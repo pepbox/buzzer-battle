@@ -12,12 +12,12 @@ import { useAppDispatch } from "../app/hooks";
 import { RootState } from "../app/store";
 import { useAppSelector } from "../app/rootReducer";
 import Loader from "../components/ui/Loader";
-// import AuthWrapper from "../components/auth/AuthWrapper";
+import AuthWrapper from "../components/auth/AuthWrapper";
 import GameStateRouter from "../features/game/components/GameStateRouter";
 
 const GameMain = () => {
   const [FetchCurrentTeam] = useLazyFetchCurrentTeamQuery();
-  const { isLoading, isAuthenticated } = useAppSelector(
+  const { isLoading } = useAppSelector(
     (state: RootState) => state.team
   );
   const dispatch = useAppDispatch();
@@ -28,10 +28,8 @@ const GameMain = () => {
   }, [dispatch, sessionId]);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      FetchCurrentTeam();
-    }
-  }, [isAuthenticated, FetchCurrentTeam]);
+    FetchCurrentTeam();
+  }, [FetchCurrentTeam]);
 
   if (isLoading) {
     return <Loader />;
@@ -51,24 +49,24 @@ const GameMain = () => {
         <Route path="/" element={<LoginPage />} />
 
         {/* Protected Routes - Require Authentication */}
-        {/* <Route
+        <Route
           element={
             <AuthWrapper userType="team" redirection={`/game/${sessionId}/`} />
           }
-        > */}
-        {/* Wrap protected routes with Overlay and GameStateRouter */}
-        <Route
-          element={
-            <Overlay>
-              <GameStateRouter />
-            </Overlay>
-          }
         >
-          <Route path="/buzzer" element={<BuzzerRound />} />
-          <Route path="/buzzer-leaderboard" element={<BuzzerLeaderboard />} />
-          <Route path="/question" element={<QuestionRoundPage />} />
-          <Route path="/leaderboard" element={<LeaderBoardPage />} />
-          {/* </Route> */}
+          {/* Wrap protected routes with Overlay and GameStateRouter */}
+          <Route
+            element={
+              <Overlay>
+                <GameStateRouter />
+              </Overlay>
+            }
+          >
+            <Route path="/buzzer" element={<BuzzerRound />} />
+            <Route path="/buzzer-leaderboard" element={<BuzzerLeaderboard />} />
+            <Route path="/question" element={<QuestionRoundPage />} />
+            <Route path="/leaderboard" element={<LeaderBoardPage />} />
+          </Route>
         </Route>
       </Routes>
     </div>
