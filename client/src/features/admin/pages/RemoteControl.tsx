@@ -10,7 +10,6 @@ import {
   usePauseGame,
   useResumeGame,
   useNextQuestion,
-  useShowLeaderboard,
   usePassToSecondTeam,
 } from "../services/adminRemoteApi";
 import { useFetchGameStateQuery } from "../../game/services/gameStateApi";
@@ -48,15 +47,13 @@ const RemoteControl: React.FC = () => {
   const { pauseGame, isLoading: pauseLoading } = usePauseGame();
   const { resumeGame, isLoading: resumeLoading } = useResumeGame();
   const { nextQuestion, isLoading: nextLoading } = useNextQuestion();
-  const { showLeaderboard, isLoading: leaderboardLoading } =
-    useShowLeaderboard();
   const { passToSecondTeam, isLoading: passLoading } = usePassToSecondTeam();
 
   const isAnyLoading =
     pauseLoading ||
     resumeLoading ||
     nextLoading ||
-    leaderboardLoading ||
+    // leaderboardLoading ||
     passLoading;
 
   // Extract game state data
@@ -147,18 +144,6 @@ const RemoteControl: React.FC = () => {
     } catch (error: any) {
       showSnackbar(
         error?.data?.message || "Failed to move to next question",
-        "error"
-      );
-    }
-  };
-
-  const handleShowLeaderboard = async () => {
-    try {
-      await showLeaderboard().unwrap();
-      showSnackbar("Leaderboard displayed", "success");
-    } catch (error: any) {
-      showSnackbar(
-        error?.data?.message || "Failed to show leaderboard",
         "error"
       );
     }
@@ -296,7 +281,6 @@ const RemoteControl: React.FC = () => {
             onNextQuestion={handleNextQuestion}
             onPauseGame={handlePauseGame}
             onResumeGame={handleResumeGame}
-            onShowLeaderboard={handleShowLeaderboard}
             onPassToSecondTeam={handlePassToSecondTeam}
             canPassToSecondTeam={canPassToSecondTeam}
             isLoading={isAnyLoading}

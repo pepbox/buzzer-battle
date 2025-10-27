@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Box,
   Paper,
@@ -9,6 +9,12 @@ import {
   Divider,
   useTheme,
   useMediaQuery,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  IconButton,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { DashboardHeaderProps } from "../types/interfaces";
@@ -18,9 +24,11 @@ import SlideshowIcon from "@mui/icons-material/Slideshow";
 import SettingsRemoteIcon from "@mui/icons-material/SettingsRemote";
 import GroupIcon from "@mui/icons-material/Group";
 import QuizIcon from "@mui/icons-material/Quiz";
+import EditIcon from "@mui/icons-material/Edit";
 import {
   useAdminLogoutMutation,
   useUpdateSessionMutation,
+  useUpdateNumberOfTeamsMutation,
 } from "../services/admin.Api";
 import GlobalButton from "../../../components/ui/button";
 import { useAppDispatch, useAppSelector } from "../../../app/rootReducer";
@@ -37,12 +45,20 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 }) => {
   const [AdminLogout] = useAdminLogoutMutation();
   const [UpdateSession] = useUpdateSessionMutation();
+  const [UpdateNumberOfTeams] = useUpdateNumberOfTeamsMutation();
   const { admin } = useAdminAuth();
   const navigate = useNavigate();
   const { sessionId } = useAppSelector((state: RootState) => state.session);
   const dispatch = useAppDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  
+  // State for edit teams modal
+  const [editTeamsModal, setEditTeamsModal] = useState({
+    open: false,
+    value: "",
+  });
+
   console.log("DashboardHeader data:", data);
 
   const handleLogout = () => {
@@ -77,6 +93,38 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     // Open presenter view in new window for dual-screen setup
     const presenterUrl = `/admin/${sessionId}/presenter`;
     navigate(presenterUrl);
+  };
+
+  // Handle edit teams modal
+  const handleEditTeamsClick = () => {
+    setEditTeamsModal({
+      open: true,
+      value: data?.totalTeams?.toString() || "",
+    });
+  };
+
+  const handleCloseTeamsModal = () => {
+    setEditTeamsModal({
+      open: false,
+      value: "",
+    });
+  };
+
+  const handleSaveNumberOfTeams = () => {
+    const numberOfTeams = parseInt(editTeamsModal.value);
+    if (isNaN(numberOfTeams) || numberOfTeams < 1) {
+      return;
+    }
+
+    UpdateNumberOfTeams({ numberOfTeams })
+      .unwrap()
+      .then(() => {
+        console.log("Number of teams updated successfully");
+        handleCloseTeamsModal();
+      })
+      .catch((error: any) => {
+        console.error("Failed to update number of teams:", error);
+      });
   };
 
   return (
@@ -237,6 +285,14 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                         {data.teamsRegistered}
                         {data.totalTeams ? ` / ${data.totalTeams}` : ""}
                       </Typography>
+                      <IconButton
+                        size="small"
+                        onClick={handleEditTeamsClick}
+                        color="primary"
+                        sx={{ ml: 0.5 }}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
                     </Box>
                   </Box>
                 )}
@@ -362,6 +418,40 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           />
         </Box>
       </Paper>
+
+      {/* Edit Number of Teams Modal */}
+      <Dialog 
+        open={editTeamsModal.open} 
+        onClose={handleCloseTeamsModal} 
+        fullWidth 
+        maxWidth="sm"
+      >
+        <DialogTitle>Edit Number of Teams</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Number of Teams"
+            type="number"
+            value={editTeamsModal.value}
+            onChange={(e) =>
+              setEditTeamsModal({ ...editTeamsModal, value: e.target.value })
+            }
+            sx={{ mt: 2 }}
+            inputProps={{ min: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseTeamsModal}>Cancel</Button>
+          <Button 
+            onClick={handleSaveNumberOfTeams} 
+            variant="contained" 
+            color="primary"
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

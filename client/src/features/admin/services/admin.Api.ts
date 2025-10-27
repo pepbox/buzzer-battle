@@ -112,6 +112,15 @@ export const adminApi = api.injectEndpoints({
       }),
     }),
 
+    updateNumberOfTeams: builder.mutation<any, { numberOfTeams: number }>({
+      query: (data) => ({
+        url: '/session/update',
+        method: 'PUT',
+        body: data,
+      }),
+      invalidatesTags: ['Team', 'GameState'],
+    }),
+
     fetchDashboardData: builder.query({
       query: () => ({
         url: '/admin/fetchDashboardData',
@@ -191,6 +200,7 @@ export const {
   useAdminLoginMutation,
   useAdminLogoutMutation,
   useUpdateSessionMutation,
+  useUpdateNumberOfTeamsMutation,
   useFetchDashboardDataQuery,
   useFetchLeaderboardDataQuery,
   useUpdatePlayerMutation,

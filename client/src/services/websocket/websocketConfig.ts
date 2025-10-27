@@ -60,7 +60,7 @@ export const setupGlobalListeners = () => {
       console.log("New team joined:", data);
       // Invalidate teams list and dashboard data
       // Note: You'll need to add these API tags to your teams API
-      store.dispatch(adminApi.util.invalidateTags(['Team']));
+      store.dispatch(adminApi.util.invalidateTags(["Team"]));
     },
     "redux"
   );
@@ -118,17 +118,6 @@ export const setupGlobalListeners = () => {
     },
     "redux"
   );
-
-  // Show Leaderboard Event
-  websocketService.addGlobalListener(
-    Events.SHOW_LEADERBOARD,
-    (data: any) => {
-      console.log("Show leaderboard:", data);
-      // Component will handle showing the leaderboard UI
-    },
-    "redux"
-  );
-
   // Answer Submitted Event
   websocketService.addGlobalListener(
     Events.ANSWER_SUBMITTED,

@@ -209,26 +209,6 @@ export const updateGameStateUnified = async (
                 }
                 break;
 
-            case 'SHOW_LEADERBOARD':
-                gameState = await gameStateService.showLeaderboard(sessionId);
-                
-                // Fetch current leaderboard
-                const leaderboard = await teamService.fetchOverallLeaderboard(sessionId);
-                additionalData.leaderboard = leaderboard;
-
-                // Emit show leaderboard event
-                SessionEmitters.toSession(sessionId, Events.SHOW_LEADERBOARD, {
-                    leaderboard,
-                });
-                
-                // Also emit game state change
-                SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
-                    gameStatus: gameState.gameStatus,
-                    currentQuestionIndex: gameState.currentQuestionIndex,
-                    currentAnsweringTeam: gameState.currentAnsweringTeam,
-                });
-                break;
-
             case 'PASS_TO_SECOND_TEAM':
                 if (!payload?.questionId) {
                     return next(new AppError("Question ID is required for PASS_TO_SECOND_TEAM action.", 400));

@@ -3,7 +3,7 @@ import { Box, Button, CircularProgress } from "@mui/material";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import PauseIcon from "@mui/icons-material/Pause";
 import SkipNextIcon from "@mui/icons-material/SkipNext";
-import LeaderboardIcon from "@mui/icons-material/Leaderboard";
+// import LeaderboardIcon from "@mui/icons-material/Leaderboard";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 
 interface RemoteActionButtonsProps {
@@ -12,7 +12,6 @@ interface RemoteActionButtonsProps {
   onNextQuestion: () => void;
   onPauseGame: () => void;
   onResumeGame: () => void;
-  onShowLeaderboard: () => void;
   onPassToSecondTeam: () => void;
   canPassToSecondTeam: boolean;
   isLoading?: boolean;
@@ -25,7 +24,6 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
   onNextQuestion,
   onPauseGame,
   onResumeGame,
-  onShowLeaderboard,
   onPassToSecondTeam,
   canPassToSecondTeam,
   isLoading = false,
@@ -67,7 +65,13 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
       <Button
         variant="contained"
         startIcon={
-          isLoading ? <CircularProgress size={20} /> : currentQuestionIndex === -1 ? <PlayArrowIcon /> : <SkipNextIcon />
+          isLoading ? (
+            <CircularProgress size={20} />
+          ) : currentQuestionIndex === -1 ? (
+            <PlayArrowIcon />
+          ) : (
+            <SkipNextIcon />
+          )
         }
         onClick={onNextQuestion}
         disabled={isLoading}
@@ -75,7 +79,8 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
           ...buttonBaseStyles,
           backgroundColor: currentQuestionIndex === -1 ? "#10B981" : "#3B82F6",
           "&:hover": {
-            backgroundColor: currentQuestionIndex === -1 ? "#059669" : "#2563EB",
+            backgroundColor:
+              currentQuestionIndex === -1 ? "#059669" : "#2563EB",
             ...buttonBaseStyles["&:hover"],
           },
         }}
@@ -122,25 +127,6 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
         </Button>
       )}
 
-      {/* Show Leaderboard Button */}
-      <Button
-        variant="contained"
-        startIcon={
-          isLoading ? <CircularProgress size={20} /> : <LeaderboardIcon />
-        }
-        onClick={onShowLeaderboard}
-        disabled={isLoading}
-        sx={{
-          ...buttonBaseStyles,
-          backgroundColor: "#8B5CF6",
-          "&:hover": {
-            backgroundColor: "#7C3AED",
-            ...buttonBaseStyles["&:hover"],
-          },
-        }}
-      >
-        🏆 Show Leaderboard
-      </Button>
 
       {/* Pass to Second Team Button - Conditional */}
       {gameStatus === "answering" && (
@@ -153,11 +139,16 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
           disabled={isLoading || !canPassToSecondTeam || !lastAnswerWasWrong}
           sx={{
             ...buttonBaseStyles,
-            backgroundColor: canPassToSecondTeam && lastAnswerWasWrong ? "#F97316" : "#9CA3AF",
-            border: canPassToSecondTeam && lastAnswerWasWrong ? "3px solid #FBBF24" : "none",
-            animation: canPassToSecondTeam && lastAnswerWasWrong
-              ? "pulse-border 2s ease-in-out infinite"
-              : "none",
+            backgroundColor:
+              canPassToSecondTeam && lastAnswerWasWrong ? "#F97316" : "#9CA3AF",
+            border:
+              canPassToSecondTeam && lastAnswerWasWrong
+                ? "3px solid #FBBF24"
+                : "none",
+            animation:
+              canPassToSecondTeam && lastAnswerWasWrong
+                ? "pulse-border 2s ease-in-out infinite"
+                : "none",
             "@keyframes pulse-border": {
               "0%, 100%": {
                 borderColor: "#FBBF24",
@@ -167,7 +158,10 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
               },
             },
             "&:hover": {
-              backgroundColor: canPassToSecondTeam && lastAnswerWasWrong ? "#EA580C" : "#9CA3AF",
+              backgroundColor:
+                canPassToSecondTeam && lastAnswerWasWrong
+                  ? "#EA580C"
+                  : "#9CA3AF",
               ...buttonBaseStyles["&:hover"],
             },
           }}

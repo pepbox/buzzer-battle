@@ -280,12 +280,6 @@ export default class GameStateService {
     return gameState;
   }
 
-  // Show leaderboard (set to paused)
-  async showLeaderboard(
-    sessionId: Types.ObjectId | string
-  ): Promise<IGameState> {
-    return await this.pauseGame(sessionId);
-  }
 
   // Move to next question with auto-end game check
   async moveToNextQuestionWithCheck(
