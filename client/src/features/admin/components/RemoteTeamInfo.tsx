@@ -131,7 +131,7 @@ const RemoteTeamInfo: React.FC<RemoteTeamInfoProps> = ({
                 color: "#1E293B",
               }}
             >
-              {buzzerTimestamp}
+              {new Date(parseInt(buzzerTimestamp)).toLocaleTimeString()}
             </Typography>
           </Box>
         )}

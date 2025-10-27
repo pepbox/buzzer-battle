@@ -67,7 +67,7 @@ const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams, onBack }) => {
         display: "flex",
         flexDirection: "column",
         overflowY: "auto",
-        justifyContent: "space-between",
+        // justifyContent: "space-between",
         pt: "16px",
       }}
     >

@@ -4,6 +4,8 @@ import BuzzerQueueService from '../services/buzzerQueue.service';
 import GameStateService from '../../gameState/services/gameState.service';
 import QuestionService from '../../questions/services/question.service';
 import { Types } from 'mongoose';
+import { SessionEmitters } from '../../../services/socket/sessionEmitters';
+import { Events } from '../../../services/socket/enums/Events';
 
 const buzzerQueueService = new BuzzerQueueService();
 const gameStateService = new GameStateService();
@@ -82,6 +84,22 @@ export const pressBuzzer = async (
         const rank = leaderboard.findIndex(
             (entry) => (entry.teamId as any)._id.toString() === teamId
         ) + 1;
+
+        // Get team details from leaderboard
+        const teamEntry = leaderboard.find(
+            (entry) => (entry.teamId as any)._id.toString() === teamId
+        );
+        const teamName = teamEntry ? (teamEntry.teamId as any).teamName : 'Unknown Team';
+
+        // Emit buzzer pressed event to all teams in the session
+        SessionEmitters.toSession(sessionId, Events.BUZZER_PRESSED, {
+            teamId,
+            teamName,
+            rank,
+            timestamp: timestamp.toString(),
+            questionId: questionId.toString(),
+            totalTeamsPressed: leaderboard.length,
+        });
 
         res.status(201).json({
             message: "Buzzer pressed successfully.",

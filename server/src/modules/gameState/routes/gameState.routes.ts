@@ -1,8 +1,8 @@
 import express from 'express';
-import { 
-    fetchGameState, 
+import {
+    fetchGameState,
     updateGameStateUnified,
-    updateGameStatus, 
+    // updateGameStatus, 
     moveToNextQuestion,
     validateTimerExpiration
 } from '../controllers/gameState.controller';
@@ -20,7 +20,7 @@ router.get('/validate-timer', authenticateUser, validateTimerExpiration);
 router.patch('/', authenticateUser, authorizeRoles('ADMIN'), updateGameStateUnified);
 
 // Legacy endpoints (Deprecated - kept for backward compatibility)
-router.patch('/status', authenticateUser, authorizeRoles('ADMIN'), updateGameStatus);
+// router.patch('/status', authenticateUser, authorizeRoles('ADMIN'), updateGameStatus);
 router.post('/next-question', authenticateUser, authorizeRoles('ADMIN'), moveToNextQuestion);
 
 export default router;

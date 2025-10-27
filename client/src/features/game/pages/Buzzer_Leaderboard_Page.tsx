@@ -13,25 +13,6 @@ const BuzzerLeaderboardPage: React.FC = () => {
   // Fetch buzzer leaderboard
   const { data, isLoading, error } = useFetchBuzzerLeaderboardQuery();
 
-  // Listen for game state change to answering round
-  // useEffect(() => {
-  //   const handleGameStateChange = (data: any) => {
-  //     if (data.gameStatus === "answering") {
-  //       setWaitingForTransition(true);
-  //       // Navigate to question round after short delay
-  //       setTimeout(() => {
-  //         navigate(`/game/${sessionId}/question`);
-  //       }, 2000);
-  //     }
-  //   };
-
-  //   websocketService.on(Events.GAME_STATE_CHANGED, handleGameStateChange);
-
-  //   return () => {
-  //     websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChange);
-  //   };
-  // }, [navigate, sessionId]);
-
   const leaderboard = data?.data?.leaderboard || [];
 
   // Find current team's rank
@@ -204,7 +185,7 @@ const BuzzerLeaderboardPage: React.FC = () => {
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                     <AccessTimeIcon fontSize="small" color="action" />
                     <Typography variant="body2" color="text.secondary">
-                      {new Date(entry.timestamp).toLocaleTimeString()}
+                      {new Date(parseInt(entry.timestamp)).toLocaleTimeString()}
                     </Typography>
                   </Box>
                 </Box>
