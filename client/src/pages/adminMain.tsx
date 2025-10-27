@@ -1,25 +1,23 @@
 import { Route, Routes } from "react-router-dom";
-import DashboardPage from "../features/admin/pages/DshboardPage";
-import AdminLogin from "../features/admin/pages/AdminLogin";
 import RemoteControl from "../features/admin/pages/RemoteControl";
 import PresenterView from "../features/admin/pages/PresenterView";
 import Box from "@mui/material/Box";
 import { useLazyFetchAdminQuery } from "../features/admin/services/admin.Api";
-import { useAppSelector } from "../app/hooks";
-import { RootState } from "../app/store";
+// import { useAppSelector } from "../app/hooks";
+// import { RootState } from "../app/store";
 import { useEffect } from "react";
+import DashboardPage from "../features/admin/Pages/DshboardPage";
+import AdminLogin from "../features/admin/Pages/AdminLogin";
 // import Loader from "../components/ui/Loader";
 // import AuthWrapper from "../components/auth/AuthWrapper";
 
 const AdminMain = () => {
   const [FetchAdmin] = useLazyFetchAdminQuery();
-  const { isAuthenticated } = useAppSelector(
-    (state: RootState) => state.admin
-  );
+  // const { isAuthenticated } = useAppSelector((state: RootState) => state.admin);
 
   useEffect(() => {
     FetchAdmin({});
-  }, [isAuthenticated, FetchAdmin]);
+  }, [FetchAdmin]);
 
   // if (isLoading) {
   //   return <Loader />;

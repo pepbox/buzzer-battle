@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Box, CircularProgress, Typography } from "@mui/material";
-import LeaderBoard, { LeaderBoardTeam } from "../compoenents/LeaderBoard";
+import LeaderBoard, { LeaderBoardTeam } from "../components/LeaderBoard";
 import { useFetchOverallLeaderboardQuery } from "../services/teamApi";
 import { websocketService } from "../../../services/websocket/websocketService";
 import { Events } from "../../../services/websocket/enums/Events";

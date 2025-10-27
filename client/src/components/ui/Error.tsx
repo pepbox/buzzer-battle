@@ -10,6 +10,7 @@ const ErrorLayout : React.FC = () => {
           borderRadius: 2,
           textAlign: "center",
           color: "#ffffff",
+          width: "100%",
         }}
       >
         <Typography variant="h6" fontWeight="bold" gutterBottom>

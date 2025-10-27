@@ -12,7 +12,6 @@ import Error from "../../../components/ui/Error";
 import { useTimerSync } from "../../../hooks/useTimerSync";
 
 const BuzzerRound: React.FC = () => {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [buzzerPressed, setBuzzerPressed] = useState(false);
   const [buzzerError, setBuzzerError] = useState<string | null>(null);
 
@@ -77,7 +76,17 @@ const BuzzerRound: React.FC = () => {
 
   // Show error state
   if (error || !question) {
-    return <Error />;
+    return (
+      <Box
+        minHeight={"100vh"}
+        flex={1}
+        display={"flex"}
+        justifyContent={"center"}
+        alignItems={"center"}
+      >
+        <Error />
+      </Box>
+    );
   }
 
   return (

@@ -1,42 +1,36 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Box, Typography, CircularProgress, Paper, Chip } from "@mui/material";
-import { useNavigate, useParams } from "react-router-dom";
 import { useFetchBuzzerLeaderboardQuery } from "../services/buzzerApi";
 import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
 import normalBg from "../../../assets/background/normal_bg.webp";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
-import { Events } from "../../../services/websocket/enums/Events";
-import { websocketService } from "../../../services/websocket/websocketService";
 
 const BuzzerLeaderboardPage: React.FC = () => {
-  const navigate = useNavigate();
-  const { sessionId } = useParams<{ sessionId: string }>();
   const team = useAppSelector((state: RootState) => state.team.team);
-  const [waitingForTransition, setWaitingForTransition] = useState(false);
 
   // Fetch buzzer leaderboard
   const { data, isLoading, error } = useFetchBuzzerLeaderboardQuery();
 
   // Listen for game state change to answering round
-  useEffect(() => {
-    const handleGameStateChange = (data: any) => {
-      if (data.gameStatus === "answering") {
-        setWaitingForTransition(true);
-        // Navigate to question round after short delay
-        setTimeout(() => {
-          navigate(`/game/${sessionId}/question`);
-        }, 2000);
-      }
-    };
+  // useEffect(() => {
+  //   const handleGameStateChange = (data: any) => {
+  //     if (data.gameStatus === "answering") {
+  //       setWaitingForTransition(true);
+  //       // Navigate to question round after short delay
+  //       setTimeout(() => {
+  //         navigate(`/game/${sessionId}/question`);
+  //       }, 2000);
+  //     }
+  //   };
 
-    websocketService.on(Events.GAME_STATE_CHANGED, handleGameStateChange);
+  //   websocketService.on(Events.GAME_STATE_CHANGED, handleGameStateChange);
 
-    return () => {
-      websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChange);
-    };
-  }, [navigate, sessionId]);
+  //   return () => {
+  //     websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChange);
+  //   };
+  // }, [navigate, sessionId]);
 
   const leaderboard = data?.data?.leaderboard || [];
 
@@ -70,9 +64,7 @@ const BuzzerLeaderboardPage: React.FC = () => {
           minHeight: "100vh",
         }}
       >
-        <Typography color="error">
-          Failed to load buzzer leaderboard
-        </Typography>
+        <Typography color="error">Failed to load buzzer leaderboard</Typography>
       </Box>
     );
   }
@@ -112,11 +104,11 @@ const BuzzerLeaderboardPage: React.FC = () => {
           <EmojiEventsIcon fontSize="large" />
           Buzzer Leaderboard
         </Typography>
-        <Typography variant="body1" color="text.secondary">
+        {/* <Typography variant="body1" color="text.secondary">
           {waitingForTransition
             ? "Transitioning to answering round..."
             : "Fastest teams who pressed the buzzer"}
-        </Typography>
+        </Typography> */}
       </Box>
 
       {/* Leaderboard List */}

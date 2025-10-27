@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import QuestionRound from "../compoenents/Question_Round";
+import QuestionRound from "../components/Question_Round";
 import { QuestionData } from "../../question/components/Question";
 import {
   useFetchCurrentQuestionQuery,
@@ -152,6 +152,7 @@ const QuestionRoundPage: React.FC = () => {
 
       // Stop submitting overlay
       setSubmittingAnswer(false);
+      console.log("Answer submission completed. : ", result.data.isCorrect);
 
       // Store the result
       setAnswerResult({
