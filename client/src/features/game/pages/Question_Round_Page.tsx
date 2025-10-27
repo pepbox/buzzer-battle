@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import QuestionRound from "../components/Question_Round";
 import { QuestionData } from "../../question/components/Question";
@@ -30,15 +30,16 @@ const QuestionRoundPage: React.FC = () => {
   const [answerStatus, setAnswerStatus] = useState<
     "answering" | "status" | "result" | null
   >(null);
-  const [answerResult, setAnswerResult] = useState<{
-    isCorrect: boolean;
-    pointsAwarded: number;
-  } | null>(null);
 
   // Get team from Redux
   const team = useAppSelector((state: RootState) => state.team?.team);
   const gameState = useAppSelector(
     (state: RootState) => state.gameState.gameState
+  );
+
+  // Get answer result from Redux (persisted across re-renders and populated by RTK Query)
+  const answerResult = useAppSelector(
+    (state: RootState) => state.question?.responseResult
   );
 
   // Fetch current question
@@ -62,13 +63,24 @@ const QuestionRoundPage: React.FC = () => {
       ? gameState?.currentAnsweringTeam?._id === team?._id
       : gameState?.currentAnsweringTeam === team?._id;
 
+  // Track current question index to detect changes
+  const previousQuestionIndexRef = useRef<number | undefined>(undefined);
+
   // Reset answer state when question changes
   useEffect(() => {
-    setSelectedAnswer("");
-    setIsAnswered(false);
-    setSubmittingAnswer(false);
-    setAnswerStatus(null);
-    setAnswerResult(null);
+    // Only reset if question actually changed
+    if (
+      previousQuestionIndexRef.current !== undefined &&
+      previousQuestionIndexRef.current !== currentQuestionIndex
+    ) {
+      console.log("🔄 Question changed - resetting state");
+      setSelectedAnswer("");
+      setIsAnswered(false);
+      setSubmittingAnswer(false);
+      setAnswerStatus(null);
+      // Note: answerResult is now in Redux and cleared by GameStateRouter
+    }
+    previousQuestionIndexRef.current = currentQuestionIndex;
   }, [currentQuestionIndex]);
 
   // Handle time up callback
@@ -102,34 +114,73 @@ const QuestionRoundPage: React.FC = () => {
   // Handle IDLE state transition - show result then redirect to leaderboard
   useEffect(() => {
     if (gameState?.gameStatus === "idle" && isAnsweringTeam) {
-      console.log("🔵 Game transitioned to IDLE - showing result");
-      
+      console.log("🔵 Game transitioned to IDLE - showing result", {
+        answerStatus,
+        answerResult,
+        hasAnswered: isAnswered,
+      });
+
       // If we haven't already set the answer status, show the result
       if (answerStatus === null || answerStatus === "answering") {
-        // Check if answer was submitted (we have answerResult)
-        if (answerResult) {
+        // Check if answer was submitted (we have answerResult in Redux)
+        if (answerResult !== null) {
+          console.log("✅ Answer was submitted - showing status screen");
           // Show the appropriate status screen
           setAnswerStatus("status");
-          
-          // After 5 seconds, redirect to leaderboard
-          setTimeout(() => {
-            console.log("⏰ Result timeout - navigating to leaderboard");
-            navigate(`/game/${sessionId}/leaderboard`);
-          }, 5000);
+        } else if (isAnswered) {
+          // Answer was submitted but result not yet in Redux - wait a bit
+          console.log("⏳ Answer submitted, waiting for result...");
+          // Don't show TimesUp yet, give Redux time to update
         } else {
-          // Time expired without answer - show TimesUp
+          console.log("⏰ Time expired without answer - showing TimesUp");
+          // Time expired without answer - show Time Up
           setIsAnswered(true);
           setAnswerStatus("status");
-          
-          // After 5 seconds, redirect to leaderboard
+          console.log("Setting timeout of 5 seconds from 4");
           setTimeout(() => {
-            console.log("⏰ TimesUp timeout - navigating to leaderboard");
-            navigate(`/game/${sessionId}/leaderboard`);
-          }, 5000);
+            console.log("Set answer status to result after delay from 4");
+            setAnswerStatus("result");
+          }, 1000);
         }
       }
     }
-  }, [gameState?.gameStatus, isAnsweringTeam, answerResult, answerStatus, navigate, sessionId]);
+  }, [
+    gameState?.gameStatus,
+    isAnsweringTeam,
+    answerResult,
+    answerStatus,
+    isAnswered,
+    navigate,
+    sessionId,
+  ]);
+
+  // Handle delayed answer result - when Redux updates after IDLE state
+  useEffect(() => {
+    // If we're in IDLE state, answered, waiting, and now have a result
+    if (
+      gameState?.gameStatus === "idle" &&
+      isAnsweringTeam &&
+      isAnswered &&
+      answerResult !== null &&
+      answerStatus === null
+    ) {
+      console.log(
+        "✅ Answer result arrived after IDLE - showing status screen"
+      );
+      setAnswerStatus("status");
+      console.log("Setting timeout of 5 seconds");
+      setTimeout(() => {
+        console.log("Set answer status to result after delay");
+        setAnswerStatus("result");
+      }, 1000);
+    }
+  }, [
+    answerResult,
+    gameState?.gameStatus,
+    isAnsweringTeam,
+    isAnswered,
+    answerStatus,
+  ]);
 
   const handleAnswerSelect = async (answer: string) => {
     if (!question || isAnswered) return;
@@ -142,7 +193,7 @@ const QuestionRoundPage: React.FC = () => {
       // The answer is already the optionId, so we can use it directly
       console.log("Submitting answer with optionId:", answer);
 
-      // Submit the answer
+      // Submit the answer - Redux slice will automatically store the result
       const result = await sendResponse({
         questionId: question._id,
         responseOptionId: answer,
@@ -152,29 +203,40 @@ const QuestionRoundPage: React.FC = () => {
 
       // Stop submitting overlay
       setSubmittingAnswer(false);
-      console.log("Answer submission completed. : ", result.data.isCorrect);
+      console.log("Answer submission completed:", result.data.isCorrect);
 
-      // Store the result
-      setAnswerResult({
-        isCorrect: result.data.isCorrect,
-        pointsAwarded: result.data.pointsAwarded,
-      });
-
+      // Result is now stored in Redux via the slice's extraReducers
       // Move to status phase (show NailedIt or CloseCall)
       setAnswerStatus("status");
+      console.log("Setting timeout of 5 seconds-from 1");
+      if (result.data.isCorrect) {
+        setTimeout(() => {
+          console.log("Set answer status to result after delay-from 1");
+          setAnswerStatus("result");
+        }, 5000);
+        setTimeout(() => {
+          navigate(`/game/${sessionId}/leaderboard`);
+        }, 10000);
+      } else {
+        setTimeout(() => {
+          navigate(`/game/${sessionId}/leaderboard`);
+        }, 5000);
+      }
 
       // The IDLE state transition will handle navigation to leaderboard
       // No need to set timeouts here
     } catch (error) {
       console.error("Failed to submit answer:", error);
       setSubmittingAnswer(false);
-      
+
       // On error, still show an error status
-      setAnswerResult({
-        isCorrect: false,
-        pointsAwarded: 0,
-      });
+      // Note: Redux won't have the result, so we'll show TimesUp
       setAnswerStatus("status");
+      console.log("Setting timeout of 5 seconds from 2");
+      setTimeout(() => {
+        console.log("Set answer status to result after delay from 2");
+        setAnswerStatus("result");
+      }, 1000);
     }
   };
 
@@ -235,7 +297,9 @@ const QuestionRoundPage: React.FC = () => {
       {/* Phase 2: Status Screen (10 seconds) - Show result feedback */}
       {answerStatus === "status" && (
         <>
-          {answerResult?.isCorrect && <NailedIt />}
+          {answerResult?.isCorrect && (
+            <NailedIt setAnswerStatus={setAnswerStatus} />
+          )}
           {answerResult && !answerResult.isCorrect && <CloseCall />}
           {!answerResult && <TimesUp />}
         </>

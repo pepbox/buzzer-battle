@@ -20,7 +20,9 @@ const BuzzerLeaderboard: React.FC = () => {
 
   // Get current team and game state from Redux
   const team = useAppSelector((state: RootState) => state.team.team);
-  const gameState = useAppSelector((state: RootState) => state.gameState.gameState);
+  const gameState = useAppSelector(
+    (state: RootState) => state.gameState.gameState
+  );
 
   // Fetch buzzer leaderboard
   const {
@@ -119,7 +121,10 @@ const BuzzerLeaderboard: React.FC = () => {
             borderRadius: "8px",
           }}
         >
-          🎯 {leaderboard.find((e) => e.teamId === answeringTeamId)?.teamName || "Team"} is answering...
+          🎯{" "}
+          {leaderboard.find((e) => e.teamId === answeringTeamId)?.teamName ||
+            "Team"}{" "}
+          is answering...
         </Typography>
       )}
 
@@ -262,7 +267,15 @@ const BuzzerLeaderboard: React.FC = () => {
                       color: entry.rank <= 3 ? "#ff6b6b" : "#666",
                     }}
                   >
-                    {formatTime(entry.timestamp)}
+                    {formatTime(
+                      String(
+                        Math.max(
+                          0,
+                          Number(entry.timestamp || 0) -
+                            Number(gameState?.buzzerRoundStartTime || 0)
+                        )
+                      )
+                    )}
                   </Typography>
                 </Box>
               </Box>

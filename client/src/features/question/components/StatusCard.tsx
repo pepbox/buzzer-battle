@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Box, Typography } from "@mui/material";
 import timeOutBg from "../../../assets/background/time_out_bg.webp";
 import correctBg from "../../../assets/background/correct_bg.webp";
@@ -120,14 +120,26 @@ export const TimesUp = () => (
   />
 );
 
-export const NailedIt = () => (
-  <StatusCard
-    type="correct"
-    mainText="Nailed it!"
-    subText="You’re on fire…"
-    emoji="🔥"
-  />
-);
+export const NailedIt = ({
+  setAnswerStatus,
+}: {
+  setAnswerStatus: (status: any) => void;
+}) => {
+  useEffect(() => {
+    setTimeout(() => {
+      setAnswerStatus("result");
+    }, 5000);
+  }, [setAnswerStatus]);
+
+  return (
+    <StatusCard
+      type="correct"
+      mainText="Nailed it!"
+      subText="You’re on fire…"
+      emoji="🔥"
+    />
+  );
+};
 
 export const CloseCall = () => (
   <StatusCard
