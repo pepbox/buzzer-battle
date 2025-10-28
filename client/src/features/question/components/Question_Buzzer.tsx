@@ -5,13 +5,78 @@ import collarImage from "../../../assets/questions/collor.webp";
 interface QuestionBuzzerProps {
   questionNumber: number;
   questionText: string;
+  questionImage?: string;
+  questionVideo?: string;
 }
 
 const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
   questionNumber,
   questionText,
+  questionImage,
+  questionVideo,
 }) => {
   const theme = useTheme();
+
+  const getMediaType = (url: string): "image" | "video" => {
+    const extension = url.split(".").pop()?.toLowerCase();
+    const videoExtensions = [
+      "mp4",
+      "webm",
+      "ogg",
+      "avi",
+      "mov",
+      "wmv",
+      "flv",
+      "m4v",
+    ];
+
+    if (videoExtensions.includes(extension || "")) {
+      return "video";
+    }
+
+    return "image"; // Default to image (includes gif, jpg, png, webp, etc.)
+  };
+  const renderMedia = () => {
+    const mediaUrl = questionImage || questionVideo;
+
+    if (!mediaUrl) return null;
+
+    const mediaType = getMediaType(mediaUrl);
+
+    const mediaStyles = {
+      width: "100%",
+      maxHeight: "100px",
+      objectFit: "fill" as const,
+      borderRadius: "12px",
+      my: "16px",
+    };
+
+    switch (mediaType) {
+      case "image":
+        return (
+          <Box
+            component="img"
+            src={mediaUrl}
+            alt="Question media"
+            sx={mediaStyles}
+          />
+        );
+      case "video":
+        return (
+          <Box
+            component="video"
+            src={mediaUrl}
+            controls
+            sx={{
+              ...mediaStyles,
+              maxHeight: "250px",
+            }}
+          />
+        );
+      default:
+        return null;
+    }
+  };
   return (
     <Box
       sx={{
@@ -80,10 +145,13 @@ const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
           zIndex: 1,
           minHeight: "120px",
           display: "flex",
+          gap: "12px",
+          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
         }}
       >
+        {renderMedia()}
         <Typography
           variant="h4"
           sx={{

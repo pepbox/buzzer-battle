@@ -13,10 +13,7 @@ import {
 } from "../services/adminSlice";
 import { RootState } from "../../../app/store";
 import { useAppSelector } from "../../../app/hooks";
-import {
-  setSessionId,
-  selectSessionId,
-} from "../../session/services/sessionSlice";
+import { selectSessionId } from "../../session/services/sessionSlice";
 import ControlCameraIcon from "@mui/icons-material/ControlCamera";
 import SlideshowIcon from "@mui/icons-material/Slideshow";
 
@@ -30,7 +27,7 @@ const AdminLogin: React.FC = () => {
 
   // Get sessionId from Redux store or URL
   const storedSessionId = useAppSelector(selectSessionId);
-  const sessionId = urlSessionId || storedSessionId;
+  const sessionId = storedSessionId || urlSessionId;
 
   // Redux state
   const isAuthenticated = useSelector((state: RootState) =>
@@ -50,13 +47,8 @@ const AdminLogin: React.FC = () => {
   useEffect(() => {
     dispatch(initializeAuth());
 
-    // Store sessionId in Redux if available from URL
-    if (urlSessionId) {
-      dispatch(setSessionId(urlSessionId));
-    }
-
     if (isAuthenticated) {
-      navigate(`/admin/${urlSessionId}/dashboard`);
+      navigate(`/admin/${storedSessionId}/dashboard`);
     }
   }, [dispatch, isAuthenticated, navigate, urlSessionId]);
 
