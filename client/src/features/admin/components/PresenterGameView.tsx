@@ -6,6 +6,7 @@ import WaitingAnimation from "./WaitingAnimation";
 import PresenterBuzzerRound from "../../game/pages/PresenterBuzzerRound";
 import { presenterAudio } from "../../../utils/presenterAudio";
 import { Session } from "../../session/services/session.api";
+import questionBg from "../../../assets/background/normal_bg.webp";
 
 interface PresenterGameViewProps {
   // sessionName?: string;
@@ -77,8 +78,12 @@ const PresenterGameView: React.FC<PresenterGameViewProps> = ({ session }) => {
             justifyContent: "center",
             height: "100%",
             width: "100%",
-            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-            padding: 4,
+            background: `url(${questionBg})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+            position: "relative",
+            overflow: "hidden",
           }}
         >
           <Box
@@ -90,18 +95,12 @@ const PresenterGameView: React.FC<PresenterGameViewProps> = ({ session }) => {
               boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
             }}
           >
-            {/* TODO: Replace with actual Question component */}
-            <Box
-              sx={{ fontSize: 36, fontWeight: "bold", mb: 3, color: "#333" }}
-            >
-              Question Display
-            </Box>
             <Box sx={{ fontSize: 24, color: "#666" }}>
               Team{" "}
               {typeof currentAnsweringTeam === "string"
                 ? currentAnsweringTeam
-                : currentAnsweringTeam?.teamNumber ||
-                  currentAnsweringTeam?.teamName}{" "}
+                : currentAnsweringTeam?.teamName ||
+                  currentAnsweringTeam?.teamNumber}{" "}
               is answering...
             </Box>
             {/* Question component will go here with presenterMode={true} */}
