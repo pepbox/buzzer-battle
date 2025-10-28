@@ -339,12 +339,39 @@ export const updateGameStateUnified = async (
                     return next(new AppError("Question ID is required for AUTO_SELECT_FASTEST_TEAM action.", 400));
                 }
 
+                // Cancel the buzzer timer (admin fast-forwarding the process)
+                timerManager.cancelTimer(`buzzer-${sessionId.toString()}`);
+
                 gameState = await gameStateService.autoSelectFastestTeam(
                     sessionId,
                     payload.questionId
                 );
 
                 const autoSelectStartTime = Date.now();
+
+                // Get session to fetch answerTimeLimit
+                const sessionForAuto = await Session.findById(sessionId);
+                const autoAnswerDuration = sessionForAuto?.answerTimeLimit || 60;
+
+                // Schedule answering timer for the auto-selected team
+                if (gameState.currentAnsweringTeam) {
+                    timerManager.scheduleAnsweringTimer(
+                        sessionId,
+                        gameState.currentAnsweringTeam,
+                        autoAnswerDuration,
+                        async () => {
+                            const idleGameState = await gameStateService.transitionToIdle(sessionId);
+                            
+                            // Emit transition to IDLE
+                            SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+                                gameStatus: idleGameState.gameStatus,
+                                currentQuestionIndex: idleGameState.currentQuestionIndex,
+                                currentAnsweringTeam: idleGameState.currentAnsweringTeam,
+                                idleStartTime: idleGameState.idleStartTime,
+                            });
+                        }
+                    );
+                }
 
                 // Emit team selected event
                 SessionEmitters.toSession(sessionId, Events.TEAM_SELECTED, {
@@ -356,7 +383,7 @@ export const updateGameStateUnified = async (
                 SessionEmitters.toTeam(sessionId, gameState.currentAnsweringTeam?.toString() || '', Events.ANSWERING_ROUND_STARTED, {
                     questionId: payload.questionId,
                     startTime: autoSelectStartTime,
-                    duration: 60000,
+                    duration: autoAnswerDuration * 1000,
                 });
 
                 SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {

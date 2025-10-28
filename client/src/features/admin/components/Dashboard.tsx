@@ -11,10 +11,7 @@ import {
 } from "@mui/material";
 import DashboardHeader from "./DashboardHeader";
 import TeamTable from "./TeamTable";
-import {
-  useUpdateSessionMutation,
-  useLazyCheckPlayersReadinessQuery,
-} from "../services/admin.Api";
+import { useNextQuestion } from "../services/adminRemoteApi";
 
 const Dashboard: React.FC<DashboardProps> = ({
   headerData,
@@ -22,46 +19,20 @@ const Dashboard: React.FC<DashboardProps> = ({
   onUpdateTeam,
   onViewResponses,
 }) => {
-  const [UpdateSession] = useUpdateSessionMutation();
-  const [checkPlayersReadiness] = useLazyCheckPlayersReadinessQuery();
   const [transaction, setTransaction] = useState<boolean>(false);
 
   // Dialog state for transactions
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [pendingTransaction, setPendingTransaction] = useState<boolean>(false);
 
-  const [isCheckingReadiness, setIsCheckingReadiness] = useState(false);
+  const { nextQuestion } = useNextQuestion();
 
   const onGameStatusChange = async () => {
     try {
-      setIsCheckingReadiness(true);
-
-      // First check if all players are ready
-      const readinessResult = await checkPlayersReadiness({}).unwrap();
-
-      if (readinessResult.allReady) {
-        // All players are ready, start game immediately
-        startGame();
-      }
-    } catch (error) {
-      console.error("Failed to check players readiness:", error);
-      // If check fails, proceed with normal game start
-      startGame();
-    } finally {
-      setIsCheckingReadiness(false);
+      await nextQuestion().unwrap();
+    } catch (error: any) {
+      console.error("Error fetching next question:", error);
     }
-  };
-
-  const startGame = () => {
-    console.log("Starting game...");
-    UpdateSession({ status: "playing" })
-      .unwrap()
-      .then(() => {
-        console.log("Session updated successfully");
-      })
-      .catch((error) => {
-        console.error("Failed to update session:", error);
-      });
   };
 
   const onTransactionsChange = (status: boolean) => {
@@ -85,7 +56,6 @@ const Dashboard: React.FC<DashboardProps> = ({
         onGameStatusChange={onGameStatusChange}
         transaction={transaction}
         onTransactionsChange={onTransactionsChange}
-        isCheckingReadiness={isCheckingReadiness}
       />
       <Box sx={{ px: 4 }}>
         <TeamTable

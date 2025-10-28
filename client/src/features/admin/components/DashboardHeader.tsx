@@ -41,7 +41,6 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   onGameStatusChange,
   onTransactionsChange,
   transaction = false, // Default value for transaction
-  isCheckingReadiness = false, // Default value for checking readiness
 }) => {
   const [AdminLogout] = useAdminLogoutMutation();
   const [UpdateSession] = useUpdateSessionMutation();
@@ -49,6 +48,9 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   const { admin } = useAdminAuth();
   const navigate = useNavigate();
   const { sessionId } = useAppSelector((state: RootState) => state.session);
+  const CurretQuestionIndex = useAppSelector(
+    (state: RootState) => state.gameState.gameState?.currentQuestionIndex
+  );
   const dispatch = useAppDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -376,18 +378,19 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             justifyContent: isMobile ? "center" : "flex-start",
           }}
         >
-          <GlobalButton
-            fullWidth={isMobile}
-            sx={{
-              display: data?.gameStatus === "playing" ? "none" : "block",
-            }}
-            disabled={isCheckingReadiness}
-            onClick={() => {
-              if (onGameStatusChange) onGameStatusChange();
-            }}
-          >
-            {isCheckingReadiness ? "Checking Players..." : "Start Game"}
-          </GlobalButton>
+          {(CurretQuestionIndex ?? 0) <= 1 && (
+            <GlobalButton
+              fullWidth={isMobile}
+              sx={{
+                display: data?.gameStatus === "playing" ? "none" : "block",
+              }}
+              onClick={() => {
+                if (onGameStatusChange) onGameStatusChange();
+              }}
+            >
+              Start Game
+            </GlobalButton>
+          )}
 
           <GlobalButton
             fullWidth={isMobile}

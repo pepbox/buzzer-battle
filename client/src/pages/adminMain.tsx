@@ -1,6 +1,6 @@
 import { Route, Routes } from "react-router-dom";
-import RemoteControl from "../features/admin/pages/RemoteControl";
-import PresenterView from "../features/admin/pages/PresenterView";
+import RemoteControl from "../features/admin/Pages/RemoteControl";
+import PresenterView from "../features/admin/Pages/PresenterView";
 import Box from "@mui/material/Box";
 import { useLazyFetchAdminQuery } from "../features/admin/services/admin.Api";
 // import { useAppSelector } from "../app/hooks";
