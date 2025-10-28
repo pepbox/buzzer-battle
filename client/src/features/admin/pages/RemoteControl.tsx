@@ -101,6 +101,11 @@ const RemoteControl: React.FC = () => {
   const buzzerLeaderboard = buzzerLeaderboardData?.data?.leaderboard || [];
   const canPassToSecondTeam = buzzerLeaderboard.length >= 2;
 
+  // Clear cache when question changes
+  useEffect(() => {
+    setBuzzerStatsCache(null);
+  }, [currentQuestionId]);
+
   // Listen for answer results via WebSocket
   useEffect(() => {
     const handleAnswerSubmitted = (data: any) => {
@@ -119,7 +124,8 @@ const RemoteControl: React.FC = () => {
     const handleGameStateChanged = (data: any) => {
       if (data.gameStatus === "buzzer_round") {
         setLastAnswerWasWrong(false); // Reset on new question
-        // Refetch buzzer stats when buzzer round starts
+        // Clear cache and refetch buzzer stats when buzzer round starts
+        setBuzzerStatsCache(null);
         if (refetchBuzzerStats) {
           refetchBuzzerStats();
         }

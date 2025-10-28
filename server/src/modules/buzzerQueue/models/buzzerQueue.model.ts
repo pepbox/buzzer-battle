@@ -39,5 +39,4 @@ const buzzerQueueSchema = new Schema<IBuzzerQueue>({
 // buzzerQueueSchema.index({ gameStateId: 1, timestamp: 1 });
 // buzzerQueueSchema.index({ sessionId: 1, questionId: 1 });
 
-
 export const BuzzerQueue = model<IBuzzerQueue>('BuzzerQueue', buzzerQueueSchema);
