@@ -75,7 +75,7 @@ export const useTimerSync = (
 
   // Calculate progress (0-100)
   const progress = (timeElapsed / duration) * 100;
-  
+
   return {
     timeElapsed,
     progress: Math.min(progress, 100),
@@ -92,7 +92,7 @@ export const useRemainingTimer = (
   onTimeUp?: () => void
 ) => {
   const { timeElapsed, progress, isExpired } = useTimerSync(startTime, duration, onTimeUp);
-  
+
   const timeRemaining = Math.max(0, duration - timeElapsed);
 
   return {

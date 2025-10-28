@@ -61,7 +61,6 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     value: "",
   });
 
-  console.log("DashboardHeader data:", data);
 
   const handleLogout = () => {
     AdminLogout({})
@@ -121,7 +120,6 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     UpdateNumberOfTeams({ numberOfTeams })
       .unwrap()
       .then(() => {
-        console.log("Number of teams updated successfully");
         handleCloseTeamsModal();
       })
       .catch((error: any) => {

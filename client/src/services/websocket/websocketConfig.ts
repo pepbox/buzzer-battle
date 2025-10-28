@@ -76,6 +76,7 @@ export const setupGlobalListeners = () => {
       // This is just for global state updates
       store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
       store.dispatch(questionApi.util.invalidateTags(["Question"]));
+      store.dispatch(buzzerApi.util.invalidateTags(["BuzzerLeaderboard"]));
     },
     "redux"
   );

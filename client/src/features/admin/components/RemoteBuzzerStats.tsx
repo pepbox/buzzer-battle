@@ -24,12 +24,6 @@ const RemoteBuzzerStats: React.FC<RemoteBuzzerStatsProps> = ({
   teamsRemaining,
   totalTeams,
 }) => {
-  // Calculate buzzer press time in seconds
-  const getBuzzerTime = (timestamp: string) => {
-    const time = parseFloat(timestamp);
-    return (time / 1000).toFixed(3);
-  };
-
   return (
     <Box
       sx={{
@@ -128,15 +122,6 @@ const RemoteBuzzerStats: React.FC<RemoteBuzzerStatsProps> = ({
                   }}
                 >
                   {fastestTeam.teamName}
-                </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    fontSize: "11px",
-                    color: "#64748B",
-                  }}
-                >
-                  Pressed at: {getBuzzerTime(fastestTeam.timestamp)}s
                 </Typography>
               </Box>
 

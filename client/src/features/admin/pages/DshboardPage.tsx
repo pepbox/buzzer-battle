@@ -101,7 +101,6 @@ const DashboardPage: React.FC = () => {
   if (isLoading || !data) {
     return <div>Loading...</div>;
   }
-  console.log("DashboardPage data:", data);
   
   // Construct header data
   const headerData = {

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { Box, Alert, Snackbar } from "@mui/material";
-import { useNavigate, useParams } from "react-router-dom";
 import normalBg from "../../../assets/background/normal_bg.webp";
 import RemoteHeader from "../components/RemoteHeader";
 import RemoteGameStatus from "../components/RemoteGameStatus";
@@ -27,8 +26,6 @@ import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
 
 const RemoteControl: React.FC = () => {
-  const navigate = useNavigate();
-  const { sessionId } = useParams<{ sessionId: string }>();
   const { session } = useAppSelector((state: RootState) => state.session);
 
   // State
@@ -63,8 +60,7 @@ const RemoteControl: React.FC = () => {
   const { resumeGame, isLoading: resumeLoading } = useResumeGame();
   const { nextQuestion, isLoading: nextLoading } = useNextQuestion();
   const { passToSecondTeam, isLoading: passLoading } = usePassToSecondTeam();
-  const { autoSelectFastestTeam} =
-    useAutoSelectFastestTeam();
+  const { autoSelectFastestTeam } = useAutoSelectFastestTeam();
 
   const isAnyLoading =
     pauseLoading ||
@@ -101,6 +97,11 @@ const RemoteControl: React.FC = () => {
   const buzzerLeaderboard = buzzerLeaderboardData?.data?.leaderboard || [];
   const canPassToSecondTeam = buzzerLeaderboard.length >= 2;
 
+  // Clear cache when question changes
+  useEffect(() => {
+    setBuzzerStatsCache(null);
+  }, [currentQuestionId]);
+
   // Listen for answer results via WebSocket
   useEffect(() => {
     const handleAnswerSubmitted = (data: any) => {
@@ -119,7 +120,8 @@ const RemoteControl: React.FC = () => {
     const handleGameStateChanged = (data: any) => {
       if (data.gameStatus === "buzzer_round") {
         setLastAnswerWasWrong(false); // Reset on new question
-        // Refetch buzzer stats when buzzer round starts
+        // Clear cache and refetch buzzer stats when buzzer round starts
+        setBuzzerStatsCache(null);
         if (refetchBuzzerStats) {
           refetchBuzzerStats();
         }

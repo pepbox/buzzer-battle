@@ -73,7 +73,6 @@ const QuestionRoundPage: React.FC = () => {
       previousQuestionIndexRef.current !== undefined &&
       previousQuestionIndexRef.current !== currentQuestionIndex
     ) {
-      console.log("🔄 Question changed - resetting state");
       setSelectedAnswer("");
       setIsAnswered(false);
       setSubmittingAnswer(false);
@@ -85,7 +84,6 @@ const QuestionRoundPage: React.FC = () => {
 
   // Handle time up callback
   const handleTimeUp = async () => {
-    console.log("Time's up!");
     setIsAnswered(true);
 
     // Show TimesUp status screen
@@ -310,7 +308,7 @@ const QuestionRoundPage: React.FC = () => {
       {answerStatus === "result" && answerResult?.isCorrect && (
         <CorrectAnswer
           pointsEarned={answerResult.pointsAwarded}
-          totalScore={(team?.teamScore || 0) + answerResult.pointsAwarded}
+          totalScore={team?.teamScore || 0}
           teamRank={1} // TODO: Get actual rank from leaderboard
           teamName={team?.teamName || ""}
         />
