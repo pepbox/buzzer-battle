@@ -1,4 +1,4 @@
-import { Route, Routes, useParams } from "react-router-dom";
+import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import LoginPage from "../features/game/pages/login.Page";
 import BuzzerRound from "../features/game/pages/Buzzer_Round";
 import BuzzerLeaderboard from "../features/game/pages/BuzzerLeaderboard";
@@ -17,9 +17,7 @@ import GameStateRouter from "../features/game/components/GameStateRouter";
 
 const GameMain = () => {
   const [FetchCurrentTeam] = useLazyFetchCurrentTeamQuery();
-  const { isLoading } = useAppSelector(
-    (state: RootState) => state.team
-  );
+  const { isLoading } = useAppSelector((state: RootState) => state.team);
   const dispatch = useAppDispatch();
   const { sessionId } = useParams<{ sessionId: string }>();
 
@@ -67,6 +65,7 @@ const GameMain = () => {
             <Route path="/question" element={<QuestionRoundPage />} />
             <Route path="/leaderboard" element={<LeaderBoardPage />} />
           </Route>
+          <Route path="/*" element={<Navigate to={`/game/${sessionId}/`} />} />
         </Route>
       </Routes>
     </div>

@@ -19,6 +19,22 @@ export interface BuzzerLeaderboardResponse {
   };
 }
 
+export interface BuzzerStatsResponse {
+  message: string;
+  data: {
+    fastestTeam: {
+      teamId: string;
+      teamNumber: number;
+      teamName: string;
+      timestamp: string;
+      pressedAt: Date;
+    } | null;
+    teamsPressed: number;
+    teamsRemaining: number;
+    totalTeams: number;
+  };
+}
+
 export interface PressBuzzerRequest {
   timestamp: string;
 }
@@ -64,6 +80,14 @@ export const buzzerApi = api.injectEndpoints({
       }),
       providesTags: ['BuzzerLeaderboard'],
     }),
+
+    fetchBuzzerStats: builder.query<BuzzerStatsResponse, void>({
+      query: () => ({
+        url: '/buzzer/stats',
+        method: 'GET',
+      }),
+      providesTags: ['BuzzerLeaderboard'],
+    }),
   }),
 });
 
@@ -73,4 +97,6 @@ export const {
   useLazyFetchBuzzerLeaderboardQuery,
   useFetchBuzzerLeaderboardByQuestionQuery,
   useLazyFetchBuzzerLeaderboardByQuestionQuery,
+  useFetchBuzzerStatsQuery,
+  useLazyFetchBuzzerStatsQuery,
 } = buzzerApi;

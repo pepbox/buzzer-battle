@@ -15,7 +15,6 @@ const AuthWrapper = ({ userType, redirection }: AuthWrapperProps) => {
   );
 
   if (!isAuthenticated) {
-    console.log("not authenticaated....")
     return <Navigate to={redirection} />;
   }
 

@@ -5,6 +5,7 @@ import PauseIcon from "@mui/icons-material/Pause";
 import SkipNextIcon from "@mui/icons-material/SkipNext";
 // import LeaderboardIcon from "@mui/icons-material/Leaderboard";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import BoltIcon from "@mui/icons-material/Bolt";
 
 interface RemoteActionButtonsProps {
   gameStatus: "paused" | "buzzer_round" | "answering" | "idle";
@@ -13,7 +14,9 @@ interface RemoteActionButtonsProps {
   onPauseGame: () => void;
   onResumeGame: () => void;
   onPassToSecondTeam: () => void;
+  onAllowTopTeam: () => void;
   canPassToSecondTeam: boolean;
+  hasFastestTeam: boolean;
   isLoading?: boolean;
   lastAnswerWasWrong?: boolean;
 }
@@ -25,7 +28,9 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
   onPauseGame,
   onResumeGame,
   onPassToSecondTeam,
+  onAllowTopTeam,
   canPassToSecondTeam,
+  hasFastestTeam,
   isLoading = false,
   lastAnswerWasWrong = false,
 }) => {
@@ -88,6 +93,40 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
         {currentQuestionIndex === -1 ? "➡️ Start Game" : "➡️ Next Question"}
       </Button>
 
+      {/* Allow Top Team Button - Only in BUZZER_ROUND */}
+      {gameStatus === "buzzer_round" && (
+        <Button
+          variant="contained"
+          startIcon={isLoading ? <CircularProgress size={20} /> : <BoltIcon />}
+          onClick={onAllowTopTeam}
+          disabled={isLoading || !hasFastestTeam}
+          sx={{
+            ...buttonBaseStyles,
+            backgroundColor: hasFastestTeam ? "#10B981" : "#9CA3AF",
+            border: hasFastestTeam ? "3px solid #34D399" : "none",
+            animation: hasFastestTeam
+              ? "pulse-green 2s ease-in-out infinite"
+              : "none",
+            "@keyframes pulse-green": {
+              "0%, 100%": {
+                borderColor: "#34D399",
+                boxShadow: "0 0 0 0 rgba(16, 185, 129, 0.4)",
+              },
+              "50%": {
+                borderColor: "#10B981",
+                boxShadow: "0 0 0 8px rgba(16, 185, 129, 0)",
+              },
+            },
+            "&:hover": {
+              backgroundColor: hasFastestTeam ? "#059669" : "#9CA3AF",
+              ...buttonBaseStyles["&:hover"],
+            },
+          }}
+        >
+          ⚡ Allow Top Team to Answer
+        </Button>
+      )}
+
       {/* Pause/Resume Button */}
       {gameStatus !== "paused" ? (
         <Button
@@ -129,7 +168,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
 
 
       {/* Pass to Second Team Button - Conditional */}
-      {gameStatus === "answering" && (
+      {(gameStatus === "answering" || gameStatus === "idle") && (
         <Button
           variant="contained"
           startIcon={

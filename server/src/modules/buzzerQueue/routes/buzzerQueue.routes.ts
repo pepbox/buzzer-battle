@@ -2,7 +2,8 @@ import express from 'express';
 import { 
     pressBuzzer,
     fetchBuzzerLeaderboard,
-    fetchBuzzerLeaderboardByQuestion 
+    fetchBuzzerLeaderboardByQuestion,
+    fetchBuzzerStats
 } from '../controllers/buzzerQueue.controller';
 import { authenticateUser, authorizeRoles } from '../../../middlewares/authMiddleware';
 
@@ -16,5 +17,8 @@ router.get('/leaderboard', authenticateUser, fetchBuzzerLeaderboard);
 
 // Admin can fetch leaderboard for specific question
 router.get('/leaderboard/:questionId', authenticateUser, authorizeRoles('ADMIN'), fetchBuzzerLeaderboardByQuestion);
+
+// Fetch buzzer statistics (fastest team, teams pressed, teams remaining)
+router.get('/stats', authenticateUser, fetchBuzzerStats);
 
 export default router;

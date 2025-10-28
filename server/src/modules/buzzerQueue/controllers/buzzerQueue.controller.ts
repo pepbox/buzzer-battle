@@ -3,6 +3,7 @@ import AppError from '../../../utils/appError';
 import BuzzerQueueService from '../services/buzzerQueue.service';
 import GameStateService from '../../gameState/services/gameState.service';
 import QuestionService from '../../questions/services/question.service';
+import TeamService from '../../teams/services/team.service';
 import { Types } from 'mongoose';
 import { SessionEmitters } from '../../../services/socket/sessionEmitters';
 import { Events } from '../../../services/socket/enums/Events';
@@ -10,6 +11,7 @@ import { Events } from '../../../services/socket/enums/Events';
 const buzzerQueueService = new BuzzerQueueService();
 const gameStateService = new GameStateService();
 const questionService = new QuestionService();
+const teamService = new TeamService();
 
 /**
  * Press buzzer for current question
@@ -237,5 +239,82 @@ export const fetchBuzzerLeaderboardByQuestion = async (
     } catch (error) {
         console.error("Error fetching buzzer leaderboard:", error);
         next(new AppError("Failed to fetch buzzer leaderboard.", 500));
+    }
+};
+
+/**
+ * Get live buzzer statistics for current question (Admin)
+ * GET /api/v1/buzzer/stats
+ * Returns: fastest team, teams pressed count, teams remaining count
+ * Requires authentication
+ */
+export const fetchBuzzerStats = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const sessionId = req.user?.sessionId;
+
+        if (!sessionId) {
+            return next(new AppError("Session ID not found in token.", 401));
+        }
+
+        // Fetch game state to get current question
+        const gameState = await gameStateService.fetchGameStateBySessionId(sessionId);
+        if (!gameState) {
+            return next(new AppError("Game state not found.", 404));
+        }
+
+        // Fetch current question
+        const currentQuestion = await questionService.fetchCurrentQuestion(
+            sessionId,
+            gameState.currentQuestionIndex
+        );
+
+        if (!currentQuestion) {
+            return next(new AppError("Current question not found.", 404));
+        }
+
+        // Fetch buzzer leaderboard for current question
+        const leaderboard = await buzzerQueueService.fetchBuzzerLeaderboard(
+            (currentQuestion as any)._id,
+            sessionId
+        );
+
+        // Get total teams in session
+        const totalTeams = await teamService.fetchTotalTeamsInSession(sessionId);
+
+        // Calculate teams pressed and remaining
+        const teamsPressed = leaderboard.length;
+        const teamsRemaining = totalTeams - teamsPressed;
+
+        // Get fastest team (first in leaderboard)
+        const fastestTeam = leaderboard.length > 0 ? {
+            teamId: (leaderboard[0].teamId as any)._id,
+            teamNumber: (leaderboard[0].teamId as any).teamNumber,
+            teamName: (leaderboard[0].teamId as any).teamName,
+            timestamp: leaderboard[0].timestamp.toString(),
+            pressedAt: leaderboard[0].createdAt,
+        } : null;
+
+        res.status(200).json({
+            message: "Buzzer statistics fetched successfully.",
+            data: {
+                fastestTeam,
+                teamsPressed,
+                teamsRemaining,
+                totalTeams,
+            },
+        });
+    } catch (error: any) {
+        console.error("Error fetching buzzer stats:", error);
+        if (error.message === "Game state not found" || error.message === "Session not found") {
+            return next(new AppError(error.message, 404));
+        }
+        if (error.message === "Session not found or numberOfTeams not set") {
+            return next(new AppError("Session configuration error.", 500));
+        }
+        next(new AppError("Failed to fetch buzzer statistics.", 500));
     }
 };

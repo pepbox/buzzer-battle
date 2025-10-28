@@ -101,7 +101,6 @@ export interface DashboardHeaderProps {
     onGameStatusChange?: () => void;
     onTransactionsChange?: (status: boolean) => void;
     transaction?: boolean;
-    isCheckingReadiness?: boolean;
 }
 
 

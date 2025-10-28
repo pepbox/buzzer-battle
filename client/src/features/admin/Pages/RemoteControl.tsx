@@ -6,14 +6,20 @@ import RemoteHeader from "../components/RemoteHeader";
 import RemoteGameStatus from "../components/RemoteGameStatus";
 import RemoteTeamInfo from "../components/RemoteTeamInfo";
 import RemoteActionButtons from "../components/RemoteActionButtons";
+import RemoteBuzzerStats from "../components/RemoteBuzzerStats";
 import {
   usePauseGame,
   useResumeGame,
   useNextQuestion,
   usePassToSecondTeam,
+  useAutoSelectFastestTeam,
 } from "../services/adminRemoteApi";
 import { useFetchGameStateQuery } from "../../game/services/gameStateApi";
-import { useFetchBuzzerLeaderboardQuery } from "../../game/services/buzzerApi";
+import {
+  useFetchBuzzerLeaderboardQuery,
+  useFetchBuzzerStatsQuery,
+} from "../../game/services/buzzerApi";
+import { useFetchCurrentQuestionQuery } from "../../question/services/questions.api";
 import { websocketService } from "../../../services/websocket/websocketService";
 import { Events } from "../../../services/websocket/enums/Events";
 import Loader from "../../../components/ui/Loader";
@@ -32,6 +38,7 @@ const RemoteControl: React.FC = () => {
   const [snackbarSeverity, setSnackbarSeverity] = useState<"success" | "error">(
     "success"
   );
+  const [buzzerStatsCache, setBuzzerStatsCache] = useState<any>(null);
 
   // Fetch game state
   const {
@@ -39,6 +46,14 @@ const RemoteControl: React.FC = () => {
     isLoading: gameStateLoading,
     error: gameStateError,
   } = useFetchGameStateQuery();
+
+  // Fetch current question to get the actual question ID
+  const { data: currentQuestionData } = useFetchCurrentQuestionQuery(
+    undefined,
+    {
+      skip: !gameStateData?.data?.gameState,
+    }
+  );
 
   // Fetch buzzer leaderboard (to check if 2nd team exists)
   const { data: buzzerLeaderboardData } = useFetchBuzzerLeaderboardQuery();
@@ -48,6 +63,8 @@ const RemoteControl: React.FC = () => {
   const { resumeGame, isLoading: resumeLoading } = useResumeGame();
   const { nextQuestion, isLoading: nextLoading } = useNextQuestion();
   const { passToSecondTeam, isLoading: passLoading } = usePassToSecondTeam();
+  const { autoSelectFastestTeam} =
+    useAutoSelectFastestTeam();
 
   const isAnyLoading =
     pauseLoading ||
@@ -62,6 +79,17 @@ const RemoteControl: React.FC = () => {
   const totalQuestions = 10; // Default value - can be fetched from session if needed
   const gameStatus = gameState?.gameStatus || "paused";
   const currentAnsweringTeamRaw = gameState?.currentAnsweringTeam;
+
+  // Get actual question ID from the current question
+  const currentQuestionId = currentQuestionData?.data?.question?._id;
+
+  // Fetch buzzer stats only when needed (not polling, just initial fetch)
+  const { data: buzzerStatsData, refetch: refetchBuzzerStats } =
+    useFetchBuzzerStatsQuery(undefined, {
+      skip: gameStatus !== "buzzer_round" || !currentQuestionId,
+    });
+
+  const buzzerStats = buzzerStatsCache || buzzerStatsData?.data;
 
   // Parse currentAnsweringTeam (could be string or object)
   const currentAnsweringTeam =
@@ -91,17 +119,34 @@ const RemoteControl: React.FC = () => {
     const handleGameStateChanged = (data: any) => {
       if (data.gameStatus === "buzzer_round") {
         setLastAnswerWasWrong(false); // Reset on new question
+        // Refetch buzzer stats when buzzer round starts
+        if (refetchBuzzerStats) {
+          refetchBuzzerStats();
+        }
+      }
+    };
+
+    const handleBuzzerPressed = () => {
+      // Update buzzer stats in real-time when a team presses buzzer
+      if (gameStatus === "buzzer_round" && refetchBuzzerStats) {
+        refetchBuzzerStats().then((result: any) => {
+          if (result.data?.data) {
+            setBuzzerStatsCache(result.data.data);
+          }
+        });
       }
     };
 
     websocketService.on(Events.ANSWER_SUBMITTED, handleAnswerSubmitted);
     websocketService.on(Events.GAME_STATE_CHANGED, handleGameStateChanged);
+    websocketService.on(Events.BUZZER_PRESSED, handleBuzzerPressed);
 
     return () => {
       websocketService.off(Events.ANSWER_SUBMITTED, handleAnswerSubmitted);
       websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChanged);
+      websocketService.off(Events.BUZZER_PRESSED, handleBuzzerPressed);
     };
-  }, []);
+  }, [gameStatus, refetchBuzzerStats]);
 
   // Handlers
   const handlePauseGame = async () => {
@@ -150,27 +195,39 @@ const RemoteControl: React.FC = () => {
   };
 
   const handlePassToSecondTeam = async () => {
-    if (
-      !gameState?.currentQuestionIndex &&
-      gameState?.currentQuestionIndex !== 0
-    ) {
+    if (!currentQuestionId) {
       showSnackbar(
-        "Cannot pass to second team - question data missing",
+        "Cannot pass to second team - question ID not available",
         "error"
       );
       return;
     }
 
     try {
-      // Get current question ID from gameState or construct it
-      // For now, using currentQuestionIndex as a fallback
-      const questionId = gameState.currentQuestionIndex.toString();
-      await passToSecondTeam(questionId).unwrap();
+      await passToSecondTeam(currentQuestionId).unwrap();
       showSnackbar("Question passed to 2nd team", "success");
       setLastAnswerWasWrong(false);
     } catch (error: any) {
       showSnackbar(
         error?.data?.message || "Failed to pass to 2nd team",
+        "error"
+      );
+    }
+  };
+
+  const handleAllowTopTeam = async () => {
+    if (!currentQuestionId) {
+      showSnackbar("Cannot select team - question ID not available", "error");
+      return;
+    }
+
+    try {
+      await autoSelectFastestTeam(currentQuestionId).unwrap();
+      showSnackbar("Top team selected! Answering round started.", "success");
+      setLastAnswerWasWrong(false);
+    } catch (error: any) {
+      showSnackbar(
+        error?.data?.message || "Failed to select fastest team",
         "error"
       );
     }
@@ -273,6 +330,15 @@ const RemoteControl: React.FC = () => {
                 : undefined
             }
           />
+          {/* Buzzer Stats - Only show during buzzer round */}
+          {gameStatus === "buzzer_round" && buzzerStats && (
+            <RemoteBuzzerStats
+              fastestTeam={buzzerStats.fastestTeam}
+              teamsPressed={buzzerStats.teamsPressed}
+              teamsRemaining={buzzerStats.teamsRemaining}
+              totalTeams={buzzerStats.totalTeams}
+            />
+          )}
 
           {/* Action Buttons */}
           <RemoteActionButtons
@@ -282,7 +348,9 @@ const RemoteControl: React.FC = () => {
             onPauseGame={handlePauseGame}
             onResumeGame={handleResumeGame}
             onPassToSecondTeam={handlePassToSecondTeam}
+            onAllowTopTeam={handleAllowTopTeam}
             canPassToSecondTeam={canPassToSecondTeam}
+            hasFastestTeam={!!buzzerStats?.fastestTeam}
             isLoading={isAnyLoading}
             lastAnswerWasWrong={lastAnswerWasWrong}
           />

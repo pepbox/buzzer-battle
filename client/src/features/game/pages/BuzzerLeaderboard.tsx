@@ -16,8 +16,6 @@ import positionFour from "../../../assets/leaderboard/four.webp";
 import positionFive from "../../../assets/leaderboard/five.webp";
 
 const BuzzerLeaderboard: React.FC = () => {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-
   // Get current team and game state from Redux
   const team = useAppSelector((state: RootState) => state.team.team);
   const gameState = useAppSelector(

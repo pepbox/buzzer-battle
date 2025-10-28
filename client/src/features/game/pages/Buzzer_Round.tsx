@@ -165,13 +165,15 @@ const BuzzerRound: React.FC = () => {
           <QuestionBuzzer
             questionNumber={(currentQuestionIndex || 0) + 1}
             questionText={question?.questionText || ""}
+            questionImage={question?.questionImage}
+            questionVideo={question?.quetionVideo}
           />
         </Box>
 
         {/* Buzzer Section */}
         <Box
           position={"absolute"}
-          bottom={30}
+          bottom={10}
           sx={{
             zIndex: "10",
             width: "100%",

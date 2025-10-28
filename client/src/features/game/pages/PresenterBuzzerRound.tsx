@@ -11,7 +11,9 @@ import { useTimerSync } from "../../../hooks/useTimerSync";
 
 const PresenterBuzzerRound: React.FC = () => {
   // Get game state from Redux
-  const gameState = useAppSelector((state: RootState) => state.gameState.gameState);
+  const gameState = useAppSelector(
+    (state: RootState) => state.gameState.gameState
+  );
 
   // Fetch current question
   const {
@@ -26,10 +28,7 @@ const PresenterBuzzerRound: React.FC = () => {
   const timeLimit = 30;
 
   // Use synced timer with server timestamp
-  const { progress } = useTimerSync(
-    gameState?.buzzerRoundStartTime,
-    timeLimit
-  );
+  const { progress } = useTimerSync(gameState?.buzzerRoundStartTime, timeLimit);
 
   // Show loading state
   if (isLoading) {
@@ -107,6 +106,8 @@ const PresenterBuzzerRound: React.FC = () => {
           <QuestionBuzzer
             questionNumber={currentQuestionIndex}
             questionText={question?.questionText || ""}
+            questionImage={question?.questionImage}
+            questionVideo={question?.quetionVideo}
           />
         </Box>
 

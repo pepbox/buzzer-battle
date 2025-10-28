@@ -39,14 +39,10 @@ const App: React.FC = () => {
   return (
     <Routes>
       <Route path="/game/:sessionId/*" element={<GameMain />} />
-      <Route path="/game/*" element={<GameMain />} />
       <Route path="/admin/:sessionId/*" element={<AdminMain />} />
 
       {/* Redirect to game main if no specific path is matched */}
       <Route path="*" element={<Default />} />
-
-      {/* 404 page */}
-      <Route path="*" element={<GameMain />} />
     </Routes>
   );
 };
