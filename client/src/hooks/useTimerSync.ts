@@ -75,7 +75,7 @@ export const useTimerSync = (
 
   // Calculate progress (0-100)
   const progress = (timeElapsed / duration) * 100;
-
+  
   return {
     timeElapsed,
     progress: Math.min(progress, 100),

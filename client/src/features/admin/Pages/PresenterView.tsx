@@ -10,7 +10,7 @@ import { setSessionId } from "../../session/services/sessionSlice";
 import PresenterGameView from "../components/PresenterGameView";
 import Loader from "../../../components/ui/Loader";
 import ErrorLayout from "../../../components/ui/Error";
-import { useGameStateMonitor } from "../../game/hooks/useGameStateMonitor";
+// import { useGameStateMonitor } from "../../game/hooks/useGameStateMonitor";
 import { presenterAudio } from "../../../utils/presenterAudio";
 
 const PresenterView: React.FC = () => {
@@ -31,7 +31,7 @@ const PresenterView: React.FC = () => {
     useFetchOverallLeaderboardQuery();
 
   // Monitor game state via WebSocket
-  useGameStateMonitor();
+  // useGameStateMonitor();
 
   // Set session ID in Redux
   useEffect(() => {

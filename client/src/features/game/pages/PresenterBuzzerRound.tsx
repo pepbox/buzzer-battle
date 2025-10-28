@@ -28,6 +28,7 @@ const PresenterBuzzerRound: React.FC = () => {
   const timeLimit = 30;
 
   // Use synced timer with server timestamp
+
   const { progress } = useTimerSync(gameState?.buzzerRoundStartTime, timeLimit);
 
   // Show loading state
@@ -60,6 +61,8 @@ const PresenterBuzzerRound: React.FC = () => {
       }}
     >
       {/* Top Progress Bar */}
+      {gameState?.buzzerRoundStartTime}
+      {progress}
       <Box
         sx={{
           m: "24px",

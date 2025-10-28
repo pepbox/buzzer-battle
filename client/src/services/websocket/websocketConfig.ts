@@ -6,6 +6,8 @@ import { gameStateApi } from "../../features/game/services/gameStateApi";
 import { buzzerApi } from "../../features/game/services/buzzerApi";
 import { setGameState } from "../../features/game/services/gameStateSlice";
 import { adminApi } from "../../features/admin/services/admin.Api";
+import { teamApi } from "../../features/game/services/teamApi";
+import { questionApi } from "../../features/question/services/questions.api";
 
 export const setupGlobalListeners = () => {
   // Game State Changed Event
@@ -73,6 +75,7 @@ export const setupGlobalListeners = () => {
       // Component-specific handlers will manage the timer
       // This is just for global state updates
       store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
+      store.dispatch(questionApi.util.invalidateTags(["Question"]));
     },
     "redux"
   );
@@ -124,6 +127,7 @@ export const setupGlobalListeners = () => {
     (data: any) => {
       console.log("Answer submitted:", data);
       store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
+      store.dispatch(teamApi.util.invalidateTags(["Leaderboard"]));
       // Invalidate teams and leaderboard
       // store.dispatch(teamsApi.util.invalidateTags(["Teams", "Leaderboard"]));
     },

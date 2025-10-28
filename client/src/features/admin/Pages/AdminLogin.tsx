@@ -118,7 +118,7 @@ const AdminLogin: React.FC = () => {
       if (result.success) {
         // The Redux slice will handle the state updates via extraReducers
         // Navigate to admin dashboard
-        navigate(`/admin/dashboard`);
+        navigate(`/admin/${sessionId}/dashboard`);
       } else {
         setLocalError(result.message || "Login failed");
       }

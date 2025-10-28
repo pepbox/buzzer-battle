@@ -174,9 +174,9 @@ const RemoteControl: React.FC = () => {
       if (result.data.gameEnded) {
         showSnackbar("Game completed! All questions done.", "success");
         // Navigate to game completion or final leaderboard
-        setTimeout(() => {
-          navigate(`/admin/${sessionId}/completion`);
-        }, 2000);
+        // setTimeout(() => {
+        //   navigate(`/admin/${sessionId}/completion`);
+        // }, 2000);
       } else {
         // Check if this was the first question (game start)
         if (currentQuestionIndex === -1) {
