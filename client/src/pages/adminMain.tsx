@@ -1,11 +1,11 @@
 import { Navigate, Route, Routes, useParams } from "react-router-dom";
-import RemoteControl from "../features/admin/Pages/RemoteControl";
-import PresenterView from "../features/admin/Pages/PresenterView";
+import RemoteControl from "../features/admin/pages/RemoteControl";
+import PresenterView from "../features/admin/pages/PresenterView";
 import Box from "@mui/material/Box";
 import { useLazyFetchAdminQuery } from "../features/admin/services/admin.Api";
 import { useEffect } from "react";
-import DashboardPage from "../features/admin/Pages/DshboardPage";
-import AdminLogin from "../features/admin/Pages/AdminLogin";
+import DashboardPage from "../features/admin/pages/DshboardPage";
+import AdminLogin from "../features/admin/pages/AdminLogin";
 import AuthWrapper from "../components/auth/AuthWrapper";
 
 const AdminMain = () => {
