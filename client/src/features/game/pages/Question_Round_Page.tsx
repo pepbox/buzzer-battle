@@ -51,8 +51,8 @@ const QuestionRoundPage: React.FC = () => {
 
   // Mutation for submitting answer
   const [sendResponse] = useSendQuestionResponseMutation();
-
   const question = questionData?.data?.question;
+
   const currentQuestionIndex = questionData?.data?.currentQuestionIndex;
 
   const timeLimit = 60; // 60 seconds for answering
@@ -272,6 +272,7 @@ const QuestionRoundPage: React.FC = () => {
     text: question.questionText,
     image: question.questionImage,
     video: question.quetionVideo,
+    score: question.score,
     options: question.options,
   };
 
@@ -284,7 +285,7 @@ const QuestionRoundPage: React.FC = () => {
           teamName={team?.teamName || ""}
           teamNumber={team?.teamNumber || 0}
           totalPoints={team?.teamScore || 0}
-          questionPoints={150} // Fixed 150 points per correct answer
+          questionPoints={questionDataFormatted.score || 0} // Fixed 150 points per correct answer
           timeLimit={timeLimit}
           timeRemaining={timeRemaining}
           selectedAnswer={selectedAnswer}

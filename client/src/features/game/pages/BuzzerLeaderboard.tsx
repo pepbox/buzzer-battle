@@ -52,14 +52,17 @@ const BuzzerLeaderboard: React.FC = () => {
     5: positionFive,
   };
 
-  // Format timestamp to show seconds with 2 decimal places (e.g., "02.44")
+  // Format timestamp to show minutes:seconds:milliseconds (e.g., "00:01:42")
   const formatTime = (timestamp: string): string => {
     try {
-      const ms = Number(timestamp);
-      const seconds = ms / 1000;
-      return seconds.toFixed(2);
+      const totalMs = Number(timestamp);
+      const minutes = Math.floor(totalMs / 60000);
+      const seconds = Math.floor((totalMs % 60000) / 1000);
+      const milliseconds = Math.floor((totalMs % 1000) / 10); // Get centiseconds (2 digits)
+      
+      return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}:${String(milliseconds).padStart(2, '0')}`;
     } catch {
-      return "00.00";
+      return "00:00:00";
     }
   };
 

@@ -164,6 +164,7 @@ export const updateGameStateUnified = async (
                                     currentQuestionIndex: updatedGameState.currentQuestionIndex,
                                     currentAnsweringTeam: updatedGameState.currentAnsweringTeam,
                                     answeringStartTime: updatedGameState.answeringRoundStartTime,
+                                    buzzerRoundStartTime: updatedGameState.buzzerRoundStartTime,
                                 });
 
                                 // Schedule auto-transition to IDLE after answer duration

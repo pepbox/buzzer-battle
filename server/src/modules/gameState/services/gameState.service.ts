@@ -403,7 +403,7 @@ export default class GameStateService {
     gameState.currentAnsweringTeam = teamId as Types.ObjectId;
     gameState.gameStatus = GameStatus.ANSWERING;
     gameState.answeringRoundStartTime = Date.now();
-    gameState.buzzerRoundStartTime = undefined; // Clear buzzer time
+    // gameState.buzzerRoundStartTime = undefined; // Clear buzzer time
 
     const options: any = {};
     if (this.session) {

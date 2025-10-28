@@ -6,177 +6,176 @@ import { Session } from "../../session/models/session.model";
 import TeamService from "../../teams/services/team.service";
 
 export default class QuestionService {
-    private session?: mongoose.ClientSession;
+  private session?: mongoose.ClientSession;
 
-    constructor(session?: mongoose.ClientSession) {
-        this.session = session;
+  constructor(session?: mongoose.ClientSession) {
+    this.session = session;
+  }
+
+  // Fetch current question based on session and question index
+  async fetchCurrentQuestion(
+    sessionId: Types.ObjectId | string,
+    questionIndex: number
+  ): Promise<IQuestion | null> {
+    const sessionQuery = Session.findById(sessionId).populate("questions");
+    if (this.session) {
+      sessionQuery.session(this.session);
     }
 
-    // Fetch current question based on session and question index
-    async fetchCurrentQuestion(
-        sessionId: Types.ObjectId | string,
-        questionIndex: number
-    ): Promise<IQuestion | null> {
-        const sessionQuery = Session.findById(sessionId).populate('questions');
-        if (this.session) {
-            sessionQuery.session(this.session);
-        }
-
-        const sessionData = await sessionQuery;
-        if (!sessionData) {
-            throw new Error("Session not found");
-        }
-
-        if (questionIndex < 0 || questionIndex >= sessionData.questions.length) {
-            return null;
-        }
-
-        const questionId = sessionData.questions[questionIndex];
-        const questionQuery = Question.findById(questionId);
-        if (this.session) {
-            questionQuery.session(this.session);
-        }
-
-        return await questionQuery;
+    const sessionData = await sessionQuery;
+    if (!sessionData) {
+      throw new Error("Session not found");
     }
 
-    // Fetch question by ID (for teams - without correct answer)
-    async fetchQuestionForTeam(
-        questionId: Types.ObjectId | string
-    ): Promise<Partial<IQuestion> | null> {
-        const query = Question.findById(questionId).select('-correctAnswer');
-        if (this.session) {
-            query.session(this.session);
-        }
-
-        return await query;
+    if (questionIndex < 0 || questionIndex >= sessionData.questions.length) {
+      return null;
     }
 
-    // Fetch question by ID (for admin - with correct answer)
-    async fetchQuestionById(
-        questionId: Types.ObjectId | string
-    ): Promise<IQuestion | null> {
-        const query = Question.findById(questionId);
-        if (this.session) {
-            query.session(this.session);
-        }
-
-        return await query;
+    const questionId = sessionData.questions[questionIndex];
+    const questionQuery = Question.findById(questionId);
+    if (this.session) {
+      questionQuery.session(this.session);
     }
 
-    // Create question response
-    async createQuestionResponse(
-        questionId: Types.ObjectId | string,
-        teamId: Types.ObjectId | string,
-        responseOptionId: string
-    ): Promise<IQuestionResponse> {
-        // Check if team has already responded to this question
-        const existingResponseQuery = QuestionResponse.findOne({
-            questionId,
-            team: teamId,
-        });
-        if (this.session) {
-            existingResponseQuery.session(this.session);
-        }
+    return await questionQuery;
+  }
 
-        const existingResponse = await existingResponseQuery;
-        if (existingResponse) {
-            throw new Error("Team has already responded to this question");
-        }
-
-        const questionResponse = new QuestionResponse({
-            questionId,
-            team: teamId,
-            response: responseOptionId,
-        });
-
-        const options: any = {};
-        if (this.session) {
-            options.session = this.session;
-        }
-
-        await questionResponse.save(options);
-        return questionResponse;
+  // Fetch question by ID (for teams - without correct answer)
+  async fetchQuestionForTeam(
+    questionId: Types.ObjectId | string
+  ): Promise<Partial<IQuestion> | null> {
+    const query = Question.findById(questionId).select("-correctAnswer");
+    if (this.session) {
+      query.session(this.session);
     }
 
-    // Validate answer and update team score
-    async validateAndUpdateScore(
-        questionId: Types.ObjectId | string,
-        teamId: Types.ObjectId | string,
-        responseOptionId: string,
-        points: number = 150
-    ): Promise<{ isCorrect: boolean; pointsAwarded: number }> {
-        // Fetch the question
-        const questionQuery = Question.findById(questionId);
-        if (this.session) {
-            questionQuery.session(this.session);
-        }
+    return await query;
+  }
 
-        const question = await questionQuery;
-        if (!question) {
-            throw new Error("Question not found");
-        }
-
-        // Check if the answer is correct by comparing optionId with correctAnswer
-        const isCorrect = question.correctAnswer === responseOptionId.toString();
-
-        // Update team score if correct
-        if (isCorrect) {
-            const teamService = new TeamService(this.session);
-            await teamService.updateTeamScore(teamId, points);
-            return { isCorrect: true, pointsAwarded: points };
-        }
-
-        return { isCorrect: false, pointsAwarded: 0 };
+  // Fetch question by ID (for admin - with correct answer)
+  async fetchQuestionById(
+    questionId: Types.ObjectId | string
+  ): Promise<IQuestion | null> {
+    const query = Question.findById(questionId);
+    if (this.session) {
+      query.session(this.session);
     }
 
-    // Get all questions for a session
-    async fetchQuestionsBySession(
-        sessionId: Types.ObjectId | string
-    ): Promise<IQuestion[]> {
-        const sessionQuery = Session.findById(sessionId).populate('questions');
-        if (this.session) {
-            sessionQuery.session(this.session);
-        }
+    return await query;
+  }
 
-        const sessionData = await sessionQuery;
-        if (!sessionData) {
-            throw new Error("Session not found");
-        }
-
-        return sessionData.questions as any;
+  // Create question response
+  async createQuestionResponse(
+    questionId: Types.ObjectId | string,
+    teamId: Types.ObjectId | string,
+    responseOptionId: string
+  ): Promise<IQuestionResponse> {
+    // Check if team has already responded to this question
+    const existingResponseQuery = QuestionResponse.findOne({
+      questionId,
+      team: teamId,
+    });
+    if (this.session) {
+      existingResponseQuery.session(this.session);
     }
 
-        // Check if team has responded to a question
-    async hasTeamResponded(
-        questionId: Types.ObjectId | string,
-        teamId: Types.ObjectId | string
-    ): Promise<boolean> {
-        const query = QuestionResponse.findOne({
-            questionId,
-            team: teamId,
-        });
-        if (this.session) {
-            query.session(this.session);
-        }
-
-        const response = await query;
-        return response !== null;
+    const existingResponse = await existingResponseQuery;
+    if (existingResponse) {
+      throw new Error("Team has already responded to this question");
     }
 
-    // Fetch all responses by team ID (for admin dashboard)
-    async fetchResponsesByTeamId(
-        teamId: Types.ObjectId | string
-    ): Promise<IQuestionResponse[]> {
-        const query = QuestionResponse.find({ team: teamId })
-            .populate('questionId')
-            .populate('team')
-            .sort({ createdAt: 1 }); // Oldest first
+    const questionResponse = new QuestionResponse({
+      questionId,
+      team: teamId,
+      response: responseOptionId,
+    });
 
-        if (this.session) {
-            query.session(this.session);
-        }
-
-        return await query;
+    const options: any = {};
+    if (this.session) {
+      options.session = this.session;
     }
+
+    await questionResponse.save(options);
+    return questionResponse;
+  }
+
+  // Validate answer and update team score
+  async validateAndUpdateScore(
+    questionId: Types.ObjectId | string,
+    teamId: Types.ObjectId | string,
+    responseOptionId: string
+  ): Promise<{ isCorrect: boolean; pointsAwarded: number }> {
+    // Fetch the question
+    const questionQuery = Question.findById(questionId);
+    if (this.session) {
+      questionQuery.session(this.session);
+    }
+
+    const question = await questionQuery;
+    if (!question) {
+      throw new Error("Question not found");
+    }
+
+    // Check if the answer is correct by comparing optionId with correctAnswer
+    const isCorrect = question.correctAnswer === responseOptionId.toString();
+
+    // Update team score if correct
+    if (isCorrect) {
+      const teamService = new TeamService(this.session);
+      await teamService.updateTeamScore(teamId, question.score);
+      return { isCorrect: true, pointsAwarded: question.score };
+    }
+
+    return { isCorrect: false, pointsAwarded: 0 };
+  }
+
+  // Get all questions for a session
+  async fetchQuestionsBySession(
+    sessionId: Types.ObjectId | string
+  ): Promise<IQuestion[]> {
+    const sessionQuery = Session.findById(sessionId).populate("questions");
+    if (this.session) {
+      sessionQuery.session(this.session);
+    }
+
+    const sessionData = await sessionQuery;
+    if (!sessionData) {
+      throw new Error("Session not found");
+    }
+
+    return sessionData.questions as any;
+  }
+
+  // Check if team has responded to a question
+  async hasTeamResponded(
+    questionId: Types.ObjectId | string,
+    teamId: Types.ObjectId | string
+  ): Promise<boolean> {
+    const query = QuestionResponse.findOne({
+      questionId,
+      team: teamId,
+    });
+    if (this.session) {
+      query.session(this.session);
+    }
+
+    const response = await query;
+    return response !== null;
+  }
+
+  // Fetch all responses by team ID (for admin dashboard)
+  async fetchResponsesByTeamId(
+    teamId: Types.ObjectId | string
+  ): Promise<IQuestionResponse[]> {
+    const query = QuestionResponse.find({ team: teamId })
+      .populate("questionId")
+      .populate("team")
+      .sort({ createdAt: 1 }); // Oldest first
+
+    if (this.session) {
+      query.session(this.session);
+    }
+
+    return await query;
+  }
 }

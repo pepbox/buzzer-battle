@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import {
   Dialog,
   DialogTitle,
@@ -16,14 +16,14 @@ import {
   useTheme,
   CircularProgress,
   Paper,
-} from '@mui/material';
+} from "@mui/material";
 import {
   Close as CloseIcon,
   CheckCircle as CheckIcon,
   Cancel as CrossIcon,
   AccessTime as ClockIcon,
-} from '@mui/icons-material';
-import { TeamResponse } from '../types/interfaces';
+} from "@mui/icons-material";
+import { TeamResponse } from "../types/interfaces";
 
 interface TeamResponsesModalProps {
   open: boolean;
@@ -45,24 +45,23 @@ const TeamResponsesModal: React.FC<TeamResponsesModalProps> = ({
   loading = false,
 }) => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   // Format time elapsed
   const formatTime = (seconds?: number): string => {
-    if (seconds === undefined) return 'N/A';
+    if (seconds === undefined) return "N/A";
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
   // Format date
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+    return date.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -75,18 +74,18 @@ const TeamResponsesModal: React.FC<TeamResponsesModalProps> = ({
       fullWidth
       PaperProps={{
         sx: {
-          height: isMobile ? '100%' : '80vh',
+          height: isMobile ? "100%" : "80vh",
         },
       }}
     >
       {/* Header */}
       <DialogTitle
         sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
           backgroundColor: theme.palette.primary.main,
-          color: 'white',
+          color: "white",
           py: 2,
         }}
       >
@@ -94,19 +93,29 @@ const TeamResponsesModal: React.FC<TeamResponsesModalProps> = ({
           <Typography variant="h6" component="div">
             Team #{teamNumber} - {teamName}
           </Typography>
-          <Typography variant="body2" sx={{ opacity: 0.9 }} color='white'>
+          <Typography variant="body2" sx={{ opacity: 0.9 }} color="white">
             Total Score: {teamScore} pts • {responses.length} Responses
           </Typography>
         </Box>
-        <IconButton onClick={onClose} sx={{ color: 'white' }}>
+        <IconButton onClick={onClose} sx={{ color: "white" }}>
           <CloseIcon />
         </IconButton>
       </DialogTitle>
 
       {/* Content */}
-      <DialogContent sx={{ p: isMobile ? 2 : 3, backgroundColor: theme.palette.background.default }}>
+      <DialogContent
+        sx={{
+          p: isMobile ? 2 : 3,
+          backgroundColor: theme.palette.background.default,
+        }}
+      >
         {loading ? (
-          <Box display="flex" justifyContent="center" alignItems="center" py={8}>
+          <Box
+            display="flex"
+            justifyContent="center"
+            alignItems="center"
+            py={8}
+          >
             <CircularProgress />
           </Box>
         ) : responses.length === 0 ? (
@@ -126,9 +135,17 @@ const TeamResponsesModal: React.FC<TeamResponsesModalProps> = ({
                   <CardContent>
                     <Stack spacing={2}>
                       {/* Question Header */}
-                      <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                      <Box
+                        display="flex"
+                        justifyContent="space-between"
+                        alignItems="flex-start"
+                      >
                         <Box flex={1}>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                          <Typography
+                            variant="subtitle2"
+                            color="text.secondary"
+                            gutterBottom
+                          >
                             Question #{index + 1}
                           </Typography>
                           <Typography variant="body1" fontWeight="bold">
@@ -136,9 +153,23 @@ const TeamResponsesModal: React.FC<TeamResponsesModalProps> = ({
                           </Typography>
                         </Box>
                         <Chip
-                          icon={response.isCorrect ? <CheckIcon /> : <CrossIcon />}
-                          label={response.isCorrect ? 'Correct' : 'Incorrect'}
-                          color={response.isCorrect ? 'success' : 'error'}
+                          icon={
+                            response.correctAnswer === response.teamResponse ? (
+                              <CheckIcon />
+                            ) : (
+                              <CrossIcon />
+                            )
+                          }
+                          label={
+                            response.correctAnswer === response.teamResponse
+                              ? "Correct"
+                              : "Incorrect"
+                          }
+                          color={
+                            response.correctAnswer === response.teamResponse
+                              ? "success"
+                              : "error"
+                          }
                           size="small"
                           sx={{ ml: 2 }}
                         />
@@ -151,9 +182,9 @@ const TeamResponsesModal: React.FC<TeamResponsesModalProps> = ({
                           src={response.questionImage}
                           alt="Question"
                           sx={{
-                            maxWidth: '100%',
+                            maxWidth: "100%",
                             maxHeight: 200,
-                            objectFit: 'contain',
+                            objectFit: "contain",
                             borderRadius: 1,
                           }}
                         />
@@ -164,7 +195,11 @@ const TeamResponsesModal: React.FC<TeamResponsesModalProps> = ({
                       {/* Options (if available) */}
                       {response.options && response.options.length > 0 && (
                         <Box>
-                          <Typography variant="body2" color="text.secondary" gutterBottom>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            gutterBottom
+                          >
                             Options:
                           </Typography>
                           <Stack spacing={1}>
@@ -176,27 +211,43 @@ const TeamResponsesModal: React.FC<TeamResponsesModalProps> = ({
                                   p: 1.5,
                                   backgroundColor:
                                     option.optionId === response.correctAnswer
-                                      ? theme.palette.success.light + '20'
-                                      : option.optionId === response.teamResponse
-                                      ? theme.palette.error.light + '20'
+                                      ? theme.palette.success.light + "20"
+                                      : option.optionId ===
+                                        response.teamResponse
+                                      ? theme.palette.error.light + "20"
                                       : theme.palette.background.paper,
                                   border: 1,
                                   borderColor:
                                     option.optionId === response.correctAnswer
                                       ? theme.palette.success.main
-                                      : option.optionId === response.teamResponse
+                                      : option.optionId ===
+                                        response.teamResponse
                                       ? theme.palette.error.main
                                       : theme.palette.divider,
                                 }}
                               >
-                                <Box display="flex" alignItems="center" justifyContent="space-between">
-                                  <Typography variant="body2">{option.optionText}</Typography>
-                                  {option.optionId === response.correctAnswer && (
-                                    <CheckIcon color="success" fontSize="small" />
+                                <Box
+                                  display="flex"
+                                  alignItems="center"
+                                  justifyContent="space-between"
+                                >
+                                  <Typography variant="body2">
+                                    {option.optionText}
+                                  </Typography>
+                                  {option.optionId ===
+                                    response.correctAnswer && (
+                                    <CheckIcon
+                                      color="success"
+                                      fontSize="small"
+                                    />
                                   )}
                                   {option.optionId === response.teamResponse &&
-                                    option.optionId !== response.correctAnswer && (
-                                      <CrossIcon color="error" fontSize="small" />
+                                    option.optionId !==
+                                      response.correctAnswer && (
+                                      <CrossIcon
+                                        color="error"
+                                        fontSize="small"
+                                      />
                                     )}
                                 </Box>
                               </Paper>
@@ -208,7 +259,11 @@ const TeamResponsesModal: React.FC<TeamResponsesModalProps> = ({
                       {/* Team Response (text-based) */}
                       {!response.options || response.options.length === 0 ? (
                         <Box>
-                          <Typography variant="body2" color="text.secondary" gutterBottom>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            gutterBottom
+                          >
                             Team's Answer:
                           </Typography>
                           <Paper
@@ -216,32 +271,41 @@ const TeamResponsesModal: React.FC<TeamResponsesModalProps> = ({
                             sx={{
                               p: 1.5,
                               backgroundColor: response.isCorrect
-                                ? theme.palette.success.light + '20'
-                                : theme.palette.error.light + '20',
+                                ? theme.palette.success.light + "20"
+                                : theme.palette.error.light + "20",
                               border: 1,
                               borderColor: response.isCorrect
                                 ? theme.palette.success.main
                                 : theme.palette.error.main,
                             }}
                           >
-                            <Typography variant="body2">{response.teamResponseText}</Typography>
+                            <Typography variant="body2">
+                              {response.teamResponseText}
+                            </Typography>
                           </Paper>
 
                           {!response.isCorrect && (
                             <Box mt={1}>
-                              <Typography variant="body2" color="text.secondary" gutterBottom>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                gutterBottom
+                              >
                                 Correct Answer:
                               </Typography>
                               <Paper
                                 elevation={0}
                                 sx={{
                                   p: 1.5,
-                                  backgroundColor: theme.palette.success.light + '20',
+                                  backgroundColor:
+                                    theme.palette.success.light + "20",
                                   border: 1,
                                   borderColor: theme.palette.success.main,
                                 }}
                               >
-                                <Typography variant="body2">{response.correctAnswerText}</Typography>
+                                <Typography variant="body2">
+                                  {response.correctAnswerText}
+                                </Typography>
                               </Paper>
                             </Box>
                           )}
@@ -251,14 +315,24 @@ const TeamResponsesModal: React.FC<TeamResponsesModalProps> = ({
                       <Divider />
 
                       {/* Response Details */}
-                      <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+                      <Box
+                        display="flex"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        flexWrap="wrap"
+                        gap={1}
+                      >
                         <Box display="flex" alignItems="center" gap={1}>
                           <Typography
                             variant="body2"
                             fontWeight="bold"
-                            color={response.pointsEarned >= 0 ? 'success.main' : 'error.main'}
+                            color={
+                              response.pointsEarned >= 0
+                                ? "success.main"
+                                : "error.main"
+                            }
                           >
-                            {response.pointsEarned >= 0 ? '+' : ''}
+                            {response.pointsEarned >= 0 ? "+" : ""}
                             {response.pointsEarned} pts
                           </Typography>
                         </Box>

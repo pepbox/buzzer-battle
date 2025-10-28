@@ -11,6 +11,7 @@ export interface QuestionData {
   text?: string;
   image?: string;
   video?: string;
+  score?: number;
   options: QuestionOption[];
 }
 
