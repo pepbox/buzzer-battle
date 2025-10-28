@@ -105,7 +105,7 @@ const BuzzerRound: React.FC = () => {
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-around",
-        overflow: "hidden",
+        overflow: "auto",
       }}
     >
       {/* Top Progress Bar */}
@@ -172,15 +172,16 @@ const BuzzerRound: React.FC = () => {
 
         {/* Buzzer Section */}
         <Box
-          position={"absolute"}
+          // position={"absolute"}
           bottom={10}
           sx={{
             zIndex: "10",
             width: "100%",
             display: "flex",
             justifyContent: "center",
-            marginTop: "auto",
-            marginBottom: { xs: "24px", sm: "32px", md: "48px" },
+            marginTop: "45px",
+            // marginBottom: { xs: "24px", sm: "32px", md: "48px" },
+            marginBottom: "16px"
           }}
         >
           <Buzzer
