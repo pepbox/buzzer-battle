@@ -159,6 +159,7 @@ export const updateGameStateUnified = async (
                                 });
 
                                 // Emit game state change
+                                // FLAGGED
                                 SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
                                     gameStatus: updatedGameState.gameStatus,
                                     currentQuestionIndex: updatedGameState.currentQuestionIndex,

@@ -6,6 +6,7 @@ import { Session } from "../../session/models/session.model";
 import { SessionStatus } from "../../session/types/enums";
 import BuzzerQueueService from "../../buzzerQueue/services/buzzerQueue.service";
 import QuestionService from "../../questions/services/question.service";
+import { IBuzzerQueue } from "../../buzzerQueue/types/buzzerQueue.interface";
 
 export default class GameStateService {
   private session?: mongoose.ClientSession;
@@ -280,7 +281,6 @@ export default class GameStateService {
     return gameState;
   }
 
-
   // Move to next question with auto-end game check
   async moveToNextQuestionWithCheck(
     sessionId: Types.ObjectId | string
@@ -388,7 +388,7 @@ export default class GameStateService {
   // Set specific team as answering team (used by auto-selection)
   async setAnsweringTeam(
     sessionId: Types.ObjectId | string,
-    teamId: Types.ObjectId | string
+    fastestTeam: IBuzzerQueue
   ): Promise<IGameState> {
     const query = GameState.findOne({ sessionId });
     if (this.session) {
@@ -400,11 +400,12 @@ export default class GameStateService {
       throw new Error("Game state not found");
     }
 
-    gameState.currentAnsweringTeam = teamId as Types.ObjectId;
+    gameState.currentAnsweringTeam = fastestTeam.teamId as any;
     gameState.gameStatus = GameStatus.ANSWERING;
     gameState.answeringRoundStartTime = Date.now();
     // gameState.buzzerRoundStartTime = undefined; // Clear buzzer time
 
+    console.log("Here fastest team selected", fastestTeam);
     const options: any = {};
     if (this.session) {
       options.session = this.session;
@@ -434,10 +435,7 @@ export default class GameStateService {
     // Get fastest team (1st place)
     const fastestTeam = leaderboard[0];
 
-    return await this.setAnsweringTeam(
-      sessionId,
-      (fastestTeam.teamId as any)._id
-    );
+    return await this.setAnsweringTeam(sessionId, fastestTeam);
   }
 
   /**

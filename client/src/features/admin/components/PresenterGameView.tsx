@@ -7,6 +7,7 @@ import PresenterBuzzerRound from "../../game/pages/PresenterBuzzerRound";
 import { presenterAudio } from "../../../utils/presenterAudio";
 import { Session } from "../../session/services/session.api";
 
+
 interface PresenterGameViewProps {
   // sessionName?: string;
   session?: Session;
@@ -91,11 +92,11 @@ const PresenterGameView: React.FC<PresenterGameViewProps> = ({ session }) => {
             }}
           >
             {/* TODO: Replace with actual Question component */}
-            <Box
+            {/* <Box
               sx={{ fontSize: 36, fontWeight: "bold", mb: 3, color: "#333" }}
             >
               Question Display
-            </Box>
+            </Box> */}
             <Box sx={{ fontSize: 24, color: "#666" }}>
               Team{" "}
               {typeof currentAnsweringTeam === "string"
