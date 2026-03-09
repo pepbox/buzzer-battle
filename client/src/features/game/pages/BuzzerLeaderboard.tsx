@@ -31,6 +31,9 @@ const BuzzerLeaderboard: React.FC = () => {
 
   const leaderboard = leaderboardData?.data?.leaderboard || [];
 
+  // Find current team's entry in the leaderboard
+  const myTeamEntry = leaderboard.find((entry) => entry.teamId === team?._id);
+
   // Get current answering team
   const currentAnsweringTeam = gameState?.currentAnsweringTeam;
   const answeringTeamId =
@@ -41,6 +44,9 @@ const BuzzerLeaderboard: React.FC = () => {
   // Check if we're in answering state
   const isAnsweringState = gameState?.gameStatus === "answering";
 
+  // Check if my team is the answering team
+  const isMyTeamAnswering = answeringTeamId === team?._id;
+
   // Position badge images
   const positionBadges: { [key: number]: string } = {
     1: positionOne,
@@ -50,6 +56,14 @@ const BuzzerLeaderboard: React.FC = () => {
     5: positionFive,
   };
 
+  // Get rank text (1st, 2nd, 3rd, etc.)
+  const getRankText = (rank: number): string => {
+    if (rank === 1) return "1st";
+    if (rank === 2) return "2nd";
+    if (rank === 3) return "3rd";
+    return `${rank}th`;
+  };
+
   // Format timestamp to show minutes:seconds:milliseconds (e.g., "00:01:42")
   const formatTime = (timestamp: string): string => {
     try {
@@ -57,7 +71,7 @@ const BuzzerLeaderboard: React.FC = () => {
       const minutes = Math.floor(totalMs / 60000);
       const seconds = Math.floor((totalMs % 60000) / 1000);
       const milliseconds = Math.floor((totalMs % 1000) / 10); // Get centiseconds (2 digits)
-      
+
       return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}:${String(milliseconds).padStart(2, '0')}`;
     } catch {
       return "00:00:00";
@@ -93,20 +107,6 @@ const BuzzerLeaderboard: React.FC = () => {
         padding: "24px",
       }}
     >
-      {/* Title */}
-      <Typography
-        variant="h4"
-        sx={{
-          color: "white",
-          fontWeight: "bold",
-          marginBottom: "16px",
-          textAlign: "center",
-          textShadow: "2px 2px 4px rgba(0,0,0,0.3)",
-        }}
-      >
-        Fastest Solvers
-      </Typography>
-
       {/* Answering Team Indicator */}
       {isAnsweringState && answeringTeamId && (
         <Typography
@@ -114,174 +114,181 @@ const BuzzerLeaderboard: React.FC = () => {
           sx={{
             color: "#FFD700",
             fontWeight: "bold",
-            marginBottom: "16px",
+            marginBottom: "24px",
             textAlign: "center",
             textShadow: "2px 2px 4px rgba(0,0,0,0.5)",
             backgroundColor: "rgba(0, 0, 0, 0.3)",
-            padding: "8px 16px",
-            borderRadius: "8px",
+            padding: "12px 24px",
+            borderRadius: "12px",
           }}
         >
-          🎯{" "}
-          {leaderboard.find((e) => e.teamId === answeringTeamId)?.teamName ||
-            "Team"}{" "}
-          is answering...
+          {isMyTeamAnswering ? "🎯 Your turn to answer!" : "🎯 Another team is answering..."}
         </Typography>
       )}
 
-      {/* Leaderboard Container */}
+      {/* My Team Card */}
       <Box
         sx={{
           backgroundColor: "white",
-          borderRadius: "16px",
-          padding: "24px",
+          borderRadius: "24px",
+          padding: "32px",
           width: "100%",
-          maxWidth: "500px",
-          maxHeight: "60vh",
-          overflowY: "auto",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
+          maxWidth: "400px",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
+          textAlign: "center",
         }}
       >
-        {leaderboard.length === 0 ? (
-          <Typography
-            sx={{
-              textAlign: "center",
-              color: "#666",
-              padding: "20px",
-            }}
-          >
-            No teams have pressed the buzzer yet
-          </Typography>
-        ) : (
-          leaderboard.map((entry) => {
-            const isCurrentTeam = team?._id === entry.teamId;
+        {myTeamEntry ? (
+          <>
+            {/* Success Message */}
+            <Typography
+              variant="h5"
+              sx={{
+                color: "#4CAF50",
+                fontWeight: "bold",
+                marginBottom: "24px",
+              }}
+            >
+              🎉 Buzzer Pressed!
+            </Typography>
 
-            return (
-              <Box
-                key={entry.teamId}
+            {/* Rank Badge */}
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                marginBottom: "16px",
+              }}
+            >
+              {positionBadges[myTeamEntry.rank] ? (
+                <img
+                  src={positionBadges[myTeamEntry.rank]}
+                  alt={`Position ${myTeamEntry.rank}`}
+                  style={{
+                    width: "80px",
+                    height: "80px",
+                    objectFit: "contain",
+                  }}
+                />
+              ) : (
+                <Box
+                  sx={{
+                    width: "80px",
+                    height: "80px",
+                    borderRadius: "50%",
+                    backgroundColor: "#3f51b5",
+                    color: "white",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontWeight: "bold",
+                    fontSize: "32px",
+                  }}
+                >
+                  {myTeamEntry.rank}
+                </Box>
+              )}
+            </Box>
+
+            {/* Rank Text */}
+            <Typography
+              variant="h4"
+              sx={{
+                fontWeight: "bold",
+                color: myTeamEntry.rank <= 3 ? "#FFD700" : "#333",
+                marginBottom: "8px",
+              }}
+            >
+              {getRankText(myTeamEntry.rank)} Place
+            </Typography>
+
+            {/* Team Name */}
+            <Typography
+              variant="h6"
+              sx={{
+                color: "#666",
+                marginBottom: "24px",
+              }}
+            >
+              {myTeamEntry.teamName}
+            </Typography>
+
+            {/* Time Display */}
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "12px",
+                backgroundColor: "rgba(0, 0, 0, 0.05)",
+                padding: "16px 24px",
+                borderRadius: "12px",
+              }}
+            >
+              <img
+                src={timerIcon}
+                alt="Timer"
+                style={{
+                  width: "28px",
+                  height: "28px",
+                  objectFit: "contain",
+                }}
+              />
+              <Typography
                 sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "12px 16px",
-                  marginBottom: "12px",
-                  borderRadius: "12px",
-                  backgroundColor:
-                    entry.teamId === answeringTeamId
-                      ? "rgba(76, 175, 80, 0.2)" // Green tint for answering team
-                      : isCurrentTeam
-                      ? "rgba(255, 215, 0, 0.2)" // Golden tint for current team
-                      : "rgba(240, 240, 240, 0.5)",
-                  border:
-                    entry.teamId === answeringTeamId
-                      ? "2px solid #4CAF50" // Green border for answering team
-                      : isCurrentTeam
-                      ? "2px solid #FFD700" // Golden border for current team
-                      : "1px solid transparent",
-                  transition: "all 0.3s ease",
-                  "&:hover": {
-                    backgroundColor:
-                      entry.teamId === answeringTeamId
-                        ? "rgba(76, 175, 80, 0.3)"
-                        : isCurrentTeam
-                        ? "rgba(255, 215, 0, 0.3)"
-                        : "rgba(240, 240, 240, 0.8)",
-                  },
+                  fontWeight: "bold",
+                  fontSize: "28px",
+                  color: myTeamEntry.rank <= 3 ? "#ff6b6b" : "#333",
+                  fontFamily: "monospace",
                 }}
               >
-                {/* Rank Badge */}
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    minWidth: "60px",
-                  }}
-                >
-                  {positionBadges[entry.rank] ? (
-                    <img
-                      src={positionBadges[entry.rank]}
-                      alt={`Position ${entry.rank}`}
-                      style={{
-                        width: "40px",
-                        height: "40px",
-                        objectFit: "contain",
-                      }}
-                    />
-                  ) : (
-                    <Box
-                      sx={{
-                        width: "40px",
-                        height: "40px",
-                        borderRadius: "50%",
-                        backgroundColor: "#3f51b5",
-                        color: "white",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontWeight: "bold",
-                        fontSize: "18px",
-                      }}
-                    >
-                      {entry.rank}
-                    </Box>
-                  )}
-                </Box>
+                {formatTime(
+                  String(
+                    Math.max(
+                      0,
+                      Number(myTeamEntry.timestamp || 0) -
+                      Number(gameState?.buzzerRoundStartTime || 0)
+                    )
+                  )
+                )}
+              </Typography>
+            </Box>
 
-                {/* Team Name */}
-                <Box sx={{ flex: 1, marginLeft: "16px" }}>
-                  <Typography
-                    sx={{
-                      fontWeight:
-                        entry.teamId === answeringTeamId || isCurrentTeam
-                          ? "bold"
-                          : "600",
-                      fontSize: "16px",
-                      color: "#333",
-                    }}
-                  >
-                    {entry.teamName}
-                    {entry.teamId === answeringTeamId && " 📝"}
-                  </Typography>
-                </Box>
-
-                {/* Time with Timer Icon */}
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <img
-                    src={timerIcon}
-                    alt="Timer"
-                    style={{
-                      width: "20px",
-                      height: "20px",
-                      objectFit: "contain",
-                    }}
-                  />
-                  <Typography
-                    sx={{
-                      fontWeight: "bold",
-                      fontSize: "16px",
-                      color: entry.rank <= 3 ? "#ff6b6b" : "#666",
-                    }}
-                  >
-                    {formatTime(
-                      String(
-                        Math.max(
-                          0,
-                          Number(entry.timestamp || 0) -
-                            Number(gameState?.buzzerRoundStartTime || 0)
-                        )
-                      )
-                    )}
-                  </Typography>
-                </Box>
-              </Box>
-            );
-          })
+            {/* Waiting Message */}
+            {!isAnsweringState && (
+              <Typography
+                sx={{
+                  color: "#888",
+                  marginTop: "24px",
+                  fontSize: "14px",
+                }}
+              >
+                Waiting for admin to select a team...
+              </Typography>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Not Pressed Message */}
+            <Typography
+              variant="h5"
+              sx={{
+                color: "#666",
+                fontWeight: "bold",
+                marginBottom: "16px",
+              }}
+            >
+              ⏳ Waiting...
+            </Typography>
+            <Typography
+              sx={{
+                color: "#888",
+                fontSize: "16px",
+              }}
+            >
+              You haven't pressed the buzzer yet
+            </Typography>
+          </>
         )}
       </Box>
     </Box>

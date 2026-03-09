@@ -27,6 +27,20 @@ export interface GameStateResponse {
   };
 }
 
+export interface MarkAnswerRequest {
+  isCorrect: boolean;
+}
+
+export interface MarkAnswerResponse {
+  message: string;
+  data: {
+    gameState: GameState;
+    isCorrect: boolean;
+    pointsAwarded: number;
+    teamId: string;
+  };
+}
+
 export const gameStateApi = api.injectEndpoints({
   endpoints: (builder) => ({
     fetchGameState: builder.query<GameStateResponse, void>({
@@ -36,10 +50,21 @@ export const gameStateApi = api.injectEndpoints({
       }),
       providesTags: ['GameState'],
     }),
+
+    markAnswer: builder.mutation<MarkAnswerResponse, MarkAnswerRequest>({
+      query: (data) => ({
+        url: '/game-state/mark-answer',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['GameState'],
+    }),
   }),
 });
 
 export const {
   useFetchGameStateQuery,
   useLazyFetchGameStateQuery,
+  useMarkAnswerMutation,
 } = gameStateApi;
+

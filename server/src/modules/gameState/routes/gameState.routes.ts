@@ -4,7 +4,8 @@ import {
     updateGameStateUnified,
     // updateGameStatus, 
     moveToNextQuestion,
-    validateTimerExpiration
+    validateTimerExpiration,
+    markAnswer
 } from '../controllers/gameState.controller';
 import { authenticateUser, authorizeRoles } from '../../../middlewares/authMiddleware';
 
@@ -18,6 +19,9 @@ router.get('/validate-timer', authenticateUser, validateTimerExpiration);
 
 // UNIFIED ENDPOINT - Admin only (NEW - RECOMMENDED)
 router.patch('/', authenticateUser, authorizeRoles('ADMIN'), updateGameStateUnified);
+
+// Mark answer as correct/wrong - Admin only (for verbal answer flow)
+router.post('/mark-answer', authenticateUser, authorizeRoles('ADMIN'), markAnswer);
 
 // Legacy endpoints (Deprecated - kept for backward compatibility)
 // router.patch('/status', authenticateUser, authorizeRoles('ADMIN'), updateGameStatus);

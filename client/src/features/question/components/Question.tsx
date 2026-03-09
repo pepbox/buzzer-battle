@@ -22,6 +22,7 @@ interface QuestionProps {
   disabled?: boolean;
   showResults?: boolean;
   correctOptionId?: string;
+  showOptions?: boolean; // NEW: When false, hide MCQ options (for verbal answer flow)
 }
 
 const Question: React.FC<QuestionProps> = ({
@@ -31,6 +32,7 @@ const Question: React.FC<QuestionProps> = ({
   disabled = false,
   showResults = false,
   correctOptionId,
+  showOptions = true, // Default to showing options for backward compatibility
 }) => {
   const [internalSelectedId, setInternalSelectedId] = useState<string>("");
 
@@ -182,7 +184,7 @@ const Question: React.FC<QuestionProps> = ({
             textAlign: "center",
             lineHeight: 1.4,
             marginBottom:
-              questionData.image || questionData.video ? "20px" : "24px",
+              questionData.image || questionData.video ? "20px" : (showOptions ? "24px" : "0px"),
             wordBreak: "break-word",
           }}
         >
@@ -190,92 +192,112 @@ const Question: React.FC<QuestionProps> = ({
         </Typography>
       )}
 
-      {/* Options Section */}
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "8px",
-        }}
-      >
-        {questionData.options.map((option, index) => (
-          <Button
-            key={option.optionId}
-            onClick={() => handleOptionClick(option.optionId)}
-            disabled={disabled}
-            sx={{
-              backgroundColor: getOptionBackgroundColor(option.optionId),
-              color: getOptionTextColor(option.optionId),
-              border: "1.5px solid #72BFFF",
-              borderRadius: "12px",
-              padding: "8px",
-              textAlign: "left",
-              justifyContent: "flex-start",
-              fontSize: "16px",
-              fontWeight: 600,
-              minHeight: "40px",
-              boxShadow: "-6.31px -6.31px 6.78px 0px #00000040 inset",
-              transition: "all 0.2s ease-in-out",
-              "&:hover": {
-                backgroundColor: disabled
-                  ? getOptionBackgroundColor(option.optionId)
-                  : option.optionId === currentSelectedId
-                  ? "#1976D2"
-                  : "#F1F5F9",
-              },
-              "&:active": {
-                transform: disabled ? "none" : "translateY(0px)",
-              },
-              "&.Mui-disabled": {
+      {/* Verbal Answer Hint - Only show when options are hidden */}
+      {!showOptions && (
+        <Typography
+          variant="body2"
+          sx={{
+            fontSize: "14px",
+            fontWeight: 500,
+            textAlign: "center",
+            color: "#64748B",
+            marginTop: "16px",
+            fontStyle: "italic",
+          }}
+        >
+          🎤 Speak your answer aloud
+        </Typography>
+      )}
+
+      {/* Options Section - Only show when showOptions is true */}
+      {showOptions && (
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "8px",
+          }}
+        >
+          {questionData.options.map((option, index) => (
+            <Button
+              key={option.optionId}
+              onClick={() => handleOptionClick(option.optionId)}
+              disabled={disabled}
+              sx={{
                 backgroundColor: getOptionBackgroundColor(option.optionId),
                 color: getOptionTextColor(option.optionId),
-                opacity: 0.8,
-              },
-            }}
-          >
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                width: "100%",
-                px: "12px",
+                border: "1.5px solid #72BFFF",
+                borderRadius: "12px",
+                padding: "8px",
+                textAlign: "left",
+                justifyContent: "flex-start",
+                fontSize: "16px",
+                fontWeight: 600,
+                minHeight: "40px",
+                boxShadow: "-6.31px -6.31px 6.78px 0px #00000040 inset",
+                transition: "all 0.2s ease-in-out",
+                "&:hover": {
+                  backgroundColor: disabled
+                    ? getOptionBackgroundColor(option.optionId)
+                    : option.optionId === currentSelectedId
+                      ? "#1976D2"
+                      : "#F1F5F9",
+                },
+                "&:active": {
+                  transform: disabled ? "none" : "translateY(0px)",
+                },
+                "&.Mui-disabled": {
+                  backgroundColor: getOptionBackgroundColor(option.optionId),
+                  color: getOptionTextColor(option.optionId),
+                  opacity: 0.8,
+                },
               }}
             >
-              {/* Option Label (A, B, C, D) */}
               <Box
                 sx={{
-                  height: "24px",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: "4px",
-                  fontSize: "10px",
-                  fontWeight: 600,
+                  width: "100%",
+                  px: "12px",
                 }}
               >
-                {getOptionLabel(index)}
-                {")"}
-              </Box>
+                {/* Option Label (A, B, C, D) */}
+                <Box
+                  sx={{
+                    height: "24px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: "4px",
+                    fontSize: "10px",
+                    fontWeight: 600,
+                  }}
+                >
+                  {getOptionLabel(index)}
+                  {")"}
+                </Box>
 
-              {/* Option Text */}
-              <Typography
-                variant="body2"
-                sx={{
-                  fontSize: "10px",
-                  fontWeight: 600,
-                  color: "inherit",
-                  flex: 1,
-                  textAlign: "left",
-                }}
-              >
-                {option.optionText}
-              </Typography>
-            </Box>
-          </Button>
-        ))}
-      </Box>
+                {/* Option Text */}
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontSize: "10px",
+                    fontWeight: 600,
+                    color: "inherit",
+                    flex: 1,
+                    textAlign: "left",
+                  }}
+                >
+                  {option.optionText}
+                </Typography>
+              </Box>
+            </Button>
+          ))}
+        </Box>
+      )}
     </Box>
   );
 };
 
 export default Question;
+

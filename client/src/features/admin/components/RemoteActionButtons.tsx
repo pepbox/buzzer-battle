@@ -3,9 +3,10 @@ import { Box, Button, CircularProgress } from "@mui/material";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import PauseIcon from "@mui/icons-material/Pause";
 import SkipNextIcon from "@mui/icons-material/SkipNext";
-// import LeaderboardIcon from "@mui/icons-material/Leaderboard";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import BoltIcon from "@mui/icons-material/Bolt";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import CancelIcon from "@mui/icons-material/Cancel";
 
 interface RemoteActionButtonsProps {
   gameStatus: "paused" | "buzzer_round" | "answering" | "idle";
@@ -15,6 +16,8 @@ interface RemoteActionButtonsProps {
   onResumeGame: () => void;
   onPassToSecondTeam: () => void;
   onAllowTopTeam: () => void;
+  onMarkCorrect?: () => void;
+  onMarkWrong?: () => void;
   canPassToSecondTeam: boolean;
   hasFastestTeam: boolean;
   isLoading?: boolean;
@@ -29,6 +32,8 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
   onResumeGame,
   onPassToSecondTeam,
   onAllowTopTeam,
+  onMarkCorrect,
+  onMarkWrong,
   canPassToSecondTeam,
   hasFastestTeam,
   isLoading = false,
@@ -66,6 +71,46 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
         gap: "12px",
       }}
     >
+      {/* Mark Answer Buttons - Only during answering state (for verbal answer flow) */}
+      {gameStatus === "answering" && !lastAnswerWasWrong && (
+        <Box sx={{ display: "flex", gap: "12px" }}>
+          <Button
+            variant="contained"
+            startIcon={isLoading ? <CircularProgress size={20} /> : <CheckCircleIcon />}
+            onClick={onMarkCorrect}
+            disabled={isLoading}
+            sx={{
+              ...buttonBaseStyles,
+              flex: 1,
+              backgroundColor: "#10B981",
+              "&:hover": {
+                backgroundColor: "#059669",
+                ...buttonBaseStyles["&:hover"],
+              },
+            }}
+          >
+            ✅ Correct
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={isLoading ? <CircularProgress size={20} /> : <CancelIcon />}
+            onClick={onMarkWrong}
+            disabled={isLoading}
+            sx={{
+              ...buttonBaseStyles,
+              flex: 1,
+              backgroundColor: "#EF4444",
+              "&:hover": {
+                backgroundColor: "#DC2626",
+                ...buttonBaseStyles["&:hover"],
+              },
+            }}
+          >
+            ❌ Wrong
+          </Button>
+        </Box>
+      )}
+
       {/* Start Game / Next Question Button */}
       <Button
         variant="contained"
@@ -167,7 +212,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
       )}
 
 
-      {/* Pass to Second Team Button - Conditional */}
+      {/* Pass to Second Team Button - Conditional (now shows after admin marks wrong) */}
       {(gameStatus === "answering" || gameStatus === "idle") && (
         <Button
           variant="contained"
@@ -222,7 +267,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
           <span style={{ fontSize: "12px", color: "#64748B" }}>
             {lastAnswerWasWrong
               ? "No second team available"
-              : "Waiting for answer result..."}
+              : "Mark answer first before passing"}
           </span>
         </Box>
       )}
@@ -231,3 +276,4 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
 };
 
 export default RemoteActionButtons;
+

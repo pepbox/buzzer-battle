@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Box, LinearProgress, Alert } from "@mui/material";
+import { Box, Alert } from "@mui/material";
 import QuestionBuzzer from "../../question/components/Question_Buzzer";
 import Buzzer from "../../../components/ui/Buzzer";
 import normalBg from "../../../assets/background/question_bg.webp";
@@ -9,7 +9,8 @@ import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
 import Loader from "../../../components/ui/Loader";
 import Error from "../../../components/ui/Error";
-import { useTimerSync } from "../../../hooks/useTimerSync";
+
+// Admin-controlled buzzer round - no timer, admin clicks "Allow Top Team" to proceed
 
 const BuzzerRound: React.FC = () => {
   const [buzzerPressed, setBuzzerPressed] = useState(false);
@@ -17,9 +18,6 @@ const BuzzerRound: React.FC = () => {
 
   // Get current team and game state from Redux
   const team = useAppSelector((state: RootState) => state.team.team);
-  const gameState = useAppSelector(
-    (state: RootState) => state.gameState.gameState
-  );
 
   // Fetch current question
   const {
@@ -31,15 +29,8 @@ const BuzzerRound: React.FC = () => {
   // Press buzzer mutation
   const [pressBuzzer, { isLoading: isPressing }] = usePressBuzzerMutation();
 
-  const timeLimit = 30;
   const question = questionData?.data?.question;
   const currentQuestionIndex = questionData?.data?.currentQuestionIndex;
-
-  // Use synced timer with server timestamp
-  const { progress, isExpired } = useTimerSync(
-    gameState?.buzzerRoundStartTime,
-    timeLimit
-  );
 
   // Reset buzzer state when question changes
   useEffect(() => {
@@ -48,7 +39,7 @@ const BuzzerRound: React.FC = () => {
   }, [currentQuestionIndex]);
 
   const handleBuzzerPress = async () => {
-    if (buzzerPressed || !team || isPressing || isExpired) return;
+    if (buzzerPressed || !team || isPressing) return;
 
     setBuzzerPressed(true);
     setBuzzerError(null);
@@ -108,29 +99,9 @@ const BuzzerRound: React.FC = () => {
         overflow: "auto",
       }}
     >
-      {/* Top Progress Bar */}
-      <Box
-        sx={{
-          m: "24px",
-        }}
-      >
-        <LinearProgress
-          variant="determinate"
-          value={progress}
-          sx={{
-            height: "8px",
-            backgroundColor: "rgba(255, 255, 255, 0.3)",
-            "& .MuiLinearProgress-bar": {
-              backgroundColor: (theme) => theme.palette.primary.main,
-              transition: "transform 0.1s ease-out",
-            },
-          }}
-        />
-      </Box>
-
       {/* Error Alert */}
       {buzzerError && (
-        <Box sx={{ m: "0 24px" }}>
+        <Box sx={{ m: "24px" }}>
           <Alert severity="error" onClose={() => setBuzzerError(null)}>
             {buzzerError}
           </Alert>
@@ -172,7 +143,6 @@ const BuzzerRound: React.FC = () => {
 
         {/* Buzzer Section */}
         <Box
-          // position={"absolute"}
           bottom={10}
           sx={{
             zIndex: "10",
@@ -180,7 +150,6 @@ const BuzzerRound: React.FC = () => {
             display: "flex",
             justifyContent: "center",
             marginTop: "45px",
-            // marginBottom: { xs: "24px", sm: "32px", md: "48px" },
             marginBottom: "16px"
           }}
         >
@@ -197,3 +166,4 @@ const BuzzerRound: React.FC = () => {
 };
 
 export default BuzzerRound;
+

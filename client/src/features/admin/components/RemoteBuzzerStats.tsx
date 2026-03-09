@@ -16,13 +16,24 @@ interface RemoteBuzzerStatsProps {
   teamsPressed: number;
   teamsRemaining: number;
   totalTeams: number;
+  buzzerRoundStartTime?: number; // Added for elapsed time calculation
 }
+
+// Format elapsed time as MM:SS:CC (minutes:seconds:centiseconds)
+const formatElapsedTime = (elapsedMs: number): string => {
+  const minutes = Math.floor(elapsedMs / 60000);
+  const seconds = Math.floor((elapsedMs % 60000) / 1000);
+  const centiseconds = Math.floor((elapsedMs % 1000) / 10);
+
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}:${String(centiseconds).padStart(2, '0')}`;
+};
 
 const RemoteBuzzerStats: React.FC<RemoteBuzzerStatsProps> = ({
   fastestTeam,
   teamsPressed,
   teamsRemaining,
   totalTeams,
+  buzzerRoundStartTime,
 }) => {
   return (
     <Box
@@ -95,21 +106,29 @@ const RemoteBuzzerStats: React.FC<RemoteBuzzerStatsProps> = ({
             </Box>
 
             <Box sx={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              {/* Elapsed Time Badge */}
               <Box
                 sx={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: "50%",
-                  backgroundColor: "#10B981",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 700,
-                  fontSize: "16px",
-                  color: "white",
+                  gap: "4px",
+                  backgroundColor: "rgba(16, 185, 129, 0.2)",
+                  padding: "6px 10px",
+                  borderRadius: "8px",
+                  border: "1px solid #10B981",
                 }}
               >
-                {fastestTeam.teamNumber}
+                <Typography
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: "14px",
+                    color: "#10B981",
+                  }}
+                >
+                  ⏱️ {buzzerRoundStartTime
+                    ? formatElapsedTime(Math.max(0, Number(fastestTeam.timestamp) - buzzerRoundStartTime))
+                    : "--:--:--"}
+                </Typography>
               </Box>
 
               <Box sx={{ flex: 1 }}>

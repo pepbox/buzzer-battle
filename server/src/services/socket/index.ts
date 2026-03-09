@@ -1,14 +1,19 @@
 import { Server as HTTPServer } from "http";
 import { Server, Socket } from "socket.io";
-import { socketManager } from "./socketManager";
-import { roomManager } from "./roomManager";
+import { createAdapter } from "@socket.io/redis-adapter";
+import { connectRedis, pubClient, subClient } from "../redis/redisClient";
+import { redisPresence } from "../redis/redisPresence";
+import { redisRooms } from "../redis/redisRooms";
 import { socketAuthMiddleware } from "../../middlewares/socketAuthMiddleware";
 import { handlePressBuzzer } from "./handelers/buzzerHandler";
 
 let ioInstance: Server | null = null;
 
-export function initializeSocket(server: HTTPServer): Server {
+export async function initializeSocket(server: HTTPServer): Promise<Server> {
   if (ioInstance) return ioInstance;
+
+  // Connect all three Redis clients before creating the Socket.IO server
+  await connectRedis();
 
   const io = new Server(server, {
     cors: {
@@ -16,29 +21,33 @@ export function initializeSocket(server: HTTPServer): Server {
     },
   });
 
+  // Attach Redis adapter for cross-instance broadcasting
+  io.adapter(createAdapter(pubClient, subClient));
+  console.log("✅ Socket.IO Redis adapter attached");
+
   io.use(socketAuthMiddleware);
 
-  io.on("connection", (socket: Socket) => {
+  io.on("connection", async (socket: Socket) => {
     console.log(`Socket connected: ${socket.id}`);
 
     const user = (socket as any).user;
     const sessionId = user?.sessionId;
-    
-    // Add to socket manager and room manager
-    socketManager.addSocket(socket.id, user);
-    roomManager.addSocketToSession(socket.id, user);
 
-    // Join session room
+    // Track presence and room membership in Redis
+    await redisPresence.addSocket(socket.id, user);
+    await redisRooms.addSocketToSession(socket.id, user);
+
+    // Join Socket.IO session room (broadcasting — Redis adapter syncs across instances)
     socket.join(`session:${sessionId}`);
     console.log(`Socket ${socket.id} joined room: session:${sessionId}`);
-    
+
     // Join role-specific room
     const roleRoom = `session:${sessionId}:${user.role.toLowerCase()}`;
     socket.join(roleRoom);
     console.log(`Socket ${socket.id} joined room: ${roleRoom}`);
-    
-    // Join team room if user is a team
-    if (user.role === 'TEAM' || user.role === 'USER') {
+
+    // Join team room if user is a team/player
+    if (user.role === "TEAM" || user.role === "USER") {
       const teamRoom = `session:${sessionId}:team:${user.id}`;
       socket.join(teamRoom);
       console.log(`Socket ${socket.id} joined team room: ${teamRoom}`);
@@ -49,19 +58,16 @@ export function initializeSocket(server: HTTPServer): Server {
       await handlePressBuzzer(socket, payload);
     });
 
-    socket.on("disconnect", () => {
+    socket.on("disconnect", async () => {
       console.log(`Socket disconnected: ${socket.id}`);
-      socketManager.removeSocket(socket.id);
-      roomManager.removeSocketFromSession(socket.id);
+      await redisPresence.removeSocket(socket.id);
+      await redisRooms.removeSocketFromSession(socket.id);
     });
-
   });
-
 
   ioInstance = io;
   return io;
 }
-
 
 export function getSocketIO(): Server {
   if (!ioInstance) {

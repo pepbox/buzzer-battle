@@ -10,11 +10,22 @@ interface RemoteTeamInfoProps {
     teamScore: number;
   } | null;
   buzzerTimestamp?: string;
+  buzzerRoundStartTime?: number; // Added for elapsed time calculation
 }
+
+// Format elapsed time as MM:SS:CC (minutes:seconds:centiseconds)
+const formatElapsedTime = (elapsedMs: number): string => {
+  const minutes = Math.floor(elapsedMs / 60000);
+  const seconds = Math.floor((elapsedMs % 60000) / 1000);
+  const centiseconds = Math.floor((elapsedMs % 1000) / 10);
+
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}:${String(centiseconds).padStart(2, '0')}`;
+};
 
 const RemoteTeamInfo: React.FC<RemoteTeamInfoProps> = ({
   currentAnsweringTeam,
   buzzerTimestamp,
+  buzzerRoundStartTime,
 }) => {
   if (!currentAnsweringTeam) {
     return (
@@ -40,6 +51,11 @@ const RemoteTeamInfo: React.FC<RemoteTeamInfoProps> = ({
       </Box>
     );
   }
+
+  // Calculate elapsed time
+  const elapsedTime = buzzerTimestamp && buzzerRoundStartTime
+    ? Math.max(0, Number(buzzerTimestamp) - buzzerRoundStartTime)
+    : null;
 
   return (
     <Box
@@ -110,8 +126,8 @@ const RemoteTeamInfo: React.FC<RemoteTeamInfoProps> = ({
           </Typography>
         </Box>
 
-        {/* Buzzer Time (if available) */}
-        {buzzerTimestamp && (
+        {/* Buzzer Elapsed Time (if available) */}
+        {elapsedTime !== null && (
           <Box
             sx={{
               display: "flex",
@@ -131,7 +147,7 @@ const RemoteTeamInfo: React.FC<RemoteTeamInfoProps> = ({
                 color: "#1E293B",
               }}
             >
-              {new Date(parseInt(buzzerTimestamp)).toLocaleTimeString()}
+              {formatElapsedTime(elapsedTime)}
             </Typography>
           </Box>
         )}

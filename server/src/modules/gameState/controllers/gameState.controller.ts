@@ -136,62 +136,9 @@ export const updateGameStateUnified = async (
                     const session = await Session.findById(sessionId);
                     const buzzerDuration = session?.questionTimeLimit || 30; // Default 30 seconds
 
-                    // Schedule auto-transition to ANSWERING after buzzer duration
-                    timerManager.scheduleBuzzerTimer(
-                        sessionId,
-                        buzzerDuration,
-                        async () => {
-                            try {
-                                const updatedGameState = await gameStateService.transitionToAnswering(
-                                    sessionId,
-                                    currentQuestion?._id as Types.ObjectId
-                                );
-
-                                // Get answer duration from session
-                                const answerDuration = session?.answerTimeLimit || 60;
-
-                                // Emit ANSWERING_ROUND_STARTED
-                                SessionEmitters.toSession(sessionId, Events.ANSWERING_ROUND_STARTED, {
-                                    questionId: currentQuestion?._id as Types.ObjectId,
-                                    teamId: updatedGameState.currentAnsweringTeam,
-                                    startTime: updatedGameState.answeringRoundStartTime,
-                                    duration: answerDuration * 1000,
-                                });
-
-                                // Emit game state change
-                                // FLAGGED
-                                SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
-                                    gameStatus: updatedGameState.gameStatus,
-                                    currentQuestionIndex: updatedGameState.currentQuestionIndex,
-                                    currentAnsweringTeam: updatedGameState.currentAnsweringTeam,
-                                    answeringStartTime: updatedGameState.answeringRoundStartTime,
-                                    buzzerRoundStartTime: updatedGameState.buzzerRoundStartTime,
-                                });
-
-                                // Schedule auto-transition to IDLE after answer duration
-                                if (updatedGameState.currentAnsweringTeam) {
-                                    timerManager.scheduleAnsweringTimer(
-                                        sessionId,
-                                        updatedGameState.currentAnsweringTeam,
-                                        answerDuration,
-                                        async () => {
-                                            const idleGameState = await gameStateService.transitionToIdle(sessionId);
-
-                                            // Emit transition to IDLE
-                                            SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
-                                                gameStatus: idleGameState.gameStatus,
-                                                currentQuestionIndex: idleGameState.currentQuestionIndex,
-                                                currentAnsweringTeam: idleGameState.currentAnsweringTeam,
-                                                idleStartTime: idleGameState.idleStartTime,
-                                            });
-                                        }
-                                    );
-                                }
-                            } catch (error) {
-                                console.error('Error in auto-transition to ANSWERING:', error);
-                            }
-                        }
-                    );
+                    // NOTE: For admin-controlled flow, buzzer round has no auto-timer.
+                    // Admin manually clicks "Allow Top Team" to end buzzer round and select fastest team.
+                    // The game stays in BUZZER_ROUND until admin takes action.
 
                     // Emit BUZZER_ROUND_STARTED with timestamp for synced timer
                     SessionEmitters.toSession(sessionId, Events.BUZZER_ROUND_STARTED, {
@@ -230,25 +177,8 @@ export const updateGameStateUnified = async (
                 const sessionForSecond = await Session.findById(sessionId);
                 const secondAnswerDuration = sessionForSecond?.answerTimeLimit || 60;
 
-                // Schedule auto-transition to IDLE for second team
-                if (gameState.currentAnsweringTeam) {
-                    timerManager.scheduleAnsweringTimer(
-                        sessionId,
-                        gameState.currentAnsweringTeam,
-                        secondAnswerDuration,
-                        async () => {
-                            const idleGameState = await gameStateService.transitionToIdle(sessionId);
-
-                            // Emit transition to IDLE
-                            SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
-                                gameStatus: idleGameState.gameStatus,
-                                currentQuestionIndex: idleGameState.currentQuestionIndex,
-                                currentAnsweringTeam: idleGameState.currentAnsweringTeam,
-                                idleStartTime: idleGameState.idleStartTime,
-                            });
-                        }
-                    );
-                }
+                // NOTE: For verbal answer flow, admin manually marks answers.
+                // Auto-transition timer removed - admin uses Mark Correct/Wrong buttons.
 
                 // Emit socket event with second chance info and timestamp
                 SessionEmitters.toSession(sessionId, Events.SECOND_CHANCE, {
@@ -292,23 +222,8 @@ export const updateGameStateUnified = async (
                 const sessionForAnswering = await Session.findById(sessionId);
                 const answerDuration = sessionForAnswering?.answerTimeLimit || 60;
 
-                // Schedule auto-transition to IDLE
-                timerManager.scheduleAnsweringTimer(
-                    sessionId,
-                    payload.teamId,
-                    answerDuration,
-                    async () => {
-                        const idleGameState = await gameStateService.transitionToIdle(sessionId);
-
-                        // Emit transition to IDLE
-                        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
-                            gameStatus: idleGameState.gameStatus,
-                            currentQuestionIndex: idleGameState.currentQuestionIndex,
-                            currentAnsweringTeam: idleGameState.currentAnsweringTeam,
-                            idleStartTime: idleGameState.idleStartTime,
-                        });
-                    }
-                );
+                // NOTE: For verbal answer flow, admin manually marks answers.
+                // Auto-transition timer removed - admin uses Mark Correct/Wrong buttons.
 
                 // Emit team selected event
                 SessionEmitters.toSession(sessionId, Events.TEAM_SELECTED, {
@@ -355,25 +270,8 @@ export const updateGameStateUnified = async (
                 const sessionForAuto = await Session.findById(sessionId);
                 const autoAnswerDuration = sessionForAuto?.answerTimeLimit || 60;
 
-                // Schedule answering timer for the auto-selected team
-                if (gameState.currentAnsweringTeam) {
-                    timerManager.scheduleAnsweringTimer(
-                        sessionId,
-                        gameState.currentAnsweringTeam,
-                        autoAnswerDuration,
-                        async () => {
-                            const idleGameState = await gameStateService.transitionToIdle(sessionId);
-
-                            // Emit transition to IDLE
-                            SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
-                                gameStatus: idleGameState.gameStatus,
-                                currentQuestionIndex: idleGameState.currentQuestionIndex,
-                                currentAnsweringTeam: idleGameState.currentAnsweringTeam,
-                                idleStartTime: idleGameState.idleStartTime,
-                            });
-                        }
-                    );
-                }
+                // NOTE: For verbal answer flow, admin manually marks answers.
+                // Auto-transition timer removed - admin uses Mark Correct/Wrong buttons.
 
                 // Emit team selected event
                 SessionEmitters.toSession(sessionId, Events.TEAM_SELECTED, {
@@ -651,5 +549,128 @@ export const validateTimerExpiration = async (
     } catch (error: any) {
         console.error("Error validating timer expiration:", error);
         next(new AppError("Failed to validate timer.", 500));
+    }
+};
+
+/**
+ * Mark answer as correct or wrong (ADMIN only)
+ * POST /api/v1/game-state/mark-answer
+ * Body: { isCorrect: boolean }
+ * Requires admin authentication
+ * 
+ * This is used in the verbal answer flow where users speak their answers
+ * and admin manually marks them as correct/wrong.
+ */
+export const markAnswer = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const sessionId = req.user?.sessionId;
+        const { isCorrect } = req.body;
+
+        if (!sessionId) {
+            return next(new AppError("Session ID not found in token.", 401));
+        }
+
+        if (typeof isCorrect !== 'boolean') {
+            return next(new AppError("isCorrect must be a boolean value.", 400));
+        }
+
+        // Fetch current game state
+        const gameState = await gameStateService.fetchGameStateBySessionId(sessionId);
+        if (!gameState) {
+            return next(new AppError("Game state not found.", 404));
+        }
+
+        // Must be in ANSWERING state to mark an answer
+        if (gameState.gameStatus !== GameStatus.ANSWERING) {
+            return next(new AppError("Can only mark answers during the answering phase.", 400));
+        }
+
+        // Must have a current answering team
+        if (!gameState.currentAnsweringTeam) {
+            return next(new AppError("No team is currently answering.", 400));
+        }
+
+        const currentTeam = gameState.currentAnsweringTeam;
+        const teamId = typeof currentTeam === 'string' ? currentTeam : currentTeam._id;
+
+        // Cancel the answering timer since admin has made a decision
+        timerManager.cancelTimer(`answering-${sessionId.toString()}-${teamId.toString()}`);
+
+        let pointsAwarded = 0;
+
+        if (isCorrect) {
+            // Fetch current question to get score value
+            const currentQuestion = await questionService.fetchCurrentQuestion(
+                sessionId,
+                gameState.currentQuestionIndex
+            );
+
+            if (currentQuestion) {
+                pointsAwarded = currentQuestion.score || 100;
+                // Update team score
+                await teamService.updateTeamScore(teamId, pointsAwarded);
+            }
+
+            // Emit ANSWER_MARKED_CORRECT to the session
+            SessionEmitters.toSession(sessionId, Events.ANSWER_MARKED_CORRECT, {
+                teamId,
+                isCorrect: true,
+                pointsAwarded,
+                timestamp: Date.now(),
+            });
+
+            // Transition to IDLE state
+            const idleGameState = await gameStateService.transitionToIdle(sessionId);
+
+            // Emit game state change
+            SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+                gameStatus: idleGameState.gameStatus,
+                currentQuestionIndex: idleGameState.currentQuestionIndex,
+                currentAnsweringTeam: idleGameState.currentAnsweringTeam,
+                idleStartTime: idleGameState.idleStartTime,
+            });
+
+            res.status(200).json({
+                message: "Answer marked as correct. Score updated.",
+                data: {
+                    gameState: idleGameState,
+                    isCorrect: true,
+                    pointsAwarded,
+                    teamId,
+                },
+            });
+        } else {
+            // Emit ANSWER_MARKED_WRONG to the session
+            // Stay in ANSWERING state to allow "Pass to Second Team" action
+            SessionEmitters.toSession(sessionId, Events.ANSWER_MARKED_WRONG, {
+                teamId,
+                isCorrect: false,
+                pointsAwarded: 0,
+                timestamp: Date.now(),
+            });
+
+            res.status(200).json({
+                message: "Answer marked as wrong. Admin can pass to second team or move to next question.",
+                data: {
+                    gameState,
+                    isCorrect: false,
+                    pointsAwarded: 0,
+                    teamId,
+                },
+            });
+        }
+    } catch (error: any) {
+        console.error("Error marking answer:", error);
+        if (error.message === "Game state not found") {
+            return next(new AppError(error.message, 404));
+        }
+        if (error.message === "Team not found") {
+            return next(new AppError(error.message, 404));
+        }
+        next(new AppError("Failed to mark answer.", 500));
     }
 };

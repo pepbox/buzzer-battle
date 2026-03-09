@@ -13,7 +13,7 @@ import {
   usePassToSecondTeam,
   useAutoSelectFastestTeam,
 } from "../services/adminRemoteApi";
-import { useFetchGameStateQuery } from "../../game/services/gameStateApi";
+import { useFetchGameStateQuery, useMarkAnswerMutation } from "../../game/services/gameStateApi";
 import {
   useFetchBuzzerLeaderboardQuery,
   useFetchBuzzerStatsQuery,
@@ -61,13 +61,14 @@ const RemoteControl: React.FC = () => {
   const { nextQuestion, isLoading: nextLoading } = useNextQuestion();
   const { passToSecondTeam, isLoading: passLoading } = usePassToSecondTeam();
   const { autoSelectFastestTeam } = useAutoSelectFastestTeam();
+  const [markAnswer, { isLoading: markAnswerLoading }] = useMarkAnswerMutation();
 
   const isAnyLoading =
     pauseLoading ||
     resumeLoading ||
     nextLoading ||
-    // leaderboardLoading ||
-    passLoading;
+    passLoading ||
+    markAnswerLoading;
 
   // Extract game state data
   const gameState = gameStateData?.data?.gameState;
@@ -104,6 +105,7 @@ const RemoteControl: React.FC = () => {
 
   // Listen for answer results via WebSocket
   useEffect(() => {
+    // Handle legacy answer submitted event (from user-selected MCQ flow)
     const handleAnswerSubmitted = (data: any) => {
       if (data.isCorrect === false) {
         setLastAnswerWasWrong(true);
@@ -115,6 +117,18 @@ const RemoteControl: React.FC = () => {
         setLastAnswerWasWrong(false);
         showSnackbar("Answer was correct! Move to next question.", "success");
       }
+    };
+
+    // Handle admin-marked correct (new verbal answer flow)
+    const handleAnswerMarkedCorrect = (data: any) => {
+      setLastAnswerWasWrong(false);
+      showSnackbar(`Answer marked correct! +${data.pointsAwarded} points.`, "success");
+    };
+
+    // Handle admin-marked wrong (new verbal answer flow)
+    const handleAnswerMarkedWrong = () => {
+      setLastAnswerWasWrong(true);
+      showSnackbar("Answer marked wrong. You can pass to 2nd team.", "error");
     };
 
     const handleGameStateChanged = (data: any) => {
@@ -140,11 +154,15 @@ const RemoteControl: React.FC = () => {
     };
 
     websocketService.on(Events.ANSWER_SUBMITTED, handleAnswerSubmitted);
+    websocketService.on(Events.ANSWER_MARKED_CORRECT, handleAnswerMarkedCorrect);
+    websocketService.on(Events.ANSWER_MARKED_WRONG, handleAnswerMarkedWrong);
     websocketService.on(Events.GAME_STATE_CHANGED, handleGameStateChanged);
     websocketService.on(Events.BUZZER_PRESSED, handleBuzzerPressed);
 
     return () => {
       websocketService.off(Events.ANSWER_SUBMITTED, handleAnswerSubmitted);
+      websocketService.off(Events.ANSWER_MARKED_CORRECT, handleAnswerMarkedCorrect);
+      websocketService.off(Events.ANSWER_MARKED_WRONG, handleAnswerMarkedWrong);
       websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChanged);
       websocketService.off(Events.BUZZER_PRESSED, handleBuzzerPressed);
     };
@@ -175,10 +193,6 @@ const RemoteControl: React.FC = () => {
 
       if (result.data.gameEnded) {
         showSnackbar("Game completed! All questions done.", "success");
-        // Navigate to game completion or final leaderboard
-        // setTimeout(() => {
-        //   navigate(`/admin/${sessionId}/completion`);
-        // }, 2000);
       } else {
         // Check if this was the first question (game start)
         if (currentQuestionIndex === -1) {
@@ -230,6 +244,33 @@ const RemoteControl: React.FC = () => {
     } catch (error: any) {
       showSnackbar(
         error?.data?.message || "Failed to select fastest team",
+        "error"
+      );
+    }
+  };
+
+  // Mark answer handlers (NEW for verbal answer flow)
+  const handleMarkCorrect = async () => {
+    try {
+      await markAnswer({ isCorrect: true }).unwrap();
+      showSnackbar("Answer marked as correct! Score updated.", "success");
+      setLastAnswerWasWrong(false);
+    } catch (error: any) {
+      showSnackbar(
+        error?.data?.message || "Failed to mark answer",
+        "error"
+      );
+    }
+  };
+
+  const handleMarkWrong = async () => {
+    try {
+      await markAnswer({ isCorrect: false }).unwrap();
+      showSnackbar("Answer marked as wrong.", "error");
+      setLastAnswerWasWrong(true);
+    } catch (error: any) {
+      showSnackbar(
+        error?.data?.message || "Failed to mark answer",
         "error"
       );
     }
@@ -325,12 +366,13 @@ const RemoteControl: React.FC = () => {
             buzzerTimestamp={
               currentAnsweringTeam
                 ? buzzerLeaderboard.find(
-                    (entry) =>
-                      entry.teamId === currentAnsweringTeam._id ||
-                      (entry as any).teamId?._id === currentAnsweringTeam._id
-                  )?.timestamp
+                  (entry) =>
+                    entry.teamId === currentAnsweringTeam._id ||
+                    (entry as any).teamId?._id === currentAnsweringTeam._id
+                )?.timestamp
                 : undefined
             }
+            buzzerRoundStartTime={gameState?.buzzerRoundStartTime}
           />
           {/* Buzzer Stats - Only show during buzzer round */}
           {gameStatus === "buzzer_round" && buzzerStats && (
@@ -339,6 +381,7 @@ const RemoteControl: React.FC = () => {
               teamsPressed={buzzerStats.teamsPressed}
               teamsRemaining={buzzerStats.teamsRemaining}
               totalTeams={buzzerStats.totalTeams}
+              buzzerRoundStartTime={gameState?.buzzerRoundStartTime}
             />
           )}
 
@@ -351,6 +394,8 @@ const RemoteControl: React.FC = () => {
             onResumeGame={handleResumeGame}
             onPassToSecondTeam={handlePassToSecondTeam}
             onAllowTopTeam={handleAllowTopTeam}
+            onMarkCorrect={handleMarkCorrect}
+            onMarkWrong={handleMarkWrong}
             canPassToSecondTeam={canPassToSecondTeam}
             hasFastestTeam={!!buzzerStats?.fastestTeam}
             isLoading={isAnyLoading}
@@ -379,3 +424,4 @@ const RemoteControl: React.FC = () => {
 };
 
 export default RemoteControl;
+

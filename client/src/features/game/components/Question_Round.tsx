@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Box, Typography, LinearProgress } from "@mui/material";
+import React from "react";
+import { Box, Typography } from "@mui/material";
 import Question, { QuestionData } from "../../question/components/Question";
 import normalBg from "../../../assets/background/normal_bg.webp";
 import coinImage from "../../../assets/questions/coin.webp";
@@ -12,12 +12,10 @@ interface QuestionRoundProps {
   teamNumber: number;
   totalPoints: number;
   questionPoints: number;
-  timeLimit?: number; // in seconds
-  timeRemaining?: number; // externally controlled time remaining (overrides internal timer)
-  onTimeUp?: () => void;
   onAnswerSelect?: (answer: string) => void;
   selectedAnswer?: string;
   disabled?: boolean;
+  showOptions?: boolean; // NEW: When false, hide MCQ options (for verbal answer flow)
 }
 
 const QuestionRound: React.FC<QuestionRoundProps> = ({
@@ -26,66 +24,12 @@ const QuestionRound: React.FC<QuestionRoundProps> = ({
   teamNumber,
   totalPoints,
   questionPoints,
-  timeLimit = 30,
-  timeRemaining: externalTimeRemaining,
-  onTimeUp,
   onAnswerSelect,
   selectedAnswer,
   disabled = false,
+  showOptions = true,
 }) => {
-  const [internalTimeRemaining, setInternalTimeRemaining] = useState(timeLimit);
-  const [isRunning, setIsRunning] = useState(true);
-
-  // Use external time if provided, otherwise use internal
-  const timeRemaining = externalTimeRemaining !== undefined ? externalTimeRemaining : internalTimeRemaining;
-
-  // Progress calculation (100 to 0 as time decreases)
-  const progress = (timeRemaining / timeLimit) * 100;
-
-  // Color transition based on remaining time
-  const getProgressColor = (): string => {
-    if (progress > 80) return "#4BBC5E"; // Green
-    if (progress > 60) return "#CCA600"; // Light green
-    if (progress > 40) return "#F18E16"; // Yellow/Orange
-    if (progress > 20) return "#FF4646"; // Orange
-    return "#F30000"; // Red
-  };
-
-  useEffect(() => {
-    // Only run internal timer if external time is not provided
-    if (externalTimeRemaining !== undefined) {
-      return;
-    }
-
-    let interval: NodeJS.Timeout;
-
-    if (isRunning && internalTimeRemaining > 0) {
-      interval = setInterval(() => {
-        setInternalTimeRemaining((prev) => {
-          const newTime = prev - 0.1; // Update every 100ms for smooth animation
-
-          if (newTime <= 0) {
-            setIsRunning(false);
-            if (onTimeUp) {
-              onTimeUp();
-            }
-            return 0;
-          }
-
-          return newTime;
-        });
-      }, 100);
-    }
-
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, [isRunning, internalTimeRemaining, onTimeUp, externalTimeRemaining]);
-
   const handleAnswerSelect = (answer: string) => {
-    setIsRunning(false); // Stop timer when answer is selected
     if (onAnswerSelect) {
       onAnswerSelect(answer);
     }
@@ -94,9 +38,6 @@ const QuestionRound: React.FC<QuestionRoundProps> = ({
   return (
     <Box
       sx={{
-        // position: "fixed",
-        // top: 0,
-        // left: 0,
         width: "100vw",
         minHeight: "100vh",
         background: "linear-gradient(180deg, #87CEEB 0%, #4682B4 100%)",
@@ -183,26 +124,6 @@ const QuestionRound: React.FC<QuestionRoundProps> = ({
           </Typography>
         </Box>
       </Box>
-      {/* Top Progress Bar */}
-      <Box
-        sx={{
-          zIndex: 10,
-          mx: "24px",
-        }}
-      >
-        <LinearProgress
-          variant="determinate"
-          value={progress}
-          sx={{
-            height: "15px",
-            backgroundColor: "rgba(255, 255, 255, 0.2)",
-            "& .MuiLinearProgress-bar": {
-              backgroundColor: getProgressColor(),
-              transition: "background-color 0.3s ease, transform 0.1s ease-out",
-            },
-          }}
-        />
-      </Box>
 
       {/* Main Content - Question */}
       <Box
@@ -223,7 +144,8 @@ const QuestionRound: React.FC<QuestionRoundProps> = ({
           questionData={questionData}
           selectedOptionId={selectedAnswer}
           onOptionSelect={handleAnswerSelect}
-          disabled={disabled || timeRemaining <= 0}
+          disabled={disabled}
+          showOptions={showOptions}
         />
       </Box>
 
@@ -250,7 +172,7 @@ const QuestionRound: React.FC<QuestionRoundProps> = ({
             sx={{
               p: "2px 8px",
               borderRadius: "20px",
-              backgroundColor: "white", // Purple avatar background
+              backgroundColor: "white",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -300,3 +222,4 @@ const QuestionRound: React.FC<QuestionRoundProps> = ({
 };
 
 export default QuestionRound;
+

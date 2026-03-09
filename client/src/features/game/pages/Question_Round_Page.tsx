@@ -2,10 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import QuestionRound from "../components/Question_Round";
 import { QuestionData } from "../../question/components/Question";
-import {
-  useFetchCurrentQuestionQuery,
-  useSendQuestionResponseMutation,
-} from "../../question/services/questions.api";
+import { useFetchCurrentQuestionQuery } from "../../question/services/questions.api";
 import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
 import Loader from "../../../components/ui/Loader";
@@ -14,32 +11,33 @@ import { Box, CircularProgress, Typography } from "@mui/material";
 import {
   NailedIt,
   CloseCall,
-  TimesUp,
 } from "../../question/components/StatusCard";
 import CorrectAnswer from "../../question/components/Correct_Answer";
-import { useRemainingTimer } from "../../../hooks/useTimerSync";
+import { websocketService } from "../../../services/websocket/websocketService";
+import { Events } from "../../../services/websocket/enums/Events";
+
+// Verbal Answer Flow: User sees question only, speaks answer aloud,
+// admin marks it correct/wrong via RemoteControl
 
 const QuestionRoundPage: React.FC = () => {
   const navigate = useNavigate();
   const { sessionId } = useParams<{ sessionId: string }>();
-  const [selectedAnswer, setSelectedAnswer] = useState<string>("");
-  const [isAnswered, setIsAnswered] = useState(false);
-  const [submittingAnswer, setSubmittingAnswer] = useState(false);
 
-  // Answer flow state management
+  // Answer flow state management for verbal answer flow
   const [answerStatus, setAnswerStatus] = useState<
-    "answering" | "status" | "result" | null
+    "waiting" | "status" | "result" | null
   >(null);
+
+  // Store answer result from admin's decision
+  const [answerResult, setAnswerResult] = useState<{
+    isCorrect: boolean;
+    pointsAwarded: number;
+  } | null>(null);
 
   // Get team from Redux
   const team = useAppSelector((state: RootState) => state.team?.team);
   const gameState = useAppSelector(
     (state: RootState) => state.gameState.gameState
-  );
-
-  // Get answer result from Redux (persisted across re-renders and populated by RTK Query)
-  const answerResult = useAppSelector(
-    (state: RootState) => state.question?.responseResult
   );
 
   // Fetch current question
@@ -49,13 +47,8 @@ const QuestionRoundPage: React.FC = () => {
     error,
   } = useFetchCurrentQuestionQuery();
 
-  // Mutation for submitting answer
-  const [sendResponse] = useSendQuestionResponseMutation();
   const question = questionData?.data?.question;
-
   const currentQuestionIndex = questionData?.data?.currentQuestionIndex;
-
-  const timeLimit = 60; // 60 seconds for answering
 
   // Check if current team is the answering team
   const isAnsweringTeam =
@@ -73,34 +66,91 @@ const QuestionRoundPage: React.FC = () => {
       previousQuestionIndexRef.current !== undefined &&
       previousQuestionIndexRef.current !== currentQuestionIndex
     ) {
-      setSelectedAnswer("");
-      setIsAnswered(false);
-      setSubmittingAnswer(false);
       setAnswerStatus(null);
-      // Note: answerResult is now in Redux and cleared by GameStateRouter
+      setAnswerResult(null);
     }
     previousQuestionIndexRef.current = currentQuestionIndex;
   }, [currentQuestionIndex]);
 
-  // Handle time up callback
-  const handleTimeUp = async () => {
-    setIsAnswered(true);
+  // Listen for admin's answer decisions via WebSocket
+  useEffect(() => {
+    const handleAnswerMarkedCorrect = (data: any) => {
+      console.log("✅ Answer marked correct by admin:", data);
 
-    // Show TimesUp status screen
-    setAnswerStatus("status");
+      // Only process if this is for the current team
+      if (data.teamId === team?._id) {
+        setAnswerResult({
+          isCorrect: true,
+          pointsAwarded: data.pointsAwarded || 0,
+        });
+        setAnswerStatus("status");
 
-    // After 10 seconds, navigate to leaderboard
-    setTimeout(() => {
-      navigate(`/game/${sessionId}/leaderboard`);
-    }, 10000);
-  };
+        // Show NailedIt for 5 seconds, then show result for 5 seconds, then navigate
+        setTimeout(() => {
+          setAnswerStatus("result");
+        }, 5000);
 
-  // Use synced timer with server timestamp
-  const { timeRemaining } = useRemainingTimer(
-    gameState?.answeringRoundStartTime,
-    timeLimit,
-    handleTimeUp
-  );
+        setTimeout(() => {
+          navigate(`/game/${sessionId}/leaderboard`);
+        }, 10000);
+      }
+    };
+
+    const handleAnswerMarkedWrong = (data: any) => {
+      console.log("❌ Answer marked wrong by admin:", data);
+
+      // Only process if this is for the current team
+      if (data.teamId === team?._id) {
+        setAnswerResult({
+          isCorrect: false,
+          pointsAwarded: 0,
+        });
+        setAnswerStatus("status");
+
+        // Show CloseCall for 5 seconds, then navigate to leaderboard
+        setTimeout(() => {
+          navigate(`/game/${sessionId}/leaderboard`);
+        }, 5000);
+      }
+    };
+
+    const handleGameStateChanged = (data: any) => {
+      console.log("🎮 Game state changed:", data.gameStatus);
+
+      // If game transitions to idle and we haven't received answer result,
+      // it means another team is being processed or question is complete
+      if (data.gameStatus === "idle" && answerStatus === null && isAnsweringTeam) {
+        // Admin marked answer, wait for specific event
+        setAnswerStatus("waiting");
+      }
+
+      // If game transitions to buzzer_round (new question), navigate accordingly
+      if (data.gameStatus === "buzzer_round") {
+        navigate(`/game/${sessionId}/buzzer`);
+      }
+    };
+
+    const handleQuestionPassed = (data: any) => {
+      console.log("🔄 Question passed to next team:", data);
+
+      // If current team was passed (they answered wrong), navigate to waiting
+      if (data.previousTeamId === team?._id) {
+        navigate(`/game/${sessionId}/leaderboard`);
+      }
+    };
+
+    websocketService.on(Events.ANSWER_MARKED_CORRECT, handleAnswerMarkedCorrect);
+    websocketService.on(Events.ANSWER_MARKED_WRONG, handleAnswerMarkedWrong);
+    websocketService.on(Events.GAME_STATE_CHANGED, handleGameStateChanged);
+    websocketService.on(Events.QUESTION_PASSED, handleQuestionPassed);
+
+    return () => {
+      websocketService.off(Events.ANSWER_MARKED_CORRECT, handleAnswerMarkedCorrect);
+      websocketService.off(Events.ANSWER_MARKED_WRONG, handleAnswerMarkedWrong);
+      websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChanged);
+      websocketService.off(Events.QUESTION_PASSED, handleQuestionPassed);
+    };
+  }, [team?._id, sessionId, navigate, answerStatus, isAnsweringTeam]);
 
   // If not the answering team, redirect to leaderboard
   useEffect(() => {
@@ -108,135 +158,6 @@ const QuestionRoundPage: React.FC = () => {
       navigate(`/game/${sessionId}/leaderboard`);
     }
   }, [gameState, isAnsweringTeam, navigate, sessionId]);
-
-  // Handle IDLE state transition - show result then redirect to leaderboard
-  useEffect(() => {
-    if (gameState?.gameStatus === "idle" && isAnsweringTeam) {
-      console.log("🔵 Game transitioned to IDLE - showing result", {
-        answerStatus,
-        answerResult,
-        hasAnswered: isAnswered,
-      });
-
-      // If we haven't already set the answer status, show the result
-      if (answerStatus === null || answerStatus === "answering") {
-        // Check if answer was submitted (we have answerResult in Redux)
-        if (answerResult !== null) {
-          console.log("✅ Answer was submitted - showing status screen");
-          // Show the appropriate status screen
-          setAnswerStatus("status");
-        } else if (isAnswered) {
-          // Answer was submitted but result not yet in Redux - wait a bit
-          console.log("⏳ Answer submitted, waiting for result...");
-          // Don't show TimesUp yet, give Redux time to update
-        } else {
-          console.log("⏰ Time expired without answer - showing TimesUp");
-          // Time expired without answer - show Time Up
-          setIsAnswered(true);
-          setAnswerStatus("status");
-          console.log("Setting timeout of 5 seconds from 4");
-          setTimeout(() => {
-            console.log("Set answer status to result after delay from 4");
-            setAnswerStatus("result");
-          }, 1000);
-        }
-      }
-    }
-  }, [
-    gameState?.gameStatus,
-    isAnsweringTeam,
-    answerResult,
-    answerStatus,
-    isAnswered,
-    navigate,
-    sessionId,
-  ]);
-
-  // Handle delayed answer result - when Redux updates after IDLE state
-  useEffect(() => {
-    // If we're in IDLE state, answered, waiting, and now have a result
-    if (
-      gameState?.gameStatus === "idle" &&
-      isAnsweringTeam &&
-      isAnswered &&
-      answerResult !== null &&
-      answerStatus === null
-    ) {
-      console.log(
-        "✅ Answer result arrived after IDLE - showing status screen"
-      );
-      setAnswerStatus("status");
-      console.log("Setting timeout of 5 seconds");
-      setTimeout(() => {
-        console.log("Set answer status to result after delay");
-        setAnswerStatus("result");
-      }, 1000);
-    }
-  }, [
-    answerResult,
-    gameState?.gameStatus,
-    isAnsweringTeam,
-    isAnswered,
-    answerStatus,
-  ]);
-
-  const handleAnswerSelect = async (answer: string) => {
-    if (!question || isAnswered) return;
-
-    setSelectedAnswer(answer);
-    setIsAnswered(true);
-    setSubmittingAnswer(true);
-
-    try {
-      // The answer is already the optionId, so we can use it directly
-      console.log("Submitting answer with optionId:", answer);
-
-      // Submit the answer - Redux slice will automatically store the result
-      const result = await sendResponse({
-        questionId: question._id,
-        responseOptionId: answer,
-      }).unwrap();
-
-      console.log("Answer submitted successfully:", result);
-
-      // Stop submitting overlay
-      setSubmittingAnswer(false);
-      console.log("Answer submission completed:", result.data.isCorrect);
-
-      // Result is now stored in Redux via the slice's extraReducers
-      // Move to status phase (show NailedIt or CloseCall)
-      setAnswerStatus("status");
-      console.log("Setting timeout of 5 seconds-from 1");
-      if (result.data.isCorrect) {
-        setTimeout(() => {
-          console.log("Set answer status to result after delay-from 1");
-          setAnswerStatus("result");
-        }, 5000);
-        setTimeout(() => {
-          navigate(`/game/${sessionId}/leaderboard`);
-        }, 10000);
-      } else {
-        setTimeout(() => {
-          navigate(`/game/${sessionId}/leaderboard`);
-        }, 5000);
-      }
-
-      // The IDLE state transition will handle navigation to leaderboard
-      // No need to set timeouts here
-    } catch (error) {
-      console.error("Failed to submit answer:", error);
-      setSubmittingAnswer(false);
-
-      // On error, still show an error status
-      // Note: Redux won't have the result, so we'll show TimesUp
-      setAnswerStatus("status");
-      console.log("Setting timeout of 5 seconds from 2");
-      setTimeout(() => {
-        console.log("Set answer status to result after delay from 2");
-        setAnswerStatus("result");
-      }, 1000);
-    }
-  };
 
   if (isLoading) {
     return <Loader />;
@@ -276,70 +197,75 @@ const QuestionRoundPage: React.FC = () => {
 
   return (
     <>
-      {/* Phase 1: Question Phase - Show question with timer */}
-      {(!answerStatus || answerStatus === "answering") && (
-        <QuestionRound
-          questionData={questionDataFormatted}
-          teamName={team?.teamName || ""}
-          teamNumber={team?.teamNumber || 0}
-          totalPoints={team?.teamScore || 0}
-          questionPoints={questionDataFormatted.score || 0} // Fixed 150 points per correct answer
-          timeLimit={timeLimit}
-          timeRemaining={timeRemaining}
-          selectedAnswer={selectedAnswer}
-          disabled={isAnswered}
-          onAnswerSelect={handleAnswerSelect}
-          onTimeUp={handleTimeUp}
-        />
+      {/* Phase 1: Question Phase - Show question without options (verbal answer flow) */}
+      {(!answerStatus || answerStatus === "waiting") && (
+        <Box sx={{ position: "relative" }}>
+          <QuestionRound
+            questionData={questionDataFormatted}
+            teamName={team?.teamName || ""}
+            teamNumber={team?.teamNumber || 0}
+            totalPoints={team?.teamScore || 0}
+            questionPoints={questionDataFormatted.score || 0}
+            disabled={true} // Always disabled - no MCQ selection
+            showOptions={false} // Hide options for verbal answer flow
+          />
+
+          {/* Waiting for Admin Overlay */}
+          <Box
+            sx={{
+              position: "fixed",
+              bottom: 80, // Above team info bar
+              left: 0,
+              right: 0,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 10,
+            }}
+          >
+            <Box
+              sx={{
+                backgroundColor: "rgba(0, 0, 0, 0.8)",
+                color: "white",
+                padding: "12px 24px",
+                borderRadius: "12px",
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+              }}
+            >
+              {/* <CircularProgress size={20} sx={{ color: "white" }} /> */}
+              <Typography sx={{ fontWeight: 600, color:"#FFF" }}>
+                Waiting for admin to mark your answer...
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
       )}
 
-      {/* Phase 2: Status Screen (10 seconds) - Show result feedback */}
+      {/* Phase 2: Status Screen - Show result feedback */}
       {answerStatus === "status" && (
         <>
           {answerResult?.isCorrect && (
             <NailedIt setAnswerStatus={setAnswerStatus} />
           )}
           {answerResult && !answerResult.isCorrect && <CloseCall />}
-          {!answerResult && <TimesUp />}
         </>
       )}
 
-      {/* Phase 3: Correct Answer Screen (10 seconds) - Only for correct answers */}
+      {/* Phase 3: Correct Answer Screen - Only for correct answers */}
       {answerStatus === "result" && answerResult?.isCorrect && (
         <CorrectAnswer
           pointsEarned={answerResult.pointsAwarded}
-          totalScore={team?.teamScore || 0}
+          totalScore={(team?.teamScore || 0) + answerResult.pointsAwarded}
           teamRank={1} // TODO: Get actual rank from leaderboard
           teamName={team?.teamName || ""}
         />
-      )}
-
-      {/* Loading Overlay - While submitting answer */}
-      {submittingAnswer && (
-        <Box
-          sx={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100vw",
-            height: "100vh",
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: 2,
-            zIndex: 9999,
-          }}
-        >
-          <CircularProgress sx={{ color: "white" }} />
-          <Typography sx={{ color: "white" }}>
-            Submitting your answer...
-          </Typography>
-        </Box>
       )}
     </>
   );
 };
 
 export default QuestionRoundPage;
+

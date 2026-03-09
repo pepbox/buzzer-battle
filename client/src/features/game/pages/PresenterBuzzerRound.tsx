@@ -1,19 +1,19 @@
 import React from "react";
-import { Box, LinearProgress } from "@mui/material";
+import { Box } from "@mui/material";
 import QuestionBuzzer from "../../question/components/Question_Buzzer";
 import normalBg from "../../../assets/background/question_bg.webp";
 import { useFetchCurrentQuestionQuery } from "../../question/services/questions.api";
 import Loader from "../../../components/ui/Loader";
 import Error from "../../../components/ui/Error";
-import { useAppSelector } from "../../../app/hooks";
-import { RootState } from "../../../app/store";
-import { useTimerSync } from "../../../hooks/useTimerSync";
+// import { useAppSelector } from "../../../app/hooks";
+// import { RootState } from "../../../app/store";
+// import { useTimerSync } from "../../../hooks/useTimerSync";
 
 const PresenterBuzzerRound: React.FC = () => {
   // Get game state from Redux
-  const gameState = useAppSelector(
-    (state: RootState) => state.gameState.gameState
-  );
+  // const gameState = useAppSelector(
+  //   (state: RootState) => state.gameState.gameState
+  // );
 
   // Fetch current question
   const {
@@ -25,10 +25,10 @@ const PresenterBuzzerRound: React.FC = () => {
   const question = questionData?.data?.question;
   const currentQuestionIndex = questionData?.data?.currentQuestionIndex || 1;
 
-  const timeLimit = 30;
+  // const timeLimit = 30;
 
   // Use synced timer with server timestamp
-  const { progress } = useTimerSync(gameState?.buzzerRoundStartTime, timeLimit);
+  // const { progress } = useTimerSync(gameState?.buzzerRoundStartTime, timeLimit);
 
   // Show loading state
   if (isLoading) {
@@ -60,7 +60,7 @@ const PresenterBuzzerRound: React.FC = () => {
       }}
     >
       {/* Top Progress Bar */}
-      <Box
+      {/* <Box
         sx={{
           m: "24px",
         }}
@@ -77,7 +77,7 @@ const PresenterBuzzerRound: React.FC = () => {
             },
           }}
         />
-      </Box>
+      </Box> */}
 
       {/* Main Content */}
       <Box
