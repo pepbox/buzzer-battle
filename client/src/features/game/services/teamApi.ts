@@ -1,4 +1,4 @@
-import { api } from '../../../app/api';
+import { api } from "../../../app/api";
 
 export interface Team {
   _id: string;
@@ -42,33 +42,49 @@ export const teamApi = api.injectEndpoints({
   endpoints: (builder) => ({
     createTeam: builder.mutation<CreateTeamResponse, CreateTeamRequest>({
       query: (credentials) => ({
-        url: '/teams/create',
-        method: 'POST',
+        url: "/teams/create",
+        method: "POST",
         body: credentials,
       }),
-      invalidatesTags: ['Team'],
+      invalidatesTags: ["Team"],
     }),
 
-    fetchCurrentTeam: builder.query<{ message: string; data: { team: Team } }, void>({
-      query: () => ({
-        url: '/teams/me',
-        method: 'GET',
+    fetchCurrentTeam: builder.query<
+      { message: string; data: { team: Team } },
+      { sessionId?: string } | void
+    >({
+      query: (arg) => ({
+        url: `/teams/me${arg?.sessionId ? `?sessionId=${arg.sessionId}` : ""}`,
+        method: "GET",
       }),
-      providesTags: ['Team'],
+      providesTags: ["Team"],
     }),
 
     fetchOverallLeaderboard: builder.query<LeaderboardResponse, void>({
       query: () => ({
-        url: '/teams/leaderboard',
-        method: 'GET',
+        url: "/teams/leaderboard",
+        method: "GET",
       }),
-      providesTags: ['Leaderboard'],
+      providesTags: ["Leaderboard"],
     }),
 
-    fetchTotalTeamsInSession: builder.query<{ message: string; data: { totalTeams: number } }, { sessionId: string }>({
+    fetchTotalTeamsInSession: builder.query<
+      { message: string; data: { totalTeams: number } },
+      { sessionId: string }
+    >({
       query: ({ sessionId }) => ({
         url: `/teams/fetchTotalTeamsInSession/${sessionId}`,
-        method: 'GET',
+        method: "GET",
+      }),
+    }),
+
+    fetchJoinedTeamNumbers: builder.query<
+      { message: string; data: { joinedTeamNumbers: number[] } },
+      { sessionId: string }
+    >({
+      query: ({ sessionId }) => ({
+        url: `/teams/joined/${sessionId}`,
+        method: "GET",
       }),
     }),
   }),
@@ -81,4 +97,5 @@ export const {
   useFetchOverallLeaderboardQuery,
   useLazyFetchOverallLeaderboardQuery,
   useFetchTotalTeamsInSessionQuery,
+  useFetchJoinedTeamNumbersQuery,
 } = teamApi;

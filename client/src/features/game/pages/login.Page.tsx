@@ -18,6 +18,7 @@ import GlobalButton from "../../../components/ui/button";
 import normalBg from "../../../assets/background/normal_bg.webp";
 import {
   useCreateTeamMutation,
+  useFetchJoinedTeamNumbersQuery,
   useFetchTotalTeamsInSessionQuery,
 } from "../services/teamApi";
 import { setTeam } from "../services/teamSlice";
@@ -32,7 +33,7 @@ const LoginPage: React.FC = () => {
 
   // Get authentication state
   const { isAuthenticated, team } = useAppSelector(
-    (state: RootState) => state.team
+    (state: RootState) => state.team,
   );
   // const { gameState } = useAppSelector((state: RootState) => state.gameState);
 
@@ -43,13 +44,21 @@ const LoginPage: React.FC = () => {
     error,
   } = useFetchTotalTeamsInSessionQuery(
     { sessionId: sessionId || "" },
-    { skip: !sessionId }
+    { skip: !sessionId },
+  );
+
+  const { data: joinedTeamsData } = useFetchJoinedTeamNumbersQuery(
+    { sessionId: sessionId || "" },
+    {
+      skip: !sessionId || isAuthenticated,
+      pollingInterval: 8000,
+      refetchOnFocus: true,
+      refetchOnReconnect: true,
+    },
   );
 
   const [teamName, setTeamName] = useState<string>("");
-  const [selectedTeamNumber, setSelectedTeamNumber] = useState<number | "1">(
-    "1"
-  );
+  const [selectedTeamNumber, setSelectedTeamNumber] = useState<number>(1);
   const [showSnackbar, setShowSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
 
@@ -100,6 +109,27 @@ const LoginPage: React.FC = () => {
     }
   }, [createError]);
 
+  const totalTeamsNumber = totalTeams?.data?.totalTeams || 0;
+  const joinedTeamNumbers = joinedTeamsData?.data?.joinedTeamNumbers || [];
+  const availableTeams = Array.from({ length: totalTeamsNumber }, (_, i) => ({
+    id: i + 1,
+    name: `Team ${i + 1}`,
+  })).filter((team) => !joinedTeamNumbers.includes(team.id));
+
+  useEffect(() => {
+    if (!availableTeams.length) {
+      return;
+    }
+
+    const selectedTeamStillAvailable = availableTeams.some(
+      (team) => team.id === selectedTeamNumber,
+    );
+
+    if (!selectedTeamStillAvailable) {
+      setSelectedTeamNumber(availableTeams[0].id);
+    }
+  }, [availableTeams, selectedTeamNumber]);
+
   // Conditional returns AFTER all hooks
   if (isLoading) {
     return <Loader />;
@@ -108,13 +138,6 @@ const LoginPage: React.FC = () => {
   if (error) {
     return <ErrorLayout />;
   }
-
-  // Dummy team data for now (team numbers)
-  const totalTeamsNumber = totalTeams?.data?.totalTeams || 0;
-  const dummyTeams = Array.from({ length: totalTeamsNumber }, (_, i) => ({
-    id: i + 1,
-    name: `Team ${i + 1}`,
-  }));
 
   const MAX_WORD_LENGTH = 15; // Maximum length per word
   const MAX_WORDS = 4; // Maximum number of words
@@ -186,7 +209,7 @@ const LoginPage: React.FC = () => {
       // Create team via API
       const result = await createTeam({
         teamName: teamName.trim(),
-        teamNumber: selectedTeamNumber as number,
+        teamNumber: selectedTeamNumber,
         sessionId: sessionId,
       }).unwrap();
 
@@ -199,7 +222,7 @@ const LoginPage: React.FC = () => {
           teamScore: result.data.team.teamScore,
           joinedAt: result.data.team.joinedAt,
           sessionId: result.data.team.sessionId,
-        })
+        }),
       );
 
       // Navigate to buzzer page (initial waiting screen)
@@ -311,20 +334,27 @@ const LoginPage: React.FC = () => {
               }}
               MenuProps={{
                 PaperProps: {
-                  style: {
-                    maxHeight: 200,
+                  sx: {
+                    maxHeight: 220,
+                    overflowY: "auto",
+                  },
+                },
+                MenuListProps: {
+                  sx: {
+                    maxHeight: 220,
+                    overflowY: "auto",
                   },
                 },
               }}
             >
-              {dummyTeams && dummyTeams.length > 0 ? (
-                dummyTeams.map((team) => (
+              {availableTeams && availableTeams.length > 0 ? (
+                availableTeams.map((team) => (
                   <MenuItem key={team.id} value={team.id}>
                     {team.name}
                   </MenuItem>
                 ))
               ) : (
-                <MenuItem disabled>No teams available</MenuItem>
+                <MenuItem disabled>All teams already joined</MenuItem>
               )}
             </Select>
           </FormControl>
@@ -337,6 +367,7 @@ const LoginPage: React.FC = () => {
               !sessionId ||
               !teamName.trim() ||
               !!getTeamNameError() ||
+              availableTeams.length === 0 ||
               isCreating
             }
             sx={{

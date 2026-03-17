@@ -1,5 +1,5 @@
-import { api } from '../../../app/api';
-import { Team, TeamResponse } from '../types/interfaces';
+import { api } from "../../../app/api";
+import { Team, TeamResponse } from "../types/interfaces";
 
 export interface AdminLoginRequest {
   password: string;
@@ -25,7 +25,7 @@ export interface DashboardResponse {
     session: {
       _id: string;
       sessionName: string;
-      status: 'NOT_STARTED' | 'PLAYING' | 'ENDED';
+      status: "NOT_STARTED" | "PLAYING" | "ENDED";
       questionTimeLimit: number;
       answerTimeLimit: number;
       numberOfTeams: number;
@@ -33,7 +33,7 @@ export interface DashboardResponse {
     };
     gameState: {
       currentQuestionIndex: number;
-      gameStatus: 'idle' | 'buzzer_round' | 'answering' | 'paused' | 'playing';
+      gameStatus: "idle" | "buzzer_round" | "answering" | "paused" | "playing";
       currentAnsweringTeam: any;
     };
     teams: Team[];
@@ -78,69 +78,99 @@ export interface TeamResponsesResponse {
   responses: TeamResponse[];
 }
 
+export interface QuestionBankItem {
+  _id: string;
+  questionText: string;
+  score: number;
+  options: Array<{
+    optionId: string;
+    optionText: string;
+  }>;
+  questionImage?: string;
+  quetionVideo?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface QuestionBankResponse {
+  message: string;
+  data: {
+    questions: QuestionBankItem[];
+  };
+}
+
 export const adminApi = api.injectEndpoints({
   endpoints: (builder) => ({
     adminLogin: builder.mutation<AdminLoginResponse, AdminLoginRequest>({
       query: (credentials) => ({
-        url: '/admin/login',
-        method: 'POST',
+        url: "/admin/login",
+        method: "POST",
         body: credentials,
       }),
     }),
 
     adminLogout: builder.mutation({
       query: () => ({
-        url: '/admin/logout',
-        method: 'POST',
+        url: "/admin/logout",
+        method: "POST",
       }),
     }),
 
-
     fetchAdmin: builder.query({
-      query: () => ({
-        url: '/admin/fetchAdmin',
-        method: 'GET',
+      query: (arg?: { sessionId?: string }) => ({
+        url: `/admin/fetchAdmin${arg?.sessionId ? `?sessionId=${arg.sessionId}` : ""}`,
+        method: "GET",
       }),
       transformResponse: (response: any) => response.data,
     }),
 
     updateSession: builder.mutation({
       query: (updateData) => ({
-        url: '/session/update',
-        method: 'PUT',
+        url: "/session/update",
+        method: "PUT",
         body: updateData,
       }),
+      invalidatesTags: ["Session", "GameState"],
     }),
 
     updateNumberOfTeams: builder.mutation<any, { numberOfTeams: number }>({
       query: (data) => ({
-        url: '/session/update',
-        method: 'PUT',
+        url: "/session/update",
+        method: "PUT",
         body: data,
       }),
-      invalidatesTags: ['Team', 'GameState'],
+      invalidatesTags: ["Team", "GameState", "Session"],
+    }),
+
+    updateSessionQuestions: builder.mutation<any, { questions: string[] }>({
+      query: (data) => ({
+        url: "/session/update",
+        method: "PUT",
+        body: data,
+      }),
+      invalidatesTags: ["Session", "GameState"],
     }),
 
     fetchDashboardData: builder.query({
       query: () => ({
-        url: '/admin/fetchDashboardData',
-        method: 'GET',
+        url: "/admin/fetchDashboardData",
+        method: "GET",
       }),
       transformResponse: (response: any) => response.data,
     }),
 
     fetchLeaderboardData: builder.query({
       query: () => ({
-        url: '/admin/fetchLeaderboardData',
-        method: 'GET',
+        url: "/admin/fetchLeaderboardData",
+        method: "GET",
       }),
       transformResponse: (response: any) => response.data,
     }),
 
     updatePlayer: builder.mutation({
       query: (updateData) => ({
-        url: '/admin/updatePlayer',
-        method: 'PUT',
+        url: "/admin/updatePlayer",
+        method: "PUT",
         body: updateData,
       }),
     }),
@@ -148,7 +178,7 @@ export const adminApi = api.injectEndpoints({
     getPlayerWithResponses: builder.query({
       query: (playerId: string) => ({
         url: `/admin/getPlayerWithResponses/${playerId}`,
-        method: 'GET',
+        method: "GET",
       }),
       transformResponse: (response: any) => response.data,
       // providesTags: ["AdminPlayer"],
@@ -156,8 +186,8 @@ export const adminApi = api.injectEndpoints({
 
     checkPlayersReadiness: builder.query({
       query: () => ({
-        url: '/admin/checkPlayersReadiness',
-        method: 'GET',
+        url: "/admin/checkPlayersReadiness",
+        method: "GET",
       }),
       transformResponse: (response: any) => response.data,
     }),
@@ -167,33 +197,42 @@ export const adminApi = api.injectEndpoints({
     // Fetch dashboard data (teams, session, game state)
     fetchTeamDashboard: builder.query<DashboardResponse, void>({
       query: () => ({
-        url: '/admin/dashboard',
-        method: 'GET',
+        url: "/admin/dashboard",
+        method: "GET",
       }),
-      providesTags: ['Team', 'GameState'],
+      providesTags: ["Team", "GameState", "Session"],
+    }),
+
+    fetchQuestionBank: builder.query<QuestionBankResponse, void>({
+      query: () => ({
+        url: "/questions",
+        method: "GET",
+      }),
+      providesTags: ["Question"],
     }),
 
     // Update team (name or score) - single optimized endpoint
-    updateTeam: builder.mutation<UpdateTeamResponse, { teamId: string; data: UpdateTeamRequest }>({
+    updateTeam: builder.mutation<
+      UpdateTeamResponse,
+      { teamId: string; data: UpdateTeamRequest }
+    >({
       query: ({ teamId, data }) => ({
         url: `/admin/teams/${teamId}`,
-        method: 'PUT',
+        method: "PUT",
         body: data,
       }),
-      invalidatesTags: ['Team'],
+      invalidatesTags: ["Team"],
     }),
 
     // Fetch team responses
     fetchTeamResponses: builder.query<TeamResponsesResponse, string>({
       query: (teamId) => ({
         url: `/admin/teams/${teamId}/responses`,
-        method: 'GET',
+        method: "GET",
       }),
       transformResponse: (response: any) => response.data,
     }),
-
   }),
-
 });
 
 export const {
@@ -201,6 +240,7 @@ export const {
   useAdminLogoutMutation,
   useUpdateSessionMutation,
   useUpdateNumberOfTeamsMutation,
+  useUpdateSessionQuestionsMutation,
   useFetchDashboardDataQuery,
   useFetchLeaderboardDataQuery,
   useUpdatePlayerMutation,
@@ -210,6 +250,7 @@ export const {
   // New team-based hooks
   useFetchTeamDashboardQuery,
   useLazyFetchTeamDashboardQuery,
+  useFetchQuestionBankQuery,
   useUpdateTeamMutation,
   useFetchTeamResponsesQuery,
   useLazyFetchTeamResponsesQuery,

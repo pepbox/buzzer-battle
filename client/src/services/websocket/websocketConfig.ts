@@ -20,7 +20,7 @@ export const setupGlobalListeners = () => {
       // Invalidate game state query to refetch
       store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
     },
-    "redux"
+    "redux",
   );
 
   // Buzzer Pressed Event (broadcast to all)
@@ -31,7 +31,7 @@ export const setupGlobalListeners = () => {
       // Invalidate buzzer leaderboard to show updated rankings
       store.dispatch(buzzerApi.util.invalidateTags(["BuzzerLeaderboard"]));
     }, 1000),
-    "redux"
+    "redux",
   );
 
   // Buzzer Pressed Success (for the team that pressed)
@@ -42,7 +42,7 @@ export const setupGlobalListeners = () => {
       // Invalidate buzzer leaderboard
       store.dispatch(buzzerApi.util.invalidateTags(["BuzzerLeaderboard"]));
     },
-    "redux"
+    "redux",
   );
 
   // Buzzer Error
@@ -52,7 +52,7 @@ export const setupGlobalListeners = () => {
       console.error("Buzzer error:", data);
       // You can dispatch a toast notification here
     },
-    "redux"
+    "redux",
   );
 
   // Team Joined Event (for admins)
@@ -64,7 +64,7 @@ export const setupGlobalListeners = () => {
       // Note: You'll need to add these API tags to your teams API
       store.dispatch(adminApi.util.invalidateTags(["Team"]));
     },
-    "redux"
+    "redux",
   );
 
   // Buzzer Round Started Event
@@ -78,7 +78,7 @@ export const setupGlobalListeners = () => {
       store.dispatch(questionApi.util.invalidateTags(["Question"]));
       store.dispatch(buzzerApi.util.invalidateTags(["BuzzerLeaderboard"]));
     },
-    "redux"
+    "redux",
   );
 
   // Answering Round Started Event
@@ -88,7 +88,7 @@ export const setupGlobalListeners = () => {
       console.log("Answering round started:", data);
       // Component-specific handlers will manage the timer
     },
-    "redux"
+    "redux",
   );
 
   // Team Selected Event
@@ -98,7 +98,7 @@ export const setupGlobalListeners = () => {
       console.log("Team selected to answer:", data);
       store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
     },
-    "redux"
+    "redux",
   );
 
   // Second Chance Event
@@ -108,7 +108,7 @@ export const setupGlobalListeners = () => {
       console.log("Second chance given:", data);
       store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
     },
-    "redux"
+    "redux",
   );
 
   // Game Ended Event
@@ -120,7 +120,7 @@ export const setupGlobalListeners = () => {
       // Invalidate leaderboard to show final results
       // store.dispatch(teamsApi.util.invalidateTags(["Leaderboard"]));
     },
-    "redux"
+    "redux",
   );
   // Answer Submitted Event
   websocketService.addGlobalListener(
@@ -132,18 +132,26 @@ export const setupGlobalListeners = () => {
       // Invalidate teams and leaderboard
       // store.dispatch(teamsApi.util.invalidateTags(["Teams", "Leaderboard"]));
     },
-    "redux"
+    "redux",
   );
 };
 
 export const initializeWebSocket = async (
   serverUrl: string,
-  authToken?: string
+  authToken?: string,
+  sessionId?: string,
 ) => {
   try {
     const options: any = {};
     if (authToken) {
       options.auth = { token: authToken };
+    }
+
+    if (sessionId) {
+      options.auth = {
+        ...(options.auth || {}),
+        sessionId,
+      };
     }
 
     await websocketService.connect(serverUrl, options);

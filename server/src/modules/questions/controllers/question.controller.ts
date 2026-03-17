@@ -11,6 +11,26 @@ import { timerManager } from "../../../services/timerManager";
 const questionService = new QuestionService();
 const gameStateService = new GameStateService();
 
+export const fetchAllQuestions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const questions = await questionService.fetchAllQuestions();
+
+    res.status(200).json({
+      message: "Questions fetched successfully.",
+      data: {
+        questions,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching questions:", error);
+    next(new AppError("Failed to fetch questions.", 500));
+  }
+};
+
 /**
  * Fetch current question for the session
  * GET /api/v1/questions/current
@@ -19,7 +39,7 @@ const gameStateService = new GameStateService();
 export const fetchCurrentQuestion = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const sessionId = req.user?.sessionId;
@@ -29,9 +49,8 @@ export const fetchCurrentQuestion = async (
     }
 
     // Fetch game state to get current question index
-    const gameState = await gameStateService.fetchGameStateBySessionId(
-      sessionId
-    );
+    const gameState =
+      await gameStateService.fetchGameStateBySessionId(sessionId);
     if (!gameState) {
       return next(new AppError("Game state not found.", 404));
     }
@@ -39,7 +58,7 @@ export const fetchCurrentQuestion = async (
     // Fetch the current question
     const question = await questionService.fetchCurrentQuestion(
       sessionId,
-      gameState.currentQuestionIndex
+      gameState.currentQuestionIndex,
     );
 
     if (!question) {
@@ -85,7 +104,7 @@ export const fetchCurrentQuestion = async (
 export const sendQuestionResponse = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { questionId } = req.params;
@@ -96,7 +115,7 @@ export const sendQuestionResponse = async (
     // Validation
     if (!teamId || !sessionId) {
       return next(
-        new AppError("Team ID or Session ID not found in token.", 401)
+        new AppError("Team ID or Session ID not found in token.", 401),
       );
     }
 
@@ -112,8 +131,8 @@ export const sendQuestionResponse = async (
       return next(
         new AppError(
           "Invalid response option ID. Must be a single lowercase letter (a-z).",
-          400
-        )
+          400,
+        ),
       );
     }
 
@@ -122,9 +141,8 @@ export const sendQuestionResponse = async (
     }
 
     // Fetch game state
-    const gameState = await gameStateService.fetchGameStateBySessionId(
-      sessionId
-    );
+    const gameState =
+      await gameStateService.fetchGameStateBySessionId(sessionId);
     if (!gameState) {
       return next(new AppError("Game state not found.", 404));
     }
@@ -160,19 +178,19 @@ export const sendQuestionResponse = async (
     const questionResponse = await questionService.createQuestionResponse(
       questionId,
       teamId,
-      responseOptionId
+      responseOptionId,
     );
 
     // Validate answer and update score
     const result = await questionService.validateAndUpdateScore(
       questionId,
       teamId,
-      responseOptionId
+      responseOptionId,
     );
 
     // Cancel the answering timer since answer was submitted
     timerManager.cancelTimer(
-      `answering-${sessionId.toString()}-${teamId.toString()}`
+      `answering-${sessionId.toString()}-${teamId.toString()}`,
     );
 
     // Transition to IDLE state after answer is submitted

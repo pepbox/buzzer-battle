@@ -17,7 +17,7 @@ const questionService = new QuestionService();
 export const fetchDashboard = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const sessionId = req.user?.sessionId;
@@ -48,7 +48,7 @@ export const fetchDashboard = async (
     const teamsWithDetails = await Promise.all(
       teams.map(async (team) => {
         const responses = await questionService.fetchResponsesByTeamId(
-          team._id
+          team._id,
         );
 
         return {
@@ -65,7 +65,7 @@ export const fetchDashboard = async (
               ? "answering"
               : "idle",
         };
-      })
+      }),
     );
 
     // Sort teams by score (highest first), then by joinedAt
@@ -100,7 +100,7 @@ export const fetchDashboard = async (
           totalQuestions: session.questions.length,
         },
         gameState: {
-          currentQuestionIndex: gameState?.currentQuestionIndex || 0,
+          currentQuestionIndex: gameState?.currentQuestionIndex ?? -1,
           gameStatus: gameState?.gameStatus || "paused",
           currentAnsweringTeam: gameState?.currentAnsweringTeam || null,
         },
@@ -108,7 +108,10 @@ export const fetchDashboard = async (
         statistics: {
           totalTeamsRegistered,
           totalTeamsExpected,
-          currentQuestion: (gameState?.currentQuestionIndex || 0) + 1,
+          currentQuestion: Math.max(
+            0,
+            (gameState?.currentQuestionIndex ?? -1) + 1,
+          ),
           totalQuestions: session.questions.length,
         },
       },
@@ -127,7 +130,7 @@ export const fetchDashboard = async (
 export const updateTeam = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { teamId } = req.params;
@@ -140,7 +143,7 @@ export const updateTeam = async (
     // Validate at least one field is provided
     if (teamName === undefined && teamScore === undefined) {
       return next(
-        new AppError("Either teamName or teamScore must be provided.", 400)
+        new AppError("Either teamName or teamScore must be provided.", 400),
       );
     }
 
@@ -163,7 +166,7 @@ export const updateTeam = async (
     if (teamScore !== undefined) {
       if (typeof teamScore !== "number" || teamScore < 0) {
         return next(
-          new AppError("Team score must be a non-negative number.", 400)
+          new AppError("Team score must be a non-negative number.", 400),
         );
       }
       updateData.teamScore = teamScore;
@@ -197,7 +200,7 @@ export const updateTeam = async (
 export const fetchTeamResponses = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { teamId } = req.params;
@@ -223,12 +226,12 @@ export const fetchTeamResponses = async (
 
         // Find the correct option
         const correctOption = question.options.find(
-          (opt: any) => opt.optionId === question.correctAnswer
+          (opt: any) => opt.optionId === question.correctAnswer,
         );
 
         // Find team's selected option
         const teamOption = question.options.find(
-          (opt: any) => opt.optionId === response.response
+          (opt: any) => opt.optionId === response.response,
         );
 
         const isCorrect = question.correctAnswer === response.response;
@@ -248,7 +251,7 @@ export const fetchTeamResponses = async (
           timeElapsed: response.timeElapsed,
           answeredAt: response.createdAt,
         };
-      })
+      }),
     );
 
     res.status(200).json({

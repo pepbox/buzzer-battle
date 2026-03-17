@@ -17,13 +17,13 @@ export default class GameStateService {
 
   // Fetch game state by session ID
   async fetchGameStateBySessionId(
-    sessionId: Types.ObjectId | string
+    sessionId: Types.ObjectId | string,
   ): Promise<IGameState | null> {
     const query = GameState.findOne({ sessionId })
       .populate("currentAnsweringTeam", "teamNumber teamName teamScore")
       .populate(
         "sessionId",
-        "sessionName status questionTimeLimit answerTimeLimit"
+        "sessionName status questionTimeLimit answerTimeLimit",
       );
 
     if (this.session) {
@@ -35,11 +35,12 @@ export default class GameStateService {
 
   // Create initial game state for a session
   async createGameState(
-    sessionId: Types.ObjectId | string
+    sessionId: Types.ObjectId | string,
   ): Promise<IGameState> {
     const gameState = new GameState({
       sessionId,
-      currentQuestionIndex: 0,
+      // Start at -1 so first NEXT_QUESTION transitions to question index 0
+      currentQuestionIndex: -1,
       gameStatus: GameStatus.PAUSED,
     });
 
@@ -55,7 +56,7 @@ export default class GameStateService {
   // Update game status
   async updateGameStatus(
     sessionId: Types.ObjectId | string,
-    status: GameStatus
+    status: GameStatus,
   ): Promise<IGameState> {
     const query = GameState.findOne({ sessionId });
     if (this.session) {
@@ -81,7 +82,7 @@ export default class GameStateService {
   // Set current answering team
   async setCurrentAnsweringTeam(
     sessionId: Types.ObjectId | string,
-    teamId: Types.ObjectId | string | null
+    teamId: Types.ObjectId | string | null,
   ): Promise<IGameState> {
     const query = GameState.findOne({ sessionId });
     if (this.session) {
@@ -110,7 +111,7 @@ export default class GameStateService {
 
   // Move to next question
   async moveToNextQuestion(
-    sessionId: Types.ObjectId | string
+    sessionId: Types.ObjectId | string,
   ): Promise<IGameState> {
     const query = GameState.findOne({ sessionId });
     if (this.session) {
@@ -143,7 +144,7 @@ export default class GameStateService {
       gameStatus?: GameStatus;
       currentQuestionIndex?: number;
       currentAnsweringTeam?: Types.ObjectId | string | null;
-    }
+    },
   ): Promise<IGameState> {
     const query = GameState.findOne({ sessionId });
     if (this.session) {
@@ -183,7 +184,7 @@ export default class GameStateService {
 
   // Start buzzer round
   async startBuzzerRound(
-    sessionId: Types.ObjectId | string
+    sessionId: Types.ObjectId | string,
   ): Promise<IGameState> {
     const query = GameState.findOne({ sessionId });
     if (this.session) {
@@ -207,21 +208,26 @@ export default class GameStateService {
 
     await gameState.save(options);
 
+    // Mark session as active once gameplay starts.
+    await Session.findByIdAndUpdate(sessionId, {
+      status: SessionStatus.PLAYING,
+    });
+
     // Clear buzzer queue for the current question (cleanup from previous question)
     const questionService = new QuestionService(this.session);
     try {
       const currentQuestion = await questionService.fetchCurrentQuestion(
         sessionId,
-        gameState.currentQuestionIndex
+        gameState.currentQuestionIndex,
       );
 
       if (currentQuestion) {
         const buzzerQueueService = new BuzzerQueueService(this.session);
         await buzzerQueueService.clearBuzzerQueueForQuestion(
-          String(currentQuestion._id)
+          String(currentQuestion._id),
         );
         console.log(
-          `🧹 Cleared buzzer queue for question ${currentQuestion._id}`
+          `🧹 Cleared buzzer queue for question ${currentQuestion._id}`,
         );
       }
     } catch (error) {
@@ -283,7 +289,7 @@ export default class GameStateService {
 
   // Move to next question with auto-end game check
   async moveToNextQuestionWithCheck(
-    sessionId: Types.ObjectId | string
+    sessionId: Types.ObjectId | string,
   ): Promise<{ gameState: IGameState; gameEnded: boolean }> {
     const query = GameState.findOne({ sessionId }).populate("sessionId");
     if (this.session) {
@@ -301,6 +307,11 @@ export default class GameStateService {
     }
 
     const totalQuestions = session.questions.length;
+
+    if (totalQuestions === 0) {
+      throw new Error("No questions configured for this session");
+    }
+
     const nextIndex = gameState.currentQuestionIndex + 1;
 
     if (nextIndex >= totalQuestions) {
@@ -343,14 +354,14 @@ export default class GameStateService {
   // Pass question to second team
   async passToSecondTeam(
     sessionId: Types.ObjectId | string,
-    currentQuestionId: Types.ObjectId | string
+    currentQuestionId: Types.ObjectId | string,
   ): Promise<IGameState> {
     const buzzerQueueService = new BuzzerQueueService(this.session);
 
     // Get buzzer leaderboard for current question
     const leaderboard = await buzzerQueueService.fetchBuzzerLeaderboard(
       currentQuestionId,
-      sessionId
+      sessionId,
     );
 
     if (leaderboard.length < 2) {
@@ -388,7 +399,7 @@ export default class GameStateService {
   // Set specific team as answering team (used by auto-selection)
   async setAnsweringTeam(
     sessionId: Types.ObjectId | string,
-    fastestTeam: IBuzzerQueue
+    fastestTeam: IBuzzerQueue,
   ): Promise<IGameState> {
     const query = GameState.findOne({ sessionId });
     if (this.session) {
@@ -418,14 +429,14 @@ export default class GameStateService {
   // Auto-select fastest team from buzzer leaderboard
   async autoSelectFastestTeam(
     sessionId: Types.ObjectId | string,
-    questionId: Types.ObjectId | string
+    questionId: Types.ObjectId | string,
   ): Promise<IGameState> {
     const buzzerQueueService = new BuzzerQueueService(this.session);
 
     // Get buzzer leaderboard
     const leaderboard = await buzzerQueueService.fetchBuzzerLeaderboard(
       questionId,
-      sessionId
+      sessionId,
     );
 
     if (leaderboard.length === 0) {
@@ -444,7 +455,7 @@ export default class GameStateService {
    */
   async transitionToAnswering(
     sessionId: Types.ObjectId | string,
-    questionId: Types.ObjectId | string
+    questionId: Types.ObjectId | string,
   ): Promise<IGameState> {
     console.log(`🔄 Auto-transitioning to ANSWERING for session ${sessionId}`);
 
@@ -456,7 +467,7 @@ export default class GameStateService {
     // Only transition if still in buzzer round
     if (gameState.gameStatus !== GameStatus.BUZZER_ROUND) {
       console.log(
-        `⚠️ Game state is ${gameState.gameStatus}, skipping transition to ANSWERING`
+        `⚠️ Game state is ${gameState.gameStatus}, skipping transition to ANSWERING`,
       );
       return gameState;
     }
@@ -479,7 +490,7 @@ export default class GameStateService {
    * Called when answering time expires
    */
   async transitionToIdle(
-    sessionId: Types.ObjectId | string
+    sessionId: Types.ObjectId | string,
   ): Promise<IGameState> {
     console.log(`🔄 Auto-transitioning to IDLE for session ${sessionId}`);
 

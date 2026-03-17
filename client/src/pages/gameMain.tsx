@@ -1,12 +1,17 @@
-import { Navigate, Route, Routes, useParams } from "react-router-dom";
+import {
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useParams,
+} from "react-router-dom";
 import LoginPage from "../features/game/pages/login.Page";
 import BuzzerRound from "../features/game/pages/Buzzer_Round";
 import BuzzerLeaderboard from "../features/game/pages/BuzzerLeaderboard";
 import QuestionRoundPage from "../features/game/pages/Question_Round_Page";
 import LeaderBoardPage from "../features/game/pages/LeaderBoard_Page";
 import Overlay from "../components/ui/Overlay";
-import { useLazyFetchCurrentTeamQuery } from "../features/game/services/teamApi";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { setSessionId } from "../features/session/services/sessionSlice";
 import { useAppDispatch } from "../app/hooks";
 import { RootState } from "../app/store";
@@ -14,22 +19,39 @@ import { useAppSelector } from "../app/rootReducer";
 import Loader from "../components/ui/Loader";
 import AuthWrapper from "../components/auth/AuthWrapper";
 import GameStateRouter from "../features/game/components/GameStateRouter";
+import { useLazyFetchCurrentTeamQuery } from "../features/game/services/teamApi";
 
 const GameMain = () => {
-  const [FetchCurrentTeam] = useLazyFetchCurrentTeamQuery();
-  const { isLoading } = useAppSelector((state: RootState) => state.team);
+  const [fetchCurrentTeam] = useLazyFetchCurrentTeamQuery();
+  const location = useLocation();
+  const { isLoading, isAuthenticated } = useAppSelector(
+    (state: RootState) => state.team,
+  );
   const dispatch = useAppDispatch();
   const { sessionId } = useParams<{ sessionId: string }>();
+  const [authResolved, setAuthResolved] = useState(false);
+  const isLoginRoute = location.pathname === `/game/${sessionId}/`;
 
   useEffect(() => {
     dispatch(setSessionId(sessionId ?? ""));
   }, [dispatch, sessionId]);
 
   useEffect(() => {
-    FetchCurrentTeam();
-  }, [FetchCurrentTeam]);
+    if (!sessionId || isAuthenticated || isLoginRoute) {
+      setAuthResolved(true);
+      return;
+    }
 
-  if (isLoading) {
+    setAuthResolved(false);
+    fetchCurrentTeam({ sessionId })
+      .unwrap()
+      .catch(() => undefined)
+      .finally(() => {
+        setAuthResolved(true);
+      });
+  }, [fetchCurrentTeam, isAuthenticated, isLoginRoute, sessionId]);
+
+  if (isLoading || (!isLoginRoute && !authResolved)) {
     return <Loader />;
   }
 

@@ -1,15 +1,30 @@
 import {
-    createApi,
-    fetchBaseQuery,
-    FetchBaseQueryError,
+  createApi,
+  fetchBaseQuery,
+  FetchBaseQueryError,
 } from "@reduxjs/toolkit/query/react";
 
 import { BaseQueryFn, FetchArgs } from "@reduxjs/toolkit/query";
 
 // Create the base query with auth headers and credentials
 const baseQuery = fetchBaseQuery({
-    baseUrl: import.meta.env.VITE_BACKEND_BASE_URL,
-    credentials: "include", // Include credentials for cross-origin requests
+  baseUrl: import.meta.env.VITE_BACKEND_BASE_URL,
+  credentials: "include", // Include credentials for cross-origin requests
+  prepareHeaders: (headers, { getState }) => {
+    const state = getState() as any;
+    const sessionId = state?.session?.sessionId;
+    const isAuthenticated = Boolean(
+      state?.admin?.isAuthenticated || state?.team?.isAuthenticated,
+    );
+
+    // Send session header only for authenticated API calls.
+    // This avoids CORS preflight noise on public polling/login endpoints.
+    if (sessionId && isAuthenticated) {
+      headers.set("x-session-id", sessionId);
+    }
+
+    return headers;
+  },
 });
 
 // Helper function to determine the refresh endpoint based on the original request URL
@@ -26,63 +41,63 @@ const baseQuery = fetchBaseQuery({
 
 // Create the reauth wrapper
 const baseQueryWithReauth: BaseQueryFn<
-    string | FetchArgs,
-    unknown,
-    FetchBaseQueryError
+  string | FetchArgs,
+  unknown,
+  FetchBaseQueryError
 > = async (args, api, extraOptions) => {
-    if (!args) {
-        throw new Error("Arguments for baseQuery cannot be undefined");
-    }
+  if (!args) {
+    throw new Error("Arguments for baseQuery cannot be undefined");
+  }
 
-    // Initial request
-    let result = await baseQuery(args, api, extraOptions);
+  // Initial request
+  let result = await baseQuery(args, api, extraOptions);
 
-    // If unauthorized (token expired or invalid), attempt refresh
-    // if (
-    //     result.error &&
-    //     (result.error.status === 401 || result.error.status === 403)
-    // ) {
-    // console.warn("Access token expired. Attempting refresh...");
-    // Extract URL from args to determine the appropriate refresh endpoint
-    // const originalUrl = typeof args === 'string' ? args : args.url;
-    // const refreshEndpoint = getRefreshEndpoint(originalUrl);
+  // If unauthorized (token expired or invalid), attempt refresh
+  // if (
+  //     result.error &&
+  //     (result.error.status === 401 || result.error.status === 403)
+  // ) {
+  // console.warn("Access token expired. Attempting refresh...");
+  // Extract URL from args to determine the appropriate refresh endpoint
+  // const originalUrl = typeof args === 'string' ? args : args.url;
+  // const refreshEndpoint = getRefreshEndpoint(originalUrl);
 
-    // Try to refresh the token
-    // const refreshResult = await baseQuery(
-    //     { url: refreshEndpoint, method: "POST" },
-    //     api,
-    //     extraOptions
-    // );
+  // Try to refresh the token
+  // const refreshResult = await baseQuery(
+  //     { url: refreshEndpoint, method: "POST" },
+  //     api,
+  //     extraOptions
+  // );
 
-    // if (refreshResult.data) {
-    //     // Optionally dispatch new token (if using Redux store for access token)
-    //     api.dispatch({
-    //         type: "auth/tokenRefreshed",
-    //         payload: refreshResult.data,
-    //     });
+  // if (refreshResult.data) {
+  //     // Optionally dispatch new token (if using Redux store for access token)
+  //     api.dispatch({
+  //         type: "auth/tokenRefreshed",
+  //         payload: refreshResult.data,
+  //     });
 
-    //     // Retry the original query
-    //     result = await baseQuery(args, api, extraOptions);
-    // } else {
-    //     console.warn("Refresh token invalid. Logging out.");
-    //     // Optional: force logout or reset auth state
-    //     api.dispatch({ type: "auth/logout" });
-    // }
-    // }
+  //     // Retry the original query
+  //     result = await baseQuery(args, api, extraOptions);
+  // } else {
+  //     console.warn("Refresh token invalid. Logging out.");
+  //     // Optional: force logout or reset auth state
+  //     api.dispatch({ type: "auth/logout" });
+  // }
+  // }
 
-    return result;
+  return result;
 };
 
 // Create the base API
 export const api = createApi({
-    baseQuery: baseQueryWithReauth,
-    tagTypes: [
-        "Team",
-        "Leaderboard",
-        "GameState",
-        "Question",
-        "BuzzerLeaderboard",
-        "Session",
-    ],
-    endpoints: () => ({}),
+  baseQuery: baseQueryWithReauth,
+  tagTypes: [
+    "Team",
+    "Leaderboard",
+    "GameState",
+    "Question",
+    "BuzzerLeaderboard",
+    "Session",
+  ],
+  endpoints: () => ({}),
 });

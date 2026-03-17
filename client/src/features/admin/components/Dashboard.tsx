@@ -8,6 +8,8 @@ import {
   DialogContentText,
   DialogTitle,
   Button,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import DashboardHeader from "./DashboardHeader";
 import TeamTable from "./TeamTable";
@@ -20,19 +22,33 @@ const Dashboard: React.FC<DashboardProps> = ({
   onViewResponses,
 }) => {
   const [transaction, setTransaction] = useState<boolean>(false);
+  const hasQuestions = (headerData.totalQuestions || 0) > 0;
 
   // Dialog state for transactions
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [pendingTransaction, setPendingTransaction] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string>("");
 
   const { nextQuestion } = useNextQuestion();
 
   const onGameStatusChange = async () => {
+    if (!hasQuestions) {
+      setErrorMessage("No questions are configured for this session.");
+      return;
+    }
+
     try {
       await nextQuestion().unwrap();
     } catch (error: any) {
       console.error("Error fetching next question:", error);
+      setErrorMessage(
+        error?.data?.message || "Failed to start game. Please try again.",
+      );
     }
+  };
+
+  const handleCloseError = () => {
+    setErrorMessage("");
   };
 
   const onTransactionsChange = (status: boolean) => {
@@ -56,6 +72,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         onGameStatusChange={onGameStatusChange}
         transaction={transaction}
         onTransactionsChange={onTransactionsChange}
+        hasQuestions={hasQuestions}
       />
       <Box sx={{ px: 4 }}>
         <TeamTable
@@ -88,6 +105,21 @@ const Dashboard: React.FC<DashboardProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={Boolean(errorMessage)}
+        autoHideDuration={4000}
+        onClose={handleCloseError}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={handleCloseError}
+          severity="error"
+          sx={{ width: "100%" }}
+        >
+          {errorMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

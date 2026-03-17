@@ -31,10 +31,10 @@ const AdminLogin: React.FC = () => {
 
   // Redux state
   const isAuthenticated = useSelector((state: RootState) =>
-    selectIsAuthenticated(state)
+    selectIsAuthenticated(state),
   );
   const isLoading = useSelector((state: RootState) =>
-    selectAdminLoading(state)
+    selectAdminLoading(state),
   );
   const reduxError = useSelector((state: RootState) => selectAdminError(state));
 
@@ -47,10 +47,10 @@ const AdminLogin: React.FC = () => {
   useEffect(() => {
     dispatch(initializeAuth());
 
-    if (isAuthenticated) {
-      navigate(`/admin/${storedSessionId}/dashboard`);
+    if (isAuthenticated && sessionId) {
+      navigate(`/admin/${sessionId}/dashboard`);
     }
-  }, [dispatch, isAuthenticated, navigate, urlSessionId]);
+  }, [dispatch, isAuthenticated, navigate, sessionId]);
 
   // Auto-focus first input on component mount
   useEffect(() => {
@@ -155,7 +155,7 @@ const AdminLogin: React.FC = () => {
   };
 
   if (isAuthenticated) {
-    return <Navigate to={`/admin/dashboard`} replace />;
+    return <Navigate to={`/admin/${sessionId}/dashboard`} replace />;
   }
 
   return (

@@ -12,6 +12,9 @@ const RemoteHeader: React.FC<RemoteHeaderProps> = ({
   currentQuestionIndex,
   totalQuestions,
 }) => {
+  const displayQuestionNumber =
+    totalQuestions > 0 ? Math.max(0, currentQuestionIndex + 1) : 0;
+
   return (
     <Box
       sx={{
@@ -91,7 +94,7 @@ const RemoteHeader: React.FC<RemoteHeaderProps> = ({
               fontSize: "14px",
             }}
           >
-            {currentQuestionIndex + 1} / {totalQuestions}
+            {displayQuestionNumber} / {totalQuestions}
           </Typography>
         </Box>
       </Box>

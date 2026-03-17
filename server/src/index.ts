@@ -12,7 +12,7 @@ import cookieParser from "cookie-parser";
 import { initializeSocket } from "./services/socket/index";
 import http from "http";
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
 connectDB();
 
@@ -31,7 +31,7 @@ const corsOptions = {
   origin: process.env.FRONTEND_URL || "http://localhost:5173",
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   credentials: true,
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-session-id"],
 };
 
 app.use(cors(corsOptions));
@@ -43,7 +43,10 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api/v1", v1Routes);
 
-if (process.env.NODE_ENV === "production" || process.env.NODE_ENV === "staging") {
+if (
+  process.env.NODE_ENV === "production" ||
+  process.env.NODE_ENV === "staging"
+) {
   const buildPath = path.join(__dirname, "..", "..", "client", "dist");
   app.use(express.static(buildPath));
 

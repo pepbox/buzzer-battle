@@ -1,20 +1,28 @@
 import { Socket } from "socket.io";
-import { verifyToken } from "../utils/jwtUtils";
+import { verifyAccessToken } from "../utils/jwtUtils";
+import { getAccessTokenCookieName } from "../utils/cookieOptions";
 
 export const socketAuthMiddleware = (
   socket: Socket,
-  next: (err?: Error) => void
+  next: (err?: Error) => void,
 ) => {
-
   console.log("Authenticating socket...");
   // const token = socket.handshake.auth?.token;
   const cookies = socket.handshake.headers?.cookie;
+  const sessionId = socket.handshake.auth?.sessionId;
   if (!cookies) {
     console.log("No cookies found in handshake headers");
     return next(new Error("Authentication cookie required"));
   }
 
-  const token = parseCookieValue(cookies, "accessToken");
+  const scopedCookieName =
+    typeof sessionId === "string" && sessionId.trim().length > 0
+      ? getAccessTokenCookieName(sessionId)
+      : "accessToken";
+
+  const token =
+    parseCookieValue(cookies, scopedCookieName) ||
+    parseCookieValue(cookies, "accessToken");
 
   if (!token) {
     console.log("No access token found");
@@ -22,7 +30,7 @@ export const socketAuthMiddleware = (
   }
 
   try {
-    const payload = verifyToken(token);
+    const payload = verifyAccessToken(token);
 
     if (typeof payload === "object" && payload.role) {
       (socket as any).user = payload;

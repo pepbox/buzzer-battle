@@ -15,6 +15,13 @@ import {
   DialogActions,
   TextField,
   IconButton,
+  Checkbox,
+  List,
+  ListItemButton,
+  ListItemText,
+  ListItemIcon,
+  Tooltip,
+  CircularProgress,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { DashboardHeaderProps } from "../types/interfaces";
@@ -25,15 +32,18 @@ import SettingsRemoteIcon from "@mui/icons-material/SettingsRemote";
 import GroupIcon from "@mui/icons-material/Group";
 import QuizIcon from "@mui/icons-material/Quiz";
 import EditIcon from "@mui/icons-material/Edit";
+import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import {
+  useFetchQuestionBankQuery,
   useAdminLogoutMutation,
-  useUpdateSessionMutation,
   useUpdateNumberOfTeamsMutation,
+  useUpdateSessionQuestionsMutation,
 } from "../services/admin.Api";
 import GlobalButton from "../../../components/ui/button";
 import { useAppDispatch, useAppSelector } from "../../../app/rootReducer";
 import { RootState } from "../../../app/store";
 import { clearAdmin } from "../services/adminSlice";
+import { useFetchSessionQuery } from "../../session/services/session.api";
 
 // Dashboard Header Component
 const DashboardHeader: React.FC<DashboardHeaderProps> = ({
@@ -41,26 +51,33 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   onGameStatusChange,
   onTransactionsChange,
   transaction = false, // Default value for transaction
+  hasQuestions = true,
 }) => {
   const [AdminLogout] = useAdminLogoutMutation();
-  const [UpdateSession] = useUpdateSessionMutation();
   const [UpdateNumberOfTeams] = useUpdateNumberOfTeamsMutation();
+  const [UpdateSessionQuestions] = useUpdateSessionQuestionsMutation();
   const { admin } = useAdminAuth();
   const navigate = useNavigate();
   const { sessionId } = useAppSelector((state: RootState) => state.session);
   const CurretQuestionIndex = useAppSelector(
-    (state: RootState) => state.gameState.gameState?.currentQuestionIndex
+    (state: RootState) => state.gameState.gameState?.currentQuestionIndex,
   );
+  const isGameNotStarted =
+    (CurretQuestionIndex ?? -1) === -1 || (data?.currentQuestion ?? 0) === 0;
   const dispatch = useAppDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-  
+  const { data: sessionResponse } = useFetchSessionQuery();
+  const { data: questionBankResponse, isLoading: isQuestionBankLoading } =
+    useFetchQuestionBankQuery();
+
   // State for edit teams modal
   const [editTeamsModal, setEditTeamsModal] = useState({
     open: false,
     value: "",
   });
-
+  const [questionModalOpen, setQuestionModalOpen] = useState(false);
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
 
   const handleLogout = () => {
     AdminLogout({})
@@ -71,18 +88,6 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       })
       .catch((error) => {
         console.error("Logout failed:", error);
-      });
-  };
-
-  const handleSesssionEnd = () => {
-    UpdateSession({ status: "ended" })
-      .unwrap()
-      .then(() => {
-        navigate(`/admin/${sessionId}/login`);
-        dispatch(clearAdmin());
-      })
-      .catch((error) => {
-        console.error("Failed to end session:", error);
       });
   };
 
@@ -124,6 +129,37 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       })
       .catch((error: any) => {
         console.error("Failed to update number of teams:", error);
+      });
+  };
+
+  const currentSessionQuestionIds = sessionResponse?.data?.questions || [];
+  const questionBank = questionBankResponse?.data?.questions || [];
+
+  const handleOpenQuestionModal = () => {
+    setSelectedQuestionIds(currentSessionQuestionIds);
+    setQuestionModalOpen(true);
+  };
+
+  const handleCloseQuestionModal = () => {
+    setQuestionModalOpen(false);
+  };
+
+  const handleToggleQuestion = (questionId: string) => {
+    setSelectedQuestionIds((current) =>
+      current.includes(questionId)
+        ? current.filter((id) => id !== questionId)
+        : [...current, questionId],
+    );
+  };
+
+  const handleSaveQuestions = () => {
+    UpdateSessionQuestions({ questions: selectedQuestionIds })
+      .unwrap()
+      .then(() => {
+        setQuestionModalOpen(false);
+      })
+      .catch((error: any) => {
+        console.error("Failed to update session questions:", error);
       });
   };
 
@@ -317,6 +353,16 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                         {data.currentQuestion}
                         {data.totalQuestions ? ` / ${data.totalQuestions}` : ""}
                       </Typography>
+                      <Tooltip title="Add Questions">
+                        <IconButton
+                          size="small"
+                          onClick={handleOpenQuestionModal}
+                          color="primary"
+                          sx={{ ml: 0.5 }}
+                        >
+                          <AddCircleOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                     </Box>
                   </Box>
                 )}
@@ -342,8 +388,8 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                         data?.gameStatus === "playing"
                           ? "success"
                           : data?.gameStatus === "paused"
-                          ? "warning"
-                          : "default"
+                            ? "warning"
+                            : "default"
                       }
                     >
                       {(() => {
@@ -376,28 +422,24 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             justifyContent: isMobile ? "center" : "flex-start",
           }}
         >
-          {(CurretQuestionIndex ?? 0) <= 1 && (
-            <GlobalButton
-              fullWidth={isMobile}
-              sx={{
-                display: data?.gameStatus === "playing" ? "none" : "block",
-              }}
-              onClick={() => {
-                if (onGameStatusChange) onGameStatusChange();
-              }}
-            >
-              Start Game
-            </GlobalButton>
+          {isGameNotStarted && (
+            <Box>
+              <GlobalButton
+                fullWidth={isMobile}
+                disabled={!hasQuestions}
+                onClick={() => {
+                  if (onGameStatusChange) onGameStatusChange();
+                }}
+              >
+                Start Game
+              </GlobalButton>
+              {!hasQuestions && (
+                <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+                  Add questions to this session before starting the game.
+                </Typography>
+              )}
+            </Box>
           )}
-
-          <GlobalButton
-            fullWidth={isMobile}
-            onClick={() => {
-              handleSesssionEnd();
-            }}
-          >
-            End Session
-          </GlobalButton>
 
           <FormControlLabel
             control={
@@ -421,10 +463,10 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       </Paper>
 
       {/* Edit Number of Teams Modal */}
-      <Dialog 
-        open={editTeamsModal.open} 
-        onClose={handleCloseTeamsModal} 
-        fullWidth 
+      <Dialog
+        open={editTeamsModal.open}
+        onClose={handleCloseTeamsModal}
+        fullWidth
         maxWidth="sm"
       >
         <DialogTitle>Edit Number of Teams</DialogTitle>
@@ -444,12 +486,68 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseTeamsModal}>Cancel</Button>
-          <Button 
-            onClick={handleSaveNumberOfTeams} 
-            variant="contained" 
+          <Button
+            onClick={handleSaveNumberOfTeams}
+            variant="contained"
             color="primary"
           >
             Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={questionModalOpen}
+        onClose={handleCloseQuestionModal}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Select Questions</DialogTitle>
+        <DialogContent>
+          {isQuestionBankLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <List sx={{ maxHeight: 420, overflowY: "auto" }}>
+              {questionBank.map((question) => {
+                const isSelected = selectedQuestionIds.includes(question._id);
+                return (
+                  <ListItemButton
+                    key={question._id}
+                    onClick={() => handleToggleQuestion(question._id)}
+                    dense
+                  >
+                    <ListItemIcon>
+                      <Checkbox
+                        edge="start"
+                        checked={isSelected}
+                        tabIndex={-1}
+                      />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={question.questionText}
+                      secondary={`Score: ${question.score} | Options: ${question.options.length}`}
+                    />
+                  </ListItemButton>
+                );
+              })}
+              {!questionBank.length && (
+                <Typography color="text.secondary" sx={{ p: 2 }}>
+                  No questions found in the database.
+                </Typography>
+              )}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseQuestionModal}>Cancel</Button>
+          <Button
+            onClick={handleSaveQuestions}
+            variant="contained"
+            color="primary"
+          >
+            Save Questions ({selectedQuestionIds.length})
           </Button>
         </DialogActions>
       </Dialog>

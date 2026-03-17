@@ -1,9 +1,16 @@
-import { NextFunction, Request, Response } from 'express';
-import AppError from '../../../utils/appError';
-import SessionService from '../../session/services/session.service';
-import { generateAccessToken, generateRefreshToken } from '../../../utils/jwtUtils';
-import AdminServices from '../services/admin.service';
-import { setCookieOptions } from '../../../utils/cookieOptions';
+import { NextFunction, Request, Response } from "express";
+import AppError from "../../../utils/appError";
+import SessionService from "../../session/services/session.service";
+import {
+  generateAccessToken,
+  generateRefreshToken,
+} from "../../../utils/jwtUtils";
+import AdminServices from "../services/admin.service";
+import {
+  getAccessTokenCookieName,
+  getRefreshTokenCookieName,
+  setCookieOptions,
+} from "../../../utils/cookieOptions";
 // import PlayerService from '../../players/services/player.service';
 // import { Player } from '../../players/models/player.model';
 // import QuestionService from '../../questions/services/question.service';
@@ -18,7 +25,6 @@ const sessionService = new SessionService();
 // const questionService = new QuestionService(Question); // Assuming you have a question service
 // const fileService = new FileService();
 // const teamService = new TeamService();
-
 
 // export const createAdmin = async (
 //     req: Request,
@@ -67,104 +73,135 @@ const sessionService = new SessionService();
 // };
 
 export const loginAdmin = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
+  req: Request,
+  res: Response,
+  next: NextFunction,
 ) => {
-    try {
-        const { sessionId, password } = req.body;
-        if (!sessionId || !password) {
-            return next(new AppError("Session ID and password are required.", 400));
-        }
-
-        const admin = await adminService.loginAdmin({
-            sessionId,
-            password,
-        });
-        const session = await sessionService.fetchSessionById(sessionId);
-        if (!session) {
-            return next(new AppError("Session not found.", 404));
-        }
-        // if (session.status === SessionStatus.ENDED) {
-        //     return next(new AppError("Session has ended. Admin cannot log in.", 403));
-        // }
-        if (!admin) {
-            return next(new AppError("Invalid session ID or password.", 401));
-        }
-
-        const accessToken = generateAccessToken({
-            id: admin._id.toString(),
-            role: "ADMIN",
-            sessionId: admin.sessionId.toString(),
-        });
-        const refreshToken = generateRefreshToken(admin._id.toString());
-
-        res.cookie("accessToken", accessToken, setCookieOptions);
-        res.cookie("refreshToken", refreshToken, { ...setCookieOptions, httpOnly: true });
-
-
-        res.status(200).json({
-            message: "Admin logged in successfully.",
-            data: {
-                admin,
-            },
-            success: true,
-        });
-    } catch (error) {
-        console.error("Error logging in admin:", error);
-        next(new AppError("Failed to log in admin.", 500));
+  try {
+    const { sessionId, password } = req.body;
+    if (!sessionId || !password) {
+      return next(new AppError("Session ID and password are required.", 400));
     }
+
+    const admin = await adminService.loginAdmin({
+      sessionId,
+      password,
+    });
+    const session = await sessionService.fetchSessionById(sessionId);
+    if (!session) {
+      return next(new AppError("Session not found.", 404));
+    }
+    // if (session.status === SessionStatus.ENDED) {
+    //     return next(new AppError("Session has ended. Admin cannot log in.", 403));
+    // }
+    if (!admin) {
+      return next(new AppError("Invalid session ID or password.", 401));
+    }
+
+    const accessToken = generateAccessToken({
+      id: admin._id.toString(),
+      role: "ADMIN",
+      sessionId: admin.sessionId.toString(),
+    });
+    const refreshToken = generateRefreshToken(admin._id.toString());
+
+    const scopedAccessCookie = getAccessTokenCookieName(
+      admin.sessionId.toString(),
+    );
+    const scopedRefreshCookie = getRefreshTokenCookieName(
+      admin.sessionId.toString(),
+    );
+
+    res.cookie(scopedAccessCookie, accessToken, setCookieOptions);
+    res.cookie(scopedRefreshCookie, refreshToken, {
+      ...setCookieOptions,
+      httpOnly: true,
+    });
+
+    res.status(200).json({
+      message: "Admin logged in successfully.",
+      data: {
+        admin,
+      },
+      success: true,
+    });
+  } catch (error) {
+    console.error("Error logging in admin:", error);
+    next(new AppError("Failed to log in admin.", 500));
+  }
 };
 
 export const fetchAdmin = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
+  req: Request,
+  res: Response,
+  next: NextFunction,
 ) => {
+  const sessionId = req.user?.sessionId;
+  if (!sessionId) {
+    return next(new AppError("Session ID is required or does not match.", 400));
+  }
 
-    const sessionId = req.user?.sessionId;
-    if (!sessionId) {
-        return next(new AppError("Session ID is required or does not match.", 400));
+  try {
+    const adminId = req.user.id;
+    if (!adminId) {
+      return next(new AppError("Admin ID is required.", 400));
     }
 
-    try {
-        const adminId = req.user.id;
-        if (!adminId) {
-            return next(new AppError("Admin ID is required.", 400));
-        }
+    const admin = await adminService.fetchAdminById(adminId);
+    if (!admin) {
+      return next(new AppError("Admin not found.", 404));
+    }
 
-        const admin = await adminService.fetchAdminById(adminId);
-        if (!admin) {
-            return next(new AppError("Admin not found.", 404));
-        }
-
-        res.status(200).json({
-            success: true,
-            data: admin,
-        });
-    } catch (error: any) { }
+    res.status(200).json({
+      success: true,
+      data: admin,
+    });
+  } catch (error: any) {}
 };
 
 export const logoutAdmin = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
+  req: Request,
+  res: Response,
+  next: NextFunction,
 ) => {
-    try {
-        res.clearCookie("accessToken", {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        });
+  try {
+    const sessionId = req.header("x-session-id");
 
-        res.status(200).json({
-            success: true,
-            message: "Admin logged out successfully.",
-        });
-    } catch (error) {
-        console.error("Error logging out admin:", error);
-        next(new AppError("Failed to log out admin.", 500));
+    if (sessionId) {
+      res.clearCookie(getAccessTokenCookieName(sessionId), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      });
+
+      res.clearCookie(getRefreshTokenCookieName(sessionId), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      });
     }
+
+    // Backward compatibility cleanup
+    res.clearCookie("accessToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    });
+
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Admin logged out successfully.",
+    });
+  } catch (error) {
+    console.error("Error logging out admin:", error);
+    next(new AppError("Failed to log out admin.", 500));
+  }
 };
 
 // export const fetchAdminDashboardData = async (
@@ -208,7 +245,7 @@ export const logoutAdmin = async (
 //                     guess.personId.toString() === guess.guessedPersonId.toString()
 //             );
 //             const peopleWhoKnowYou = `${correctGuessesByPerson.length}`;
-//             // Status from session 
+//             // Status from session
 //             const currentStatus = session.status || "Pending";
 
 //             // Total score
@@ -359,18 +396,18 @@ export const logoutAdmin = async (
 
 //         // Fetch all players in the session
 //         const players = await playerService.getPlayersBySession(sessionId);
-        
+
 //         // Get total number of questions
 //         const totalQuestions = await questionService.getAllQuestions();
 //         const totalQuestionCount = totalQuestions.length;
 
 //         const pendingPlayers = [];
-        
+
 //         for (const player of players) {
 //             // Get responses by player id
 //             const responses = await questionService.getResponsesByPlayerId(player._id.toString());
 //             const answeredCount = responses.length;
-            
+
 //             // If player hasn't answered all questions, add to pending list
 //             if (answeredCount < totalQuestionCount) {
 //                 const team = await teamService.fetchTeamById(player?.team?.toString() || "");

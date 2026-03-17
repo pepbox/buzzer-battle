@@ -11,6 +11,7 @@ import CancelIcon from "@mui/icons-material/Cancel";
 interface RemoteActionButtonsProps {
   gameStatus: "paused" | "buzzer_round" | "answering" | "idle";
   currentQuestionIndex: number;
+  totalQuestions: number;
   onNextQuestion: () => void;
   onPauseGame: () => void;
   onResumeGame: () => void;
@@ -27,6 +28,7 @@ interface RemoteActionButtonsProps {
 const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
   gameStatus,
   currentQuestionIndex,
+  totalQuestions,
   onNextQuestion,
   onPauseGame,
   onResumeGame,
@@ -39,6 +41,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
   isLoading = false,
   lastAnswerWasWrong = false,
 }) => {
+  const hasQuestions = totalQuestions > 0;
   const buttonBaseStyles = {
     width: "100%",
     padding: "16px",
@@ -76,7 +79,9 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
         <Box sx={{ display: "flex", gap: "12px" }}>
           <Button
             variant="contained"
-            startIcon={isLoading ? <CircularProgress size={20} /> : <CheckCircleIcon />}
+            startIcon={
+              isLoading ? <CircularProgress size={20} /> : <CheckCircleIcon />
+            }
             onClick={onMarkCorrect}
             disabled={isLoading}
             sx={{
@@ -93,7 +98,9 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
           </Button>
           <Button
             variant="contained"
-            startIcon={isLoading ? <CircularProgress size={20} /> : <CancelIcon />}
+            startIcon={
+              isLoading ? <CircularProgress size={20} /> : <CancelIcon />
+            }
             onClick={onMarkWrong}
             disabled={isLoading}
             sx={{
@@ -124,7 +131,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
           )
         }
         onClick={onNextQuestion}
-        disabled={isLoading}
+        disabled={isLoading || !hasQuestions}
         sx={{
           ...buttonBaseStyles,
           backgroundColor: currentQuestionIndex === -1 ? "#10B981" : "#3B82F6",
@@ -137,6 +144,21 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
       >
         {currentQuestionIndex === -1 ? "➡️ Start Game" : "➡️ Next Question"}
       </Button>
+
+      {!hasQuestions && (
+        <Box
+          sx={{
+            padding: "8px",
+            backgroundColor: "rgba(239, 68, 68, 0.08)",
+            borderRadius: "8px",
+            textAlign: "center",
+          }}
+        >
+          <span style={{ fontSize: "12px", color: "#B91C1C" }}>
+            No questions configured for this session.
+          </span>
+        </Box>
+      )}
 
       {/* Allow Top Team Button - Only in BUZZER_ROUND */}
       {gameStatus === "buzzer_round" && (
@@ -211,7 +233,6 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
         </Button>
       )}
 
-
       {/* Pass to Second Team Button - Conditional (now shows after admin marks wrong) */}
       {(gameStatus === "answering" || gameStatus === "idle") && (
         <Button
@@ -276,4 +297,3 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
 };
 
 export default RemoteActionButtons;
-
