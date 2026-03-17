@@ -4,6 +4,7 @@ import {
   Routes,
   useLocation,
   useParams,
+  useNavigate,
 } from "react-router-dom";
 import LoginPage from "../features/game/pages/login.Page";
 import BuzzerRound from "../features/game/pages/Buzzer_Round";
@@ -20,38 +21,88 @@ import Loader from "../components/ui/Loader";
 import AuthWrapper from "../components/auth/AuthWrapper";
 import GameStateRouter from "../features/game/components/GameStateRouter";
 import { useLazyFetchCurrentTeamQuery } from "../features/game/services/teamApi";
+import { useLazyFetchGameStateQuery } from "../features/game/services/gameStateApi";
+import { websocketService } from "../services/websocket/websocketService";
+import { Events } from "../services/websocket/enums/Events";
+import { clearTeam } from "../features/game/services/teamSlice";
 
 const GameMain = () => {
   const [fetchCurrentTeam] = useLazyFetchCurrentTeamQuery();
+  const [fetchGameState] = useLazyFetchGameStateQuery();
   const location = useLocation();
+  const navigate = useNavigate();
   const { isLoading, isAuthenticated } = useAppSelector(
     (state: RootState) => state.team,
   );
   const dispatch = useAppDispatch();
   const { sessionId } = useParams<{ sessionId: string }>();
   const [authResolved, setAuthResolved] = useState(false);
+  const [gameStateLoaded, setGameStateLoaded] = useState(false);
   const isLoginRoute = location.pathname === `/game/${sessionId}/`;
 
   useEffect(() => {
     dispatch(setSessionId(sessionId ?? ""));
   }, [dispatch, sessionId]);
 
+  // Listen for session end event (super admin ended the session)
+  useEffect(() => {
+    const handleSessionEnded = (data: any) => {
+      console.log("⚠️ Session ended by super admin:", data.message);
+      // Clear team auth state
+      dispatch(clearTeam());
+      // Redirect to login with message
+      navigate(`/game/${sessionId}/`, {
+        state: {
+          message: "Session has been ended. Please log in again.",
+          severity: "warning",
+        },
+      });
+    };
+
+    console.log(
+      "📡 Setting up SESSION_ENDED listener for team. Event name:",
+      Events.SESSION_ENDED,
+    );
+    websocketService.on(Events.SESSION_ENDED, handleSessionEnded);
+
+    return () => {
+      websocketService.off(Events.SESSION_ENDED, handleSessionEnded);
+    };
+  }, [dispatch, navigate, sessionId]);
+
   useEffect(() => {
     if (!sessionId || isAuthenticated || isLoginRoute) {
       setAuthResolved(true);
+      setGameStateLoaded(true);
       return;
     }
 
     setAuthResolved(false);
+    setGameStateLoaded(false);
+
+    // Fetch current team to restore auth on refresh
     fetchCurrentTeam({ sessionId })
       .unwrap()
-      .catch(() => undefined)
-      .finally(() => {
+      .then(() => {
         setAuthResolved(true);
+        // After auth is resolved, fetch game state so GameStateRouter knows which screen to show
+        return fetchGameState();
+      })
+      .catch(() => {
+        setAuthResolved(true); // Auth failed, but still mark as resolved so user can login
+      })
+      .finally(() => {
+        setGameStateLoaded(true);
       });
-  }, [fetchCurrentTeam, isAuthenticated, isLoginRoute, sessionId]);
+  }, [
+    fetchCurrentTeam,
+    fetchGameState,
+    isAuthenticated,
+    isLoginRoute,
+    sessionId,
+  ]);
 
-  if (isLoading || (!isLoginRoute && !authResolved)) {
+  if (isLoading || (!isLoginRoute && (!authResolved || !gameStateLoaded))) {
     return <Loader />;
   }
 

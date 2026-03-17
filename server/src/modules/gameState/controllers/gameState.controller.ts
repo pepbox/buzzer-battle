@@ -73,6 +73,13 @@ export const updateGameStateUnified = async (
       return next(new AppError("Action is required.", 400));
     }
 
+    // Ensure gameState exists before processing any action
+    let existingGameState =
+      await gameStateService.fetchGameStateBySessionId(sessionId);
+    if (!existingGameState) {
+      existingGameState = await gameStateService.createGameState(sessionId);
+    }
+
     let gameState;
     let additionalData: any = {};
 

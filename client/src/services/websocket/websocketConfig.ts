@@ -8,6 +8,8 @@ import { setGameState } from "../../features/game/services/gameStateSlice";
 import { adminApi } from "../../features/admin/services/admin.Api";
 import { teamApi } from "../../features/game/services/teamApi";
 import { questionApi } from "../../features/question/services/questions.api";
+import { clearAdmin } from "../../features/admin/services/adminSlice";
+import { clearTeam } from "../../features/game/services/teamSlice";
 
 export const setupGlobalListeners = () => {
   // Game State Changed Event
@@ -131,6 +133,35 @@ export const setupGlobalListeners = () => {
       store.dispatch(teamApi.util.invalidateTags(["Leaderboard"]));
       // Invalidate teams and leaderboard
       // store.dispatch(teamsApi.util.invalidateTags(["Teams", "Leaderboard"]));
+    },
+    "redux",
+  );
+
+  // Session Ended Event - force logout all users in this session
+  websocketService.addGlobalListener(
+    Events.SESSION_ENDED,
+    (data: any) => {
+      console.warn("Session ended event received:", data);
+
+      // Clear both auth states to ensure all user types are logged out
+      store.dispatch(clearAdmin());
+      store.dispatch(clearTeam());
+
+      // Redirect based on current route. Use hard navigation to avoid stale app state.
+      const pathname = window.location.pathname;
+      const sessionIdFromPath = pathname.split("/")[2] || "";
+
+      if (pathname.startsWith("/admin/")) {
+        window.location.replace(`/admin/${sessionIdFromPath}/login`);
+        return;
+      }
+
+      if (pathname.startsWith("/game/")) {
+        window.location.replace(`/game/${sessionIdFromPath}/`);
+        return;
+      }
+
+      window.location.replace("/");
     },
     "redux",
   );
