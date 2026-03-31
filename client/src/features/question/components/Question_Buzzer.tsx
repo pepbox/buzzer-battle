@@ -7,6 +7,12 @@ interface QuestionBuzzerProps {
   questionText: string;
   questionImage?: string;
   questionVideo?: string;
+  questionMedia?: Array<{
+    type: "text" | "image" | "video" | "gif" | "file";
+    url?: string;
+    text?: string;
+    name?: string;
+  }>;
 }
 
 const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
@@ -14,6 +20,7 @@ const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
   questionText,
   questionImage,
   questionVideo,
+  questionMedia,
 }) => {
   const theme = useTheme();
 
@@ -37,45 +44,93 @@ const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
     return "image"; // Default to image (includes gif, jpg, png, webp, etc.)
   };
   const renderMedia = () => {
-    const mediaUrl = questionImage || questionVideo;
+    const explicitMedia = questionMedia || [];
+    const legacyMedia = [
+      questionImage ? { type: "image", url: questionImage } : null,
+      questionVideo ? { type: "video", url: questionVideo } : null,
+    ].filter(Boolean) as Array<{
+      type: "text" | "image" | "video" | "gif" | "file";
+      url?: string;
+      text?: string;
+      name?: string;
+    }>;
 
-    if (!mediaUrl) return null;
-
-    const mediaType = getMediaType(mediaUrl);
+    const mediaItems = explicitMedia.length > 0 ? explicitMedia : legacyMedia;
+    if (!mediaItems.length) return null;
 
     const mediaStyles = {
       width: "100%",
-      maxHeight: "100px",
-      objectFit: "fill" as const,
+      maxHeight: "220px",
+      objectFit: "contain" as const,
       borderRadius: "12px",
-      my: "16px",
+      my: "10px",
     };
 
-    switch (mediaType) {
-      case "image":
+    return mediaItems.map((media, index) => {
+      if (!media) return null;
+
+      if (media.type === "text") {
+        return (
+          <Typography
+            key={`buzzer-media-text-${index}`}
+            variant="body2"
+            sx={{ textAlign: "center", color: "#475569", my: "8px" }}
+          >
+            {media.text}
+          </Typography>
+        );
+      }
+
+      if ((media.type === "image" || media.type === "gif") && media.url) {
         return (
           <Box
+            key={`buzzer-media-image-${index}`}
             component="img"
-            src={mediaUrl}
-            alt="Question media"
+            src={media.url}
+            alt={media.name || `Question media ${index + 1}`}
             sx={mediaStyles}
           />
         );
-      case "video":
+      }
+
+      if (media.type === "video" && media.url) {
         return (
           <Box
+            key={`buzzer-media-video-${index}`}
             component="video"
-            src={mediaUrl}
+            src={media.url}
             controls
-            sx={{
-              ...mediaStyles,
-              maxHeight: "250px",
-            }}
+            sx={mediaStyles}
           />
         );
-      default:
-        return null;
-    }
+      }
+
+      if (media.url) {
+        const derivedType = getMediaType(media.url);
+        if (derivedType === "video") {
+          return (
+            <Box
+              key={`buzzer-media-video-fallback-${index}`}
+              component="video"
+              src={media.url}
+              controls
+              sx={mediaStyles}
+            />
+          );
+        }
+        return (
+          <Box
+            key={`buzzer-media-image-fallback-${index}`}
+            component="img"
+            src={media.url}
+            alt={media.name || `Question media ${index + 1}`}
+            sx={mediaStyles}
+          />
+        );
+      }
+
+      return null;
+    });
   };
   return (
     <Box

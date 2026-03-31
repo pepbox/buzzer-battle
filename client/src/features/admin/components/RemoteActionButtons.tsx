@@ -13,6 +13,7 @@ interface RemoteActionButtonsProps {
   currentQuestionIndex: number;
   totalQuestions: number;
   onNextQuestion: () => void;
+  onShowAnswer: () => void;
   onPauseGame: () => void;
   onResumeGame: () => void;
   onPassToSecondTeam: () => void;
@@ -30,6 +31,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
   currentQuestionIndex,
   totalQuestions,
   onNextQuestion,
+  onShowAnswer,
   onPauseGame,
   onResumeGame,
   onPassToSecondTeam,
@@ -143,6 +145,26 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
         }}
       >
         {currentQuestionIndex === -1 ? "➡️ Start Game" : "➡️ Next Question"}
+      </Button>
+
+      {/* Show Answer Button */}
+      <Button
+        variant="contained"
+        startIcon={
+          isLoading ? <CircularProgress size={20} /> : <CheckCircleIcon />
+        }
+        onClick={onShowAnswer}
+        disabled={isLoading || currentQuestionIndex < 0}
+        sx={{
+          ...buttonBaseStyles,
+          backgroundColor: "#14B8A6",
+          "&:hover": {
+            backgroundColor: "#0D9488",
+            ...buttonBaseStyles["&:hover"],
+          },
+        }}
+      >
+        👁️ Show Answer
       </Button>
 
       {!hasQuestions && (

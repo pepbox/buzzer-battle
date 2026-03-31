@@ -24,12 +24,15 @@ const App: React.FC = () => {
     (state: RootState) => state.session.sessionId,
   );
 
-  // Session endpoint is protected; poll while authenticated so ended sessions force logout.
+  const shouldFetchSession =
+    (isAdminAuthenticated || isUserAuthenticated) && Boolean(sessionId);
+
+  // Session endpoint is protected; fetched upon mount or authentication.
   const { data: sessionData } = useFetchSessionQuery(undefined, {
-    skip: !(isAdminAuthenticated || isUserAuthenticated),
-    pollingInterval: 5000,
-    refetchOnFocus: true,
-    refetchOnReconnect: true,
+    // Avoid repeated refetches while users are idle on paused overlay.
+    skip: !shouldFetchSession,
+    refetchOnFocus: false,
+    refetchOnReconnect: false,
   });
 
   useEffect(() => {

@@ -23,6 +23,7 @@ export enum Events {
   SECOND_CHANCE = "second-chance", // When 2nd team gets a chance
   QUESTION_PASSED = "question-passed", // When admin passes question to next team
   SHOW_LEADERBOARD = "show-leaderboard", // When admin triggers leaderboard view
+  SHOW_ANSWER = "show-answer", // When admin reveals current answer to all users
 
   // Session Events
   SESSION_UPDATE = "session-update", // Session settings changed

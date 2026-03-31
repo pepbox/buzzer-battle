@@ -11,7 +11,8 @@ import BuzzerRound from "../features/game/pages/Buzzer_Round";
 import BuzzerLeaderboard from "../features/game/pages/BuzzerLeaderboard";
 import QuestionRoundPage from "../features/game/pages/Question_Round_Page";
 import LeaderBoardPage from "../features/game/pages/LeaderBoard_Page";
-import Overlay from "../components/ui/Overlay";
+import AnswerRevealPage from "../features/game/pages/AnswerRevealPage";
+import GameLayout from "../features/game/components/GameLayout";
 import { useEffect, useState } from "react";
 import { setSessionId } from "../features/session/services/sessionSlice";
 import { useAppDispatch } from "../app/hooks";
@@ -19,7 +20,6 @@ import { RootState } from "../app/store";
 import { useAppSelector } from "../app/rootReducer";
 import Loader from "../components/ui/Loader";
 import AuthWrapper from "../components/auth/AuthWrapper";
-import GameStateRouter from "../features/game/components/GameStateRouter";
 import { useLazyFetchCurrentTeamQuery } from "../features/game/services/teamApi";
 import { useLazyFetchGameStateQuery } from "../features/game/services/gameStateApi";
 import { websocketService } from "../services/websocket/websocketService";
@@ -125,18 +125,16 @@ const GameMain = () => {
             <AuthWrapper userType="team" redirection={`/game/${sessionId}/`} />
           }
         >
-          {/* Wrap protected routes with Overlay and GameStateRouter */}
           <Route
             element={
-              <Overlay>
-                <GameStateRouter />
-              </Overlay>
+              <GameLayout />
             }
           >
             <Route path="/buzzer" element={<BuzzerRound />} />
             <Route path="/buzzer-leaderboard" element={<BuzzerLeaderboard />} />
             <Route path="/question" element={<QuestionRoundPage />} />
             <Route path="/leaderboard" element={<LeaderBoardPage />} />
+            <Route path="/answer-reveal" element={<AnswerRevealPage />} />
           </Route>
           <Route path="/*" element={<Navigate to={`/game/${sessionId}/`} />} />
         </Route>

@@ -10,6 +10,8 @@ export interface IGameState extends Document {
   buzzerRoundStartTime?: number;
   answeringRoundStartTime?: number;
   idleStartTime?: number;
+  teamsWhoAnsweredThisQuestion: Types.ObjectId[];
+  isNoBuzzerQuestion: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

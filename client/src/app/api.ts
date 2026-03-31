@@ -98,6 +98,7 @@ export const api = createApi({
     "Question",
     "BuzzerLeaderboard",
     "Session",
+    "Folder",
   ],
   endpoints: () => ({}),
 });

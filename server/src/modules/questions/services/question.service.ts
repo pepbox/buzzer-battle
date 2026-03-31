@@ -1,6 +1,7 @@
 import mongoose, { Types } from "mongoose";
 import { Question } from "../models/question.model";
 import { QuestionResponse } from "../models/question.response.model";
+import { QuestionFolder } from "../models/questionFolder.model";
 import { IQuestion, IQuestionResponse } from "../types/interfaces";
 import { Session } from "../../session/models/session.model";
 import TeamService from "../../teams/services/team.service";
@@ -12,13 +13,144 @@ export default class QuestionService {
     this.session = session;
   }
 
-  async fetchAllQuestions(): Promise<IQuestion[]> {
-    const query = Question.find().sort({ createdAt: -1 });
+  async fetchAllQuestions(filters?: {
+    search?: string;
+    folder?: string;
+    sort?: "newest" | "oldest";
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    questions: IQuestion[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const queryFilter: Record<string, any> = {};
+    const sortBy: Record<string, 1 | -1> =
+      filters?.sort === "oldest" ? { createdAt: 1 } : { createdAt: -1 };
+    const page = Math.max(1, Number(filters?.page || 1));
+    const limit = Math.min(100, Math.max(1, Number(filters?.limit || 50)));
+
+    if (filters?.folder && filters.folder !== "all") {
+      queryFilter.folder = filters.folder;
+    }
+
+    if (filters?.search) {
+      const searchRegex = new RegExp(filters.search, "i");
+      queryFilter.$or = [
+        { questionText: searchRegex },
+        { folder: searchRegex },
+        { "options.optionText": searchRegex },
+        { "questionContent.text": searchRegex },
+        { "answerContent.text": searchRegex },
+      ];
+    }
+
+    const query = Question.find(queryFilter)
+      .sort(sortBy)
+      .skip((page - 1) * limit)
+      .limit(limit);
+
+    const countQuery = Question.countDocuments(queryFilter);
+
+    if (this.session) {
+      query.session(this.session);
+      countQuery.session(this.session);
+    }
+
+    const [questions, total] = await Promise.all([query, countQuery]);
+
+    return { questions, total, page, limit };
+  }
+
+  async createQuestion(input: {
+    questionText?: string;
+    questionImage?: string;
+    quetionVideo?: string;
+    options?: { optionId: string; optionText: string }[];
+    correctAnswer?: string;
+    score?: number;
+    folder?: string;
+    keepBuzzer?: boolean;
+    questionContent?: any;
+    questionAssets?: any[];
+    answerContent?: any;
+  }): Promise<IQuestion> {
+    const normalizedFolder = (input.folder || "General").trim();
+
+    await QuestionFolder.findOneAndUpdate(
+      { name: normalizedFolder },
+      { $setOnInsert: { name: normalizedFolder } },
+      { upsert: true, new: true, session: this.session },
+    );
+
+    const question = new Question({
+      questionText: input.questionText || input.questionContent?.text || "",
+      questionImage: input.questionImage,
+      quetionVideo: input.quetionVideo,
+      options: input.options || [],
+      correctAnswer: input.correctAnswer,
+      score: input.score ?? 0,
+      folder: normalizedFolder,
+      keepBuzzer: input.keepBuzzer ?? true,
+      questionContent: input.questionContent,
+      questionAssets: input.questionAssets || [],
+      answerContent: input.answerContent,
+    });
+
+    const options: any = {};
+    if (this.session) {
+      options.session = this.session;
+    }
+
+    await question.save(options);
+    return question;
+  }
+
+  async fetchFolders(): Promise<string[]> {
+    const query = QuestionFolder.find()
+      .sort({ name: 1 })
+      .select("name -_id")
+      .lean();
     if (this.session) {
       query.session(this.session);
     }
 
-    return await query;
+    const folders = await query;
+    const names = folders.map((folder) => folder.name).filter(Boolean);
+
+    if (!names.includes("General")) {
+      return ["General", ...names];
+    }
+
+    return names;
+  }
+
+  async createFolder(name: string): Promise<string> {
+    const normalized = name.trim();
+
+    if (!normalized) {
+      throw new Error("Folder name is required");
+    }
+
+    const existingQuery = QuestionFolder.findOne({ name: normalized });
+    if (this.session) {
+      existingQuery.session(this.session);
+    }
+    const existing = await existingQuery;
+
+    if (existing) {
+      throw new Error("Folder already exists");
+    }
+
+    const folder = new QuestionFolder({ name: normalized });
+    const options: any = {};
+    if (this.session) {
+      options.session = this.session;
+    }
+    await folder.save(options);
+
+    return folder.name;
   }
 
   // Fetch current question based on session and question index
@@ -186,5 +318,51 @@ export default class QuestionService {
     }
 
     return await query;
+  }
+
+  // Create question response for buzzer/verbal answer flow
+  async createBuzzerResponse(
+    questionId: Types.ObjectId | string,
+    teamId: Types.ObjectId | string,
+    isCorrect: boolean,
+  ): Promise<IQuestionResponse> {
+    // Check if team has already responded to this question
+    const existingResponseQuery = QuestionResponse.findOne({
+      questionId,
+      team: teamId,
+    });
+    if (this.session) {
+      existingResponseQuery.session(this.session);
+    }
+
+    const existingResponse = await existingResponseQuery;
+    if (existingResponse) {
+      // Update existing response instead of creating duplicate
+      existingResponse.isCorrect = isCorrect;
+
+      const options: any = {};
+      if (this.session) {
+        options.session = this.session;
+      }
+
+      await existingResponse.save(options);
+      return existingResponse;
+    }
+
+    // Create new response
+    const questionResponse = new QuestionResponse({
+      questionId,
+      team: teamId,
+      response: isCorrect ? "CORRECT" : "INCORRECT", // For buzzer/verbal answers
+      isCorrect: isCorrect,
+    });
+
+    const options: any = {};
+    if (this.session) {
+      options.session = this.session;
+    }
+
+    await questionResponse.save(options);
+    return questionResponse;
   }
 }

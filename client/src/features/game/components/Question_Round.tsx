@@ -16,6 +16,7 @@ interface QuestionRoundProps {
   selectedAnswer?: string;
   disabled?: boolean;
   showOptions?: boolean; // NEW: When false, hide MCQ options (for verbal answer flow)
+  showVerbalHint?: boolean;
 }
 
 const QuestionRound: React.FC<QuestionRoundProps> = ({
@@ -28,6 +29,7 @@ const QuestionRound: React.FC<QuestionRoundProps> = ({
   selectedAnswer,
   disabled = false,
   showOptions = true,
+  showVerbalHint = true,
 }) => {
   const handleAnswerSelect = (answer: string) => {
     if (onAnswerSelect) {
@@ -146,6 +148,7 @@ const QuestionRound: React.FC<QuestionRoundProps> = ({
           onOptionSelect={handleAnswerSelect}
           disabled={disabled}
           showOptions={showOptions}
+          showVerbalHint={showVerbalHint}
         />
       </Box>
 
@@ -222,4 +225,3 @@ const QuestionRound: React.FC<QuestionRoundProps> = ({
 };
 
 export default QuestionRound;
-

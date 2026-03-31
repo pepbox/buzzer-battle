@@ -5,8 +5,9 @@ const questionSchema = new Schema<IQuestion>(
   {
     questionText: {
       type: String,
-      required: true,
+      required: false,
       trim: true,
+      default: "",
     },
     options: [
       {
@@ -17,8 +18,9 @@ const questionSchema = new Schema<IQuestion>(
         },
         optionText: {
           type: String,
-          required: true,
+          required: false,
           trim: true,
+          default: "",
         },
       },
     ],
@@ -32,17 +34,136 @@ const questionSchema = new Schema<IQuestion>(
     },
     correctAnswer: {
       type: String,
-      required: true,
+      required: false,
       // This should be the optionId of the correct option (e.g., 'a', 'b', 'c', 'd')
     },
     score: {
       type: Number,
-      required: true,
+      required: false,
+      default: 0,
+    },
+    folder: {
+      type: String,
+      required: false,
+      trim: true,
+      default: "General",
+    },
+    keepBuzzer: {
+      type: Boolean,
+      default: true,
+    },
+    questionContent: {
+      text: {
+        type: String,
+        required: false,
+        trim: true,
+      },
+      media: [
+        {
+          type: {
+            type: String,
+            enum: ["text", "image", "video", "gif", "file"],
+            required: true,
+          },
+          url: {
+            type: String,
+            required: false,
+          },
+          text: {
+            type: String,
+            required: false,
+          },
+          mimeType: {
+            type: String,
+            required: false,
+          },
+          fileId: {
+            type: String,
+            required: false,
+          },
+          name: {
+            type: String,
+            required: false,
+          },
+        },
+      ],
+    },
+    questionAssets: [
+      {
+        type: {
+          type: String,
+          enum: ["text", "image", "video", "gif", "file"],
+          required: true,
+        },
+        url: {
+          type: String,
+          required: false,
+        },
+        text: {
+          type: String,
+          required: false,
+        },
+        mimeType: {
+          type: String,
+          required: false,
+        },
+        fileId: {
+          type: String,
+          required: false,
+        },
+        name: {
+          type: String,
+          required: false,
+        },
+      },
+    ],
+    answerContent: {
+      text: {
+        type: String,
+        required: false,
+        trim: true,
+      },
+      media: [
+        {
+          type: {
+            type: String,
+            enum: ["text", "image", "video", "gif", "file"],
+            required: true,
+          },
+          url: {
+            type: String,
+            required: false,
+          },
+          text: {
+            type: String,
+            required: false,
+          },
+          mimeType: {
+            type: String,
+            required: false,
+          },
+          fileId: {
+            type: String,
+            required: false,
+          },
+          name: {
+            type: String,
+            required: false,
+          },
+        },
+      ],
     },
   },
   {
     timestamps: true,
-  }
+  },
 );
+
+questionSchema.index({ folder: 1, createdAt: -1 });
+questionSchema.index({
+  questionText: "text",
+  folder: "text",
+  "options.optionText": "text",
+});
 
 export const Question = model<IQuestion>("Question", questionSchema);

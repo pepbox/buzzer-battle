@@ -103,6 +103,29 @@ export const setupGlobalListeners = () => {
     "redux",
   );
 
+  // Answer Marked Correct Event
+  websocketService.addGlobalListener(
+    Events.ANSWER_MARKED_CORRECT,
+    (data: any) => {
+      console.log("Answer marked correct:", data);
+      store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
+      store.dispatch(teamApi.util.invalidateTags(["Leaderboard", "Team"]));
+      store.dispatch(questionApi.util.invalidateTags(["Question"]));
+    },
+    "redux",
+  );
+
+  // Answer Marked Wrong Event
+  websocketService.addGlobalListener(
+    Events.ANSWER_MARKED_WRONG,
+    (data: any) => {
+      console.log("Answer marked wrong:", data);
+      store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
+      store.dispatch(teamApi.util.invalidateTags(["Leaderboard", "Team"]));
+    },
+    "redux",
+  );
+
   // Second Chance Event
   websocketService.addGlobalListener(
     Events.SECOND_CHANCE,
@@ -133,6 +156,16 @@ export const setupGlobalListeners = () => {
       store.dispatch(teamApi.util.invalidateTags(["Leaderboard"]));
       // Invalidate teams and leaderboard
       // store.dispatch(teamsApi.util.invalidateTags(["Teams", "Leaderboard"]));
+    },
+    "redux",
+  );
+
+  websocketService.addGlobalListener(
+    Events.SHOW_ANSWER,
+    (data: any) => {
+      console.log("Show answer triggered:", data);
+      store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
+      store.dispatch(questionApi.util.invalidateTags(["Question"]));
     },
     "redux",
   );

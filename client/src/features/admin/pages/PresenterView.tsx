@@ -7,6 +7,7 @@ import { RootState } from "../../../app/store";
 import { useFetchSessionQuery } from "../../session/services/session.api";
 import { useFetchOverallLeaderboardQuery } from "../../game/services/teamApi";
 import { useFetchBuzzerLeaderboardQuery } from "../../game/services/buzzerApi";
+import { useFetchGameStateQuery } from "../../game/services/gameStateApi";
 import { setSessionId } from "../../session/services/sessionSlice";
 import PresenterGameView from "../components/PresenterGameView";
 import Loader from "../../../components/ui/Loader";
@@ -30,7 +31,7 @@ const PresenterView: React.FC = () => {
 
   // Get game state from Redux
   const gameState = useAppSelector(
-    (state: RootState) => state.gameState.gameState
+    (state: RootState) => state.gameState.gameState,
   );
 
   // Fetch session data
@@ -46,6 +47,9 @@ const PresenterView: React.FC = () => {
 
   // Fetch buzzer leaderboard data
   const { data: buzzerLeaderboardData } = useFetchBuzzerLeaderboardQuery();
+
+  // Fetch game state to ensure it's loaded on mount and refresh
+  const { isLoading: gameStateLoading } = useFetchGameStateQuery();
 
   const buzzerLeaderboard = buzzerLeaderboardData?.data?.leaderboard || [];
   const buzzerRoundStartTime = gameState?.buzzerRoundStartTime;
@@ -82,7 +86,7 @@ const PresenterView: React.FC = () => {
     setIsMuted(!isMuted);
   };
 
-  if (sessionLoading || leaderboardLoading) {
+  if (sessionLoading || leaderboardLoading || gameStateLoading) {
     return <Loader />;
   }
 
@@ -157,7 +161,7 @@ const PresenterView: React.FC = () => {
         sx={{
           width: "70%",
           height: "100%",
-          overflow: "hidden",
+          overflow: "auto",
         }}
       >
         <PresenterGameView session={session?.data} />
@@ -187,7 +191,13 @@ const PresenterView: React.FC = () => {
               borderBottom: "2px solid #444",
             }}
           >
-            <Box sx={{ fontSize: 32, fontWeight: "bold", color: isBuzzerRound ? "#00BFFF" : "#FFD700" }}>
+            <Box
+              sx={{
+                fontSize: 32,
+                fontWeight: "bold",
+                color: isBuzzerRound ? "#00BFFF" : "#FFD700",
+              }}
+            >
               {isBuzzerRound ? "⏱️ BUZZER QUEUE ⏱️" : "🏆 LEADERBOARD 🏆"}
             </Box>
           </Box>
@@ -208,7 +218,10 @@ const PresenterView: React.FC = () => {
 
                   // Calculate elapsed time
                   const elapsedTime = buzzerRoundStartTime
-                    ? Math.max(0, Number(entry.timestamp) - buzzerRoundStartTime)
+                    ? Math.max(
+                        0,
+                        Number(entry.timestamp) - buzzerRoundStartTime,
+                      )
                     : 0;
 
                   return (
@@ -246,20 +259,25 @@ const PresenterView: React.FC = () => {
                           {getRankIcon(rank)}
                         </Box>
                         <Box sx={{ flex: 1 }}>
-                            <Box sx={{ fontSize: 20, fontWeight: "bold" }}>
-                              Team #{entry.teamNumber}
-                            </Box>
-                            <Box sx={{ fontSize: 14, color: "#888" }}>
-                              {entry.teamName}
-                            </Box>
+                          <Box sx={{ fontSize: 20, fontWeight: "bold" }}>
+                            Team #{entry.teamNumber}
                           </Box>
+                          <Box sx={{ fontSize: 14, color: "#888" }}>
+                            {entry.teamName}
+                          </Box>
+                        </Box>
                       </Box>
                       {/* Elapsed Time Display */}
                       <Box
                         sx={{
                           fontSize: 20,
                           fontWeight: "bold",
-                          color: index === 0 ? "#00BFFF" : index < 3 ? "#87CEEB" : "#888",
+                          color:
+                            index === 0
+                              ? "#00BFFF"
+                              : index < 3
+                                ? "#87CEEB"
+                                : "#888",
                           fontFamily: "monospace",
                         }}
                       >
@@ -281,90 +299,88 @@ const PresenterView: React.FC = () => {
                 Waiting for teams to press buzzer...
               </Box>
             )
-          ) : (
-            // LEADERBOARD - Show during other states
-            leaderboardData?.data?.leaderboard &&
-              leaderboardData?.data.leaderboard.length > 0 ? (
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                {leaderboardData?.data.leaderboard.map(
-                  (team: any, index: number) => {
-                    const rank = index + 1;
-                    const getRankIcon = (rank: number) => {
-                      if (rank === 1) return "🥇";
-                      if (rank === 2) return "🥈";
-                      if (rank === 3) return "🥉";
-                      return `#${rank}`;
-                    };
+          ) : // LEADERBOARD - Show during other states
+          leaderboardData?.data?.leaderboard &&
+            leaderboardData?.data.leaderboard.length > 0 ? (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {leaderboardData?.data.leaderboard.map(
+                (team: any, index: number) => {
+                  const rank = index + 1;
+                  const getRankIcon = (rank: number) => {
+                    if (rank === 1) return "🥇";
+                    if (rank === 2) return "🥈";
+                    if (rank === 3) return "🥉";
+                    return `#${rank}`;
+                  };
 
-                    return (
+                  return (
+                    <Box
+                      key={team._id}
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: 2,
+                        backgroundColor:
+                          index === 0
+                            ? "rgba(255, 215, 0, 0.1)"
+                            : index === 1
+                              ? "rgba(192, 192, 192, 0.1)"
+                              : index === 2
+                                ? "rgba(205, 127, 50, 0.1)"
+                                : "rgba(255, 255, 255, 0.05)",
+                        borderRadius: 2,
+                        border:
+                          index < 3
+                            ? "2px solid rgba(255, 215, 0, 0.3)"
+                            : "none",
+                      }}
+                    >
                       <Box
-                        key={team._id}
                         sx={{
                           display: "flex",
                           alignItems: "center",
-                          justifyContent: "space-between",
-                          padding: 2,
-                          backgroundColor:
-                            index === 0
-                              ? "rgba(255, 215, 0, 0.1)"
-                              : index === 1
-                                ? "rgba(192, 192, 192, 0.1)"
-                                : index === 2
-                                  ? "rgba(205, 127, 50, 0.1)"
-                                  : "rgba(255, 255, 255, 0.05)",
-                          borderRadius: 2,
-                          border:
-                            index < 3
-                              ? "2px solid rgba(255, 215, 0, 0.3)"
-                              : "none",
+                          gap: 2,
+                          flex: 1,
                         }}
                       >
-                        <Box
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 2,
-                            flex: 1,
-                          }}
-                        >
-                          <Box sx={{ fontSize: 24, minWidth: 50 }}>
-                            {getRankIcon(rank)}
-                          </Box>
-                          <Box sx={{ flex: 1 }}>
-                            <Box sx={{ fontSize: 20, fontWeight: "bold" }}>
-                              Team #{team.teamNumber}
-                            </Box>
-                            <Box sx={{ fontSize: 14, color: "#888" }}>
-                              {team.teamName}
-                            </Box>
-                          </Box>
+                        <Box sx={{ fontSize: 24, minWidth: 50 }}>
+                          {getRankIcon(rank)}
                         </Box>
-                        <Box
-                          sx={{
-                            fontSize: 24,
-                            fontWeight: "bold",
-                            color: "#FFD700",
-                          }}
-                        >
-                          {team.teamScore}
+                        <Box sx={{ flex: 1 }}>
+                          <Box sx={{ fontSize: 20, fontWeight: "bold" }}>
+                            Team #{team.teamNumber}
+                          </Box>
+                          <Box sx={{ fontSize: 14, color: "#888" }}>
+                            {team.teamName}
+                          </Box>
                         </Box>
                       </Box>
-                    );
-                  }
-                )}
-              </Box>
-            ) : (
-              <Box
-                sx={{
-                  textAlign: "center",
-                  py: 4,
-                  color: "#888",
-                  fontSize: 18,
-                }}
-              >
-                No teams have scored yet
-              </Box>
-            )
+                      <Box
+                        sx={{
+                          fontSize: 24,
+                          fontWeight: "bold",
+                          color: "#FFD700",
+                        }}
+                      >
+                        {team.teamScore}
+                      </Box>
+                    </Box>
+                  );
+                },
+              )}
+            </Box>
+          ) : (
+            <Box
+              sx={{
+                textAlign: "center",
+                py: 4,
+                color: "#888",
+                fontSize: 18,
+              }}
+            >
+              No teams have scored yet
+            </Box>
           )}
         </Box>
       </Box>

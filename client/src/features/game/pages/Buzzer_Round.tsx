@@ -135,9 +135,16 @@ const BuzzerRound: React.FC = () => {
         >
           <QuestionBuzzer
             questionNumber={(currentQuestionIndex || 0) + 1}
-            questionText={question?.questionText || ""}
+            questionText={
+              question?.questionContent?.text || question?.questionText || ""
+            }
             questionImage={question?.questionImage}
             questionVideo={question?.quetionVideo}
+            questionMedia={
+              question?.questionContent?.media?.length
+                ? question.questionContent.media
+                : question?.questionAssets
+            }
           />
         </Box>
 
@@ -150,7 +157,7 @@ const BuzzerRound: React.FC = () => {
             display: "flex",
             justifyContent: "center",
             marginTop: "45px",
-            marginBottom: "16px"
+            marginBottom: "16px",
           }}
         >
           <Buzzer
@@ -166,4 +173,3 @@ const BuzzerRound: React.FC = () => {
 };
 
 export default BuzzerRound;
-

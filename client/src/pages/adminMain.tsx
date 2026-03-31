@@ -13,6 +13,7 @@ import { useLazyFetchAdminQuery } from "../features/admin/services/admin.Api";
 import { useEffect, useState } from "react";
 import DashboardPage from "../features/admin/pages/DshboardPage";
 import AdminLogin from "../features/admin/pages/AdminLogin";
+import QuestionLibraryPage from "../features/admin/pages/QuestionLibraryPage";
 import AuthWrapper from "../components/auth/AuthWrapper";
 import { useAppDispatch } from "../app/hooks";
 import { setSessionId } from "../features/session/services/sessionSlice";
@@ -103,6 +104,7 @@ const AdminMain = () => {
           <Route path="/remote-control" element={<RemoteControl />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/presenter" element={<PresenterView />} />
+          <Route path="/questions" element={<QuestionLibraryPage />} />
         </Route>
         <Route
           path="/*"

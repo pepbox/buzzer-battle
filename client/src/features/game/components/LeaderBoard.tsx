@@ -1,6 +1,6 @@
 import React from "react";
-import { Box, Typography, IconButton } from "@mui/material";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { Box, Typography } from "@mui/material";
+// import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import starImage from "../../../assets/questions/star.webp";
 import doubleCoinImage from "../../../assets/questions/double_coin.webp";
 import podiumImage from "../../../assets/leaderboard/podium.webp";
@@ -18,7 +18,7 @@ interface LeaderBoardProps {
   onBack?: () => void;
 }
 
-const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams, onBack }) => {
+const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams }) => {
   // Sort teams by rank and get top 3 for podium
   const sortedTeams = [...teams].sort((a, b) => a.rank - b.rank);
   const topThree = sortedTeams.slice(0, 3);
@@ -77,23 +77,28 @@ const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams, onBack }) => {
           display: "flex",
           alignItems: "center",
           padding: "4px 20px",
-          justifyContent: "flex-start",
+          justifyContent: "flex-center",
         }}
       >
-        <IconButton
+        {/* <IconButton
           onClick={onBack}
           sx={{
             color: "black",
           }}
         >
           <ArrowBackIcon />
-        </IconButton>
+        </IconButton> */}
         <Typography
           variant="h6"
           sx={{
             color: "black",
             fontWeight: 700,
             fontSize: "12px",
+            textAlign: "center",
+            alignContent: "center",
+            display: "flex",
+            justifyContent: "center",
+            flex: 1,
           }}
         >
           Leaderboard

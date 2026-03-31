@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Box, Typography } from "@mui/material";
+import { useNavigate, useParams } from "react-router-dom";
 import { useFetchBuzzerLeaderboardQuery } from "../services/buzzerApi";
+import { useFetchCurrentQuestionQuery } from "../../question/services/questions.api";
 import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
 import Loader from "../../../components/ui/Loader";
@@ -16,11 +18,30 @@ import positionFour from "../../../assets/leaderboard/four.webp";
 import positionFive from "../../../assets/leaderboard/five.webp";
 
 const BuzzerLeaderboard: React.FC = () => {
+  const normalizeId = (value: any): string | undefined => {
+    if (!value) return undefined;
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (typeof value._id === "string") return value._id;
+      if (value._id) return String(value._id);
+      if (value.id) return String(value.id);
+      return String(value);
+    }
+    return String(value);
+  };
+
+  const navigate = useNavigate();
+  const { sessionId } = useParams<{ sessionId: string }>();
+
   // Get current team and game state from Redux
   const team = useAppSelector((state: RootState) => state.team.team);
   const gameState = useAppSelector(
-    (state: RootState) => state.gameState.gameState
+    (state: RootState) => state.gameState.gameState,
   );
+
+  // Fetch current question to check if it's a no-buzzer question
+  const { data: questionData } = useFetchCurrentQuestionQuery();
+  const isNoBuzzerQuestion = questionData?.data?.question?.keepBuzzer === false;
 
   // Fetch buzzer leaderboard
   const {
@@ -32,20 +53,26 @@ const BuzzerLeaderboard: React.FC = () => {
   const leaderboard = leaderboardData?.data?.leaderboard || [];
 
   // Find current team's entry in the leaderboard
-  const myTeamEntry = leaderboard.find((entry) => entry.teamId === team?._id);
+  const myTeamEntry = leaderboard.find(
+    (entry) => normalizeId(entry.teamId) === normalizeId(team?._id),
+  );
 
   // Get current answering team
   const currentAnsweringTeam = gameState?.currentAnsweringTeam;
-  const answeringTeamId =
-    typeof currentAnsweringTeam === "string"
-      ? currentAnsweringTeam
-      : currentAnsweringTeam?._id;
+  const answeringTeamId = normalizeId(currentAnsweringTeam);
 
   // Check if we're in answering state
   const isAnsweringState = gameState?.gameStatus === "answering";
 
   // Check if my team is the answering team
-  const isMyTeamAnswering = answeringTeamId === team?._id;
+  const isMyTeamAnswering = answeringTeamId === normalizeId(team?._id);
+
+  // Redirect answering team to question page
+  useEffect(() => {
+    if (isMyTeamAnswering && isAnsweringState && sessionId) {
+      navigate(`/game/${sessionId}/question`);
+    }
+  }, [isMyTeamAnswering, isAnsweringState, sessionId, navigate]);
 
   // Position badge images
   const positionBadges: { [key: number]: string } = {
@@ -72,7 +99,7 @@ const BuzzerLeaderboard: React.FC = () => {
       const seconds = Math.floor((totalMs % 60000) / 1000);
       const milliseconds = Math.floor((totalMs % 1000) / 10); // Get centiseconds (2 digits)
 
-      return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}:${String(milliseconds).padStart(2, '0')}`;
+      return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}:${String(milliseconds).padStart(2, "0")}`;
     } catch {
       return "00:00:00";
     }
@@ -122,7 +149,9 @@ const BuzzerLeaderboard: React.FC = () => {
             borderRadius: "12px",
           }}
         >
-          {isMyTeamAnswering ? "🎯 Your turn to answer!" : "🎯 Another team is answering..."}
+          {isMyTeamAnswering
+            ? "🎯 Your turn to answer!"
+            : "🎯 Another team is answering..."}
         </Typography>
       )}
 
@@ -247,9 +276,9 @@ const BuzzerLeaderboard: React.FC = () => {
                     Math.max(
                       0,
                       Number(myTeamEntry.timestamp || 0) -
-                      Number(gameState?.buzzerRoundStartTime || 0)
-                    )
-                  )
+                        Number(gameState?.buzzerRoundStartTime || 0),
+                    ),
+                  ),
                 )}
               </Typography>
             </Box>
@@ -269,7 +298,7 @@ const BuzzerLeaderboard: React.FC = () => {
           </>
         ) : (
           <>
-            {/* Not Pressed Message */}
+            {/* Not Pressed / Not Selected Message */}
             <Typography
               variant="h5"
               sx={{
@@ -286,7 +315,9 @@ const BuzzerLeaderboard: React.FC = () => {
                 fontSize: "16px",
               }}
             >
-              You haven't pressed the buzzer yet
+              {isNoBuzzerQuestion
+                ? "Waiting for admin to select your team..."
+                : "You haven't pressed the buzzer yet"}
             </Typography>
           </>
         )}

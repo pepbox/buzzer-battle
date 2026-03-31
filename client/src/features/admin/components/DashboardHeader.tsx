@@ -15,13 +15,7 @@ import {
   DialogActions,
   TextField,
   IconButton,
-  Checkbox,
-  List,
-  ListItemButton,
-  ListItemText,
-  ListItemIcon,
   Tooltip,
-  CircularProgress,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { DashboardHeaderProps } from "../types/interfaces";
@@ -34,16 +28,13 @@ import QuizIcon from "@mui/icons-material/Quiz";
 import EditIcon from "@mui/icons-material/Edit";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import {
-  useFetchQuestionBankQuery,
   useAdminLogoutMutation,
   useUpdateNumberOfTeamsMutation,
-  useUpdateSessionQuestionsMutation,
 } from "../services/admin.Api";
 import GlobalButton from "../../../components/ui/button";
 import { useAppDispatch, useAppSelector } from "../../../app/rootReducer";
 import { RootState } from "../../../app/store";
 import { clearAdmin } from "../services/adminSlice";
-import { useFetchSessionQuery } from "../../session/services/session.api";
 
 // Dashboard Header Component
 const DashboardHeader: React.FC<DashboardHeaderProps> = ({
@@ -55,7 +46,6 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 }) => {
   const [AdminLogout] = useAdminLogoutMutation();
   const [UpdateNumberOfTeams] = useUpdateNumberOfTeamsMutation();
-  const [UpdateSessionQuestions] = useUpdateSessionQuestionsMutation();
   const { admin } = useAdminAuth();
   const navigate = useNavigate();
   const { sessionId } = useAppSelector((state: RootState) => state.session);
@@ -67,17 +57,12 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   const dispatch = useAppDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-  const { data: sessionResponse } = useFetchSessionQuery();
-  const { data: questionBankResponse, isLoading: isQuestionBankLoading } =
-    useFetchQuestionBankQuery();
 
   // State for edit teams modal
   const [editTeamsModal, setEditTeamsModal] = useState({
     open: false,
     value: "",
   });
-  const [questionModalOpen, setQuestionModalOpen] = useState(false);
-  const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
 
   const handleLogout = () => {
     AdminLogout({})
@@ -92,13 +77,13 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   };
 
   const handleRemoteControl = () => {
-    navigate(`/admin/${sessionId}/remote-control`);
+    window.open(`/admin/${sessionId}/remote-control`, "_blank");
   };
 
   const handlePresenterView = () => {
     // Open presenter view in new window for dual-screen setup
     const presenterUrl = `/admin/${sessionId}/presenter`;
-    navigate(presenterUrl);
+    window.open(presenterUrl, "_blank");
   };
 
   // Handle edit teams modal
@@ -132,35 +117,8 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       });
   };
 
-  const currentSessionQuestionIds = sessionResponse?.data?.questions || [];
-  const questionBank = questionBankResponse?.data?.questions || [];
-
-  const handleOpenQuestionModal = () => {
-    setSelectedQuestionIds(currentSessionQuestionIds);
-    setQuestionModalOpen(true);
-  };
-
-  const handleCloseQuestionModal = () => {
-    setQuestionModalOpen(false);
-  };
-
-  const handleToggleQuestion = (questionId: string) => {
-    setSelectedQuestionIds((current) =>
-      current.includes(questionId)
-        ? current.filter((id) => id !== questionId)
-        : [...current, questionId],
-    );
-  };
-
-  const handleSaveQuestions = () => {
-    UpdateSessionQuestions({ questions: selectedQuestionIds })
-      .unwrap()
-      .then(() => {
-        setQuestionModalOpen(false);
-      })
-      .catch((error: any) => {
-        console.error("Failed to update session questions:", error);
-      });
+  const handleOpenQuestionLibrary = () => {
+    window.open(`/admin/${sessionId}/questions`, "_blank");
   };
 
   return (
@@ -356,7 +314,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                       <Tooltip title="Add Questions">
                         <IconButton
                           size="small"
-                          onClick={handleOpenQuestionModal}
+                          onClick={handleOpenQuestionLibrary}
                           color="primary"
                           sx={{ ml: 0.5 }}
                         >
@@ -492,62 +450,6 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             color="primary"
           >
             Save
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={questionModalOpen}
-        onClose={handleCloseQuestionModal}
-        fullWidth
-        maxWidth="md"
-      >
-        <DialogTitle>Select Questions</DialogTitle>
-        <DialogContent>
-          {isQuestionBankLoading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-              <CircularProgress />
-            </Box>
-          ) : (
-            <List sx={{ maxHeight: 420, overflowY: "auto" }}>
-              {questionBank.map((question) => {
-                const isSelected = selectedQuestionIds.includes(question._id);
-                return (
-                  <ListItemButton
-                    key={question._id}
-                    onClick={() => handleToggleQuestion(question._id)}
-                    dense
-                  >
-                    <ListItemIcon>
-                      <Checkbox
-                        edge="start"
-                        checked={isSelected}
-                        tabIndex={-1}
-                      />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={question.questionText}
-                      secondary={`Score: ${question.score} | Options: ${question.options.length}`}
-                    />
-                  </ListItemButton>
-                );
-              })}
-              {!questionBank.length && (
-                <Typography color="text.secondary" sx={{ p: 2 }}>
-                  No questions found in the database.
-                </Typography>
-              )}
-            </List>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseQuestionModal}>Cancel</Button>
-          <Button
-            onClick={handleSaveQuestions}
-            variant="contained"
-            color="primary"
-          >
-            Save Questions ({selectedQuestionIds.length})
           </Button>
         </DialogActions>
       </Dialog>

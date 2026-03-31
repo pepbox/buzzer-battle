@@ -11,6 +11,12 @@ export interface QuestionData {
   text?: string;
   image?: string;
   video?: string;
+  media?: Array<{
+    type: "text" | "image" | "video" | "gif" | "file";
+    url?: string;
+    text?: string;
+    name?: string;
+  }>;
   score?: number;
   options: QuestionOption[];
 }
@@ -23,6 +29,7 @@ interface QuestionProps {
   showResults?: boolean;
   correctOptionId?: string;
   showOptions?: boolean; // NEW: When false, hide MCQ options (for verbal answer flow)
+  showVerbalHint?: boolean;
 }
 
 const Question: React.FC<QuestionProps> = ({
@@ -33,6 +40,7 @@ const Question: React.FC<QuestionProps> = ({
   showResults = false,
   correctOptionId,
   showOptions = true, // Default to showing options for backward compatibility
+  showVerbalHint = true,
 }) => {
   const [internalSelectedId, setInternalSelectedId] = useState<string>("");
 
@@ -111,45 +119,105 @@ const Question: React.FC<QuestionProps> = ({
   };
 
   const renderMedia = () => {
-    const mediaUrl = questionData.image || questionData.video;
+    const explicitMedia = questionData.media || [];
+    const legacyMedia = [
+      questionData.image ? { type: "image", url: questionData.image } : null,
+      questionData.video ? { type: "video", url: questionData.video } : null,
+    ].filter(Boolean) as Array<{
+      type: "text" | "image" | "video" | "gif" | "file";
+      url?: string;
+      text?: string;
+      name?: string;
+    }>;
 
-    if (!mediaUrl) return null;
-
-    const mediaType = getMediaType(mediaUrl);
+    const mediaItems = explicitMedia.length > 0 ? explicitMedia : legacyMedia;
+    if (!mediaItems.length) return null;
 
     const mediaStyles = {
       width: "100%",
-      maxHeight: "200px",
-      objectFit: "cover" as const,
+      maxHeight: "250px",
+      objectFit: "contain" as const,
       borderRadius: "12px",
-      marginBottom: "16px",
+      my: "10px",
     };
 
-    switch (mediaType) {
-      case "image":
+    return mediaItems.map((media, index) => {
+      if (!media) return null;
+
+      if (media.type === "text") {
+        return (
+          <Typography
+            key={`media-text-${index}`}
+            variant="body2"
+            sx={{ textAlign: "center", color: "#475569", my: "8px" }}
+          >
+            {media.text}
+          </Typography>
+        );
+      }
+
+      if ((media.type === "image" || media.type === "gif") && media.url) {
         return (
           <Box
+            key={`media-image-${index}`}
             component="img"
-            src={mediaUrl}
-            alt="Question media"
+            src={media.url}
+            alt={media.name || `Question media ${index + 1}`}
             sx={mediaStyles}
           />
         );
-      case "video":
+      }
+
+      if (media.type === "video" && media.url) {
         return (
           <Box
+            key={`media-video-${index}`}
             component="video"
-            src={mediaUrl}
+            src={media.url}
             controls
-            sx={{
-              ...mediaStyles,
-              maxHeight: "250px",
-            }}
+            sx={mediaStyles}
           />
         );
-      default:
-        return null;
-    }
+      }
+
+      if (media.type === "file") {
+        return (
+          <Typography
+            key={`media-file-${index}`}
+            variant="body2"
+            sx={{ textAlign: "center", color: "#1D4ED8", my: "8px" }}
+          >
+            {media.name || "Attached file"}
+          </Typography>
+        );
+      }
+
+      if (media.url) {
+        const derivedType = getMediaType(media.url);
+        if (derivedType === "video") {
+          return (
+            <Box
+              key={`media-video-fallback-${index}`}
+              component="video"
+              src={media.url}
+              controls
+              sx={mediaStyles}
+            />
+          );
+        }
+        return (
+          <Box
+            key={`media-image-fallback-${index}`}
+            component="img"
+            src={media.url}
+            alt={media.name || `Question media ${index + 1}`}
+            sx={mediaStyles}
+          />
+        );
+      }
+
+      return null;
+    });
   };
 
   return (
@@ -184,7 +252,13 @@ const Question: React.FC<QuestionProps> = ({
             textAlign: "center",
             lineHeight: 1.4,
             marginBottom:
-              questionData.image || questionData.video ? "20px" : (showOptions ? "24px" : "0px"),
+              questionData.media?.length ||
+              questionData.image ||
+              questionData.video
+                ? "20px"
+                : showOptions
+                  ? "24px"
+                  : "0px",
             wordBreak: "break-word",
           }}
         >
@@ -193,7 +267,7 @@ const Question: React.FC<QuestionProps> = ({
       )}
 
       {/* Verbal Answer Hint - Only show when options are hidden */}
-      {!showOptions && (
+      {!showOptions && showVerbalHint && (
         <Typography
           variant="body2"
           sx={{
@@ -300,4 +374,3 @@ const Question: React.FC<QuestionProps> = ({
 };
 
 export default Question;
-

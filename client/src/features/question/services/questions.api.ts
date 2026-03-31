@@ -5,13 +5,32 @@ export interface QuestionOption {
   optionText: string;
 }
 
+export interface MediaItem {
+  type: "text" | "image" | "video" | "gif" | "file";
+  url?: string;
+  text?: string;
+  mimeType?: string;
+  fileId?: string;
+  name?: string;
+}
+
+export interface ContentSection {
+  text?: string;
+  media?: MediaItem[];
+}
+
 export interface Question {
   _id: string;
   questionText: string;
   questionImage?: string;
   quetionVideo?: string;
   options: QuestionOption[];
+  correctAnswer?: string;
+  questionContent?: ContentSection;
+  answerContent?: ContentSection;
+  questionAssets?: MediaItem[];
   score: number;
+  keepBuzzer?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

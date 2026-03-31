@@ -129,17 +129,46 @@ export const updateGameStateUnified = async (
             finalLeaderboard,
           });
         } else {
-          // Game is continuing - start buzzer round for this question
-          const buzzerStartTime = Date.now();
-
-          // Update to BUZZER_ROUND status and save timestamp
-          gameState = await gameStateService.startBuzzerRound(sessionId);
-
           // Get current question
           const currentQuestion = await questionService.fetchCurrentQuestion(
             sessionId,
             gameState.currentQuestionIndex,
           );
+
+          if (!currentQuestion) {
+            return next(new AppError("Current question not found.", 404));
+          }
+
+          if (currentQuestion.keepBuzzer === false) {
+            // For no-buzzer questions, do NOT auto-select a team.
+            // Admin will manually select via dropdown in RemoteControl.
+            // Keep game in IDLE state waiting for manual team selection.
+            gameState = await gameStateService.updateGameState(sessionId, {
+              gameStatus: GameStatus.IDLE,
+              currentAnsweringTeam: null,
+            });
+
+            // Mark as no-buzzer question so frontend knows to show question, not answer
+            gameState.isNoBuzzerQuestion = true;
+            gameState.teamsWhoAnsweredThisQuestion = [];
+            await gameState.save();
+
+            SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+              gameStatus: gameState.gameStatus,
+              currentQuestionIndex: gameState.currentQuestionIndex,
+              currentAnsweringTeam: gameState.currentAnsweringTeam,
+              keepBuzzer: false,
+              isNoBuzzerQuestion: true,
+            });
+
+            break;
+          }
+
+          // Game is continuing - start buzzer round for this question
+          const buzzerStartTime = Date.now();
+
+          // Update to BUZZER_ROUND status and save timestamp
+          gameState = await gameStateService.startBuzzerRound(sessionId);
 
           // Get session to fetch questionTimeLimit
           const session = await Session.findById(sessionId);
@@ -165,6 +194,32 @@ export const updateGameStateUnified = async (
             buzzerRoundStartTime: buzzerStartTime,
           });
         }
+        break;
+
+      case "SHOW_ANSWER":
+        // Must have an active/current question before revealing answer.
+        if (existingGameState.currentQuestionIndex < 0) {
+          return next(
+            new AppError("No active question to reveal answer for.", 400),
+          );
+        }
+
+        // Move to idle so /questions/current returns answer content for teams.
+        gameState = await gameStateService.updateGameState(sessionId, {
+          gameStatus: GameStatus.IDLE,
+        });
+
+        SessionEmitters.toSession(sessionId, Events.SHOW_ANSWER, {
+          currentQuestionIndex: gameState.currentQuestionIndex,
+          timestamp: Date.now(),
+        });
+
+        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+          gameStatus: gameState.gameStatus,
+          currentQuestionIndex: gameState.currentQuestionIndex,
+          currentAnsweringTeam: gameState.currentAnsweringTeam,
+          forceAnswerReveal: true,
+        });
         break;
 
       case "PASS_TO_SECOND_TEAM":
@@ -657,19 +712,26 @@ export const markAnswer = async (
     );
 
     let pointsAwarded = 0;
+    const currentQuestion = await questionService.fetchCurrentQuestion(
+      sessionId,
+      gameState.currentQuestionIndex,
+    );
+
+    if (!currentQuestion) {
+      return next(new AppError("Current question not found.", 404));
+    }
+
+    // Save the response to database for dashboard tracking
+    await questionService.createBuzzerResponse(
+      currentQuestion._id as Types.ObjectId,
+      teamId,
+      isCorrect,
+    );
 
     if (isCorrect) {
-      // Fetch current question to get score value
-      const currentQuestion = await questionService.fetchCurrentQuestion(
-        sessionId,
-        gameState.currentQuestionIndex,
-      );
-
-      if (currentQuestion) {
-        pointsAwarded = currentQuestion.score || 100;
-        // Update team score
-        await teamService.updateTeamScore(teamId, pointsAwarded);
-      }
+      pointsAwarded = currentQuestion.score || 100;
+      // Update team score
+      await teamService.updateTeamScore(teamId, pointsAwarded);
 
       // Emit ANSWER_MARKED_CORRECT to the session
       SessionEmitters.toSession(sessionId, Events.ANSWER_MARKED_CORRECT, {
@@ -701,13 +763,40 @@ export const markAnswer = async (
       });
     } else {
       // Emit ANSWER_MARKED_WRONG to the session
-      // Stay in ANSWERING state to allow "Pass to Second Team" action
+      // For no-buzzer questions, return to IDLE so admin can manually select next team.
+      // For buzzer questions, stay in ANSWERING so admin can pass to second team.
       SessionEmitters.toSession(sessionId, Events.ANSWER_MARKED_WRONG, {
         teamId,
         isCorrect: false,
         pointsAwarded: 0,
         timestamp: Date.now(),
       });
+
+      if (currentQuestion?.keepBuzzer === false) {
+        const updatedState = await gameStateService.updateGameState(sessionId, {
+          gameStatus: GameStatus.IDLE,
+          currentAnsweringTeam: null,
+        });
+
+        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+          gameStatus: updatedState.gameStatus,
+          currentQuestionIndex: updatedState.currentQuestionIndex,
+          currentAnsweringTeam: updatedState.currentAnsweringTeam,
+          keepBuzzer: false,
+        });
+
+        res.status(200).json({
+          message:
+            "Answer marked as wrong. Select another team for this no-buzzer question.",
+          data: {
+            gameState: updatedState,
+            isCorrect: false,
+            pointsAwarded: 0,
+            teamId,
+          },
+        });
+        return;
+      }
 
       res.status(200).json({
         message:

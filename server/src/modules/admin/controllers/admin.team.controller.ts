@@ -224,33 +224,67 @@ export const fetchTeamResponses = async (
         // Response already has question populated
         const question = response.questionId;
 
-        // Find the correct option
-        const correctOption = question.options.find(
-          (opt: any) => opt.optionId === question.correctAnswer,
-        );
+        // Check if this is a buzzer/verbal answer (has isCorrect field)
+        const isBuzzerResponse =
+          response.isCorrect !== undefined &&
+          (response.response === "CORRECT" ||
+            response.response === "INCORRECT");
 
-        // Find team's selected option
-        const teamOption = question.options.find(
-          (opt: any) => opt.optionId === response.response,
-        );
+        if (isBuzzerResponse) {
+          // For buzzer/verbal answers
+          const correctOption = question.options.find(
+            (opt: any) => opt.optionId === question.correctAnswer,
+          );
 
-        const isCorrect = question.correctAnswer === response.response;
+          return {
+            questionId: question._id,
+            questionText:
+              question.questionContent?.text || question.questionText || "",
+            questionImage: question.questionImage,
+            questionVideo: question.questionVideo,
+            options: question.options.length > 0 ? question.options : undefined, // Only include if exists
+            teamResponse: response.isCorrect ? "CORRECT" : "INCORRECT",
+            teamResponseText: response.isCorrect
+              ? "Correct Answer (Verbal)"
+              : "Incorrect Answer (Verbal)",
+            correctAnswer: "CORRECT", // Set to "CORRECT" for buzzer responses so chip comparison works
+            correctAnswerText: correctOption?.optionText || "Verbal Answer",
+            isCorrect: response.isCorrect,
+            pointsEarned: response.isCorrect ? question.score : 0,
+            timeElapsed: response.timeElapsed,
+            answeredAt: response.createdAt,
+          };
+        } else {
+          // For MCQ answers
+          // Find the correct option
+          const correctOption = question.options.find(
+            (opt: any) => opt.optionId === question.correctAnswer,
+          );
 
-        return {
-          questionId: question._id,
-          questionText: question.questionText,
-          questionImage: question.questionImage,
-          questionVideo: question.questionVideo,
-          options: question.options,
-          teamResponse: response.response,
-          teamResponseText: teamOption?.optionText || "N/A",
-          correctAnswer: question.correctAnswer,
-          correctAnswerText: correctOption?.optionText || "N/A",
-          isCorrect: isCorrect,
-          pointsEarned: isCorrect ? question.score : 0,
-          timeElapsed: response.timeElapsed,
-          answeredAt: response.createdAt,
-        };
+          // Find team's selected option
+          const teamOption = question.options.find(
+            (opt: any) => opt.optionId === response.response,
+          );
+
+          const isCorrect = question.correctAnswer === response.response;
+
+          return {
+            questionId: question._id,
+            questionText:
+              question.questionContent?.text || question.questionText || "",
+            questionImage: question.questionImage,
+            questionVideo: question.questionVideo,
+            options: question.options,
+            teamResponse: response.response,
+            teamResponseText: teamOption?.optionText || "N/A",
+            correctAnswer: question.correctAnswer,
+            correctAnswerText: correctOption?.optionText || "N/A",
+            isCorrect: isCorrect,
+            pointsEarned: isCorrect ? question.score : 0,
+            timeElapsed: response.timeElapsed,
+            answeredAt: response.createdAt,
+          };
+        }
       }),
     );
 

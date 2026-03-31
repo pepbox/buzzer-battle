@@ -7,6 +7,7 @@ import mongoose from "mongoose";
 import { SessionEmitters } from "../../../services/socket/sessionEmitters";
 import { Events } from "../../../services/socket/enums/Events";
 import { timerManager } from "../../../services/timerManager";
+import FileService from "../../files/services/fileService";
 
 const questionService = new QuestionService();
 const gameStateService = new GameStateService();
@@ -17,17 +18,213 @@ export const fetchAllQuestions = async (
   next: NextFunction,
 ) => {
   try {
-    const questions = await questionService.fetchAllQuestions();
+    const { search, folder, sort, page, limit } = req.query;
+    const result = await questionService.fetchAllQuestions({
+      search: typeof search === "string" ? search : undefined,
+      folder: typeof folder === "string" ? folder : undefined,
+      sort: sort === "oldest" ? "oldest" : "newest",
+      page: typeof page === "string" ? Number(page) : undefined,
+      limit: typeof limit === "string" ? Number(limit) : undefined,
+    });
 
     res.status(200).json({
       message: "Questions fetched successfully.",
       data: {
-        questions,
+        questions: result.questions,
+        pagination: {
+          total: result.total,
+          page: result.page,
+          limit: result.limit,
+        },
       },
     });
   } catch (error) {
     console.error("Error fetching questions:", error);
     next(new AppError("Failed to fetch questions.", 500));
+  }
+};
+
+export const fetchFolders = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const folders = await questionService.fetchFolders();
+
+    res.status(200).json({
+      message: "Folders fetched successfully.",
+      data: { folders },
+    });
+  } catch (error) {
+    console.error("Error fetching folders:", error);
+    next(new AppError("Failed to fetch folders.", 500));
+  }
+};
+
+export const createFolder = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { name } = req.body;
+
+    if (!name || typeof name !== "string") {
+      return next(new AppError("Folder name is required.", 400));
+    }
+
+    const folder = await questionService.createFolder(name);
+
+    res.status(201).json({
+      message: "Folder created successfully.",
+      data: { folder },
+    });
+  } catch (error: any) {
+    if (error.message === "Folder already exists") {
+      return next(new AppError(error.message, 409));
+    }
+    if (error.message === "Folder name is required") {
+      return next(new AppError(error.message, 400));
+    }
+    console.error("Error creating folder:", error);
+    next(new AppError("Failed to create folder.", 500));
+  }
+};
+
+export const createQuestion = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const {
+      questionText,
+      questionImage,
+      quetionVideo,
+      options,
+      correctAnswer,
+      score,
+      folder,
+      keepBuzzer,
+      questionContent,
+      questionAssets,
+      answerContent,
+    } = req.body;
+
+    const hasQuestion = Boolean(
+      questionText ||
+      questionContent?.text ||
+      (Array.isArray(questionContent?.media) &&
+        questionContent.media.length > 0),
+    );
+
+    const hasAnswer = Boolean(
+      answerContent?.text ||
+      (Array.isArray(answerContent?.media) && answerContent.media.length > 0),
+    );
+
+    if (!hasQuestion) {
+      return next(
+        new AppError(
+          "Question is required (text or at least one media item).",
+          400,
+        ),
+      );
+    }
+
+    if (!hasAnswer) {
+      return next(
+        new AppError(
+          "Answer is required (text or at least one media item).",
+          400,
+        ),
+      );
+    }
+
+    const normalizedOptions = Array.isArray(options)
+      ? options
+          .filter((opt: any) => opt?.optionText)
+          .map((opt: any, index: number) => ({
+            optionId: opt.optionId || String.fromCharCode(97 + index),
+            optionText: String(opt.optionText),
+          }))
+      : [];
+
+    const selectedCorrectAnswer =
+      typeof correctAnswer === "string" && correctAnswer
+        ? correctAnswer
+        : normalizedOptions[0]?.optionId;
+
+    const question = await questionService.createQuestion({
+      questionText,
+      questionImage,
+      quetionVideo,
+      options: normalizedOptions,
+      correctAnswer: selectedCorrectAnswer,
+      score: Number(score || 0),
+      folder,
+      keepBuzzer,
+      questionContent,
+      questionAssets,
+      answerContent,
+    });
+
+    res.status(201).json({
+      message: "Question created successfully.",
+      data: {
+        question,
+      },
+    });
+  } catch (error) {
+    console.error("Error creating question:", error);
+    next(new AppError("Failed to create question.", 500));
+  }
+};
+
+export const uploadQuestionMedia = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    if (!req.file) {
+      return next(new AppError("File is required.", 400));
+    }
+
+    const savedFile = await FileService.uploadFile({
+      originalName: req.file.originalname,
+      fileName: req.file.key || req.file.originalname,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+      location: req.file.location || "",
+      bucket: req.file.bucket || "",
+      etag: req.file.etag || "",
+    });
+
+    const mediaType = req.file.mimetype.startsWith("image/")
+      ? req.file.mimetype === "image/gif"
+        ? "gif"
+        : "image"
+      : req.file.mimetype.startsWith("video/")
+        ? "video"
+        : "file";
+
+    res.status(201).json({
+      message: "Media uploaded successfully.",
+      data: {
+        media: {
+          type: mediaType,
+          url: req.file.location,
+          mimeType: req.file.mimetype,
+          name: req.file.originalname,
+          fileId: savedFile._id,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error uploading media:", error);
+    next(new AppError("Failed to upload media.", 500));
   }
 };
 
@@ -65,8 +262,11 @@ export const fetchCurrentQuestion = async (
       return next(new AppError("Current question not found.", 404));
     }
 
+    // Determine if we can reveal the answer
+    const canRevealAnswer = gameState.gameStatus === GameStatus.IDLE;
+
     // Remove correct answer for team
-    const questionForTeam = {
+    const questionForTeam: any = {
       _id: question._id,
       questionText: question.questionText,
       questionImage: question.questionImage,
@@ -75,9 +275,18 @@ export const fetchCurrentQuestion = async (
         optionId: opt.optionId,
         optionText: opt.optionText,
       })),
+      questionContent: question.questionContent,
+      score: question.score,
+      keepBuzzer: question.keepBuzzer,
+      questionAssets: question.questionAssets,
       createdAt: question.createdAt,
       updatedAt: question.updatedAt,
     };
+
+    if (canRevealAnswer) {
+      questionForTeam.correctAnswer = question.correctAnswer;
+      questionForTeam.answerContent = question.answerContent;
+    }
 
     res.status(200).json({
       message: "Current question fetched successfully.",

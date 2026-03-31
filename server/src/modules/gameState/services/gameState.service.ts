@@ -316,8 +316,11 @@ export default class GameStateService {
 
     if (nextIndex >= totalQuestions) {
       // Last question completed - End game
-      session.status = SessionStatus.ENDED;
-      await session.save();
+      // NOTE: Don't set session.status to ENDED automatically.
+      // This would cause all API calls to fail and force users to logout.
+      // Let admin explicitly end the session after viewing final results.
+      // session.status = SessionStatus.ENDED;
+      // await session.save();
 
       gameState.gameStatus = GameStatus.PAUSED;
       gameState.currentAnsweringTeam = undefined;
@@ -339,6 +342,8 @@ export default class GameStateService {
       gameState.gameStatus = GameStatus.BUZZER_ROUND;
       gameState.buzzerRoundStartTime = undefined; // Clear timestamps
       gameState.answeringRoundStartTime = undefined;
+      gameState.teamsWhoAnsweredThisQuestion = []; // Reset for new question
+      gameState.isNoBuzzerQuestion = false; // Reset no-buzzer flag
 
       const options: any = {};
       if (this.session) {
@@ -364,13 +369,6 @@ export default class GameStateService {
       sessionId,
     );
 
-    if (leaderboard.length < 2) {
-      throw new Error("No second team available in buzzer queue");
-    }
-
-    // Get 2nd place team
-    const secondTeam = leaderboard[1];
-
     const query = GameState.findOne({ sessionId });
     if (this.session) {
       query.session(this.session);
@@ -381,11 +379,57 @@ export default class GameStateService {
       throw new Error("Game state not found");
     }
 
-    // Set 2nd team as answering team
-    gameState.currentAnsweringTeam = (secondTeam.teamId as any)._id;
+    const getTeamId = (entry: IBuzzerQueue): string => {
+      const teamRef: any = entry.teamId as any;
+      if (typeof teamRef === "string") return teamRef;
+      return String(teamRef?._id ?? teamRef);
+    };
+
+    const currentAnsweringTeamId = gameState.currentAnsweringTeam
+      ? String(gameState.currentAnsweringTeam)
+      : undefined;
+
+    // Filter out teams that have already answered this question OR are currently answering.
+    // This ensures each pass moves to the next eligible team in queue order.
+    const unansweredTeams = leaderboard.filter((team) => {
+      const teamId = getTeamId(team);
+
+      const alreadyAnswered = gameState.teamsWhoAnsweredThisQuestion.some(
+        (answeredTeamId) => answeredTeamId.toString() === teamId,
+      );
+
+      const isCurrentTeam =
+        !!currentAnsweringTeamId && currentAnsweringTeamId === teamId;
+
+      return !alreadyAnswered && !isCurrentTeam;
+    });
+
+    if (unansweredTeams.length === 0) {
+      throw new Error("No unanswered teams available in buzzer queue");
+    }
+
+    // Get the first unanswered team (highest ranked unanswered team)
+    const nextTeam = unansweredTeams[0];
+
+    // Add the current answering team to the answered list once.
+    if (gameState.currentAnsweringTeam) {
+      const currentTeamId = String(gameState.currentAnsweringTeam);
+      const alreadyTracked = gameState.teamsWhoAnsweredThisQuestion.some(
+        (teamId) => teamId.toString() === currentTeamId,
+      );
+
+      if (!alreadyTracked) {
+        gameState.teamsWhoAnsweredThisQuestion.push(
+          gameState.currentAnsweringTeam,
+        );
+      }
+    }
+
+    // Set next team as answering team
+    gameState.currentAnsweringTeam = getTeamId(nextTeam) as any;
     gameState.gameStatus = GameStatus.ANSWERING;
     gameState.answeringRoundStartTime = Date.now();
-    gameState.buzzerRoundStartTime = undefined; // Clear buzzer time
+    // Keep buzzerRoundStartTime so waiting teams can still render stable elapsed buzzer times.
 
     const options: any = {};
     if (this.session) {
@@ -396,10 +440,10 @@ export default class GameStateService {
     return gameState;
   }
 
-  // Set specific team as answering team (used by auto-selection)
+  // Set specific team as answering team (used by auto-selection and manual selection)
   async setAnsweringTeam(
     sessionId: Types.ObjectId | string,
-    fastestTeam: IBuzzerQueue,
+    fastestTeamOrTeamId: IBuzzerQueue | Types.ObjectId | string,
   ): Promise<IGameState> {
     const query = GameState.findOne({ sessionId });
     if (this.session) {
@@ -411,12 +455,19 @@ export default class GameStateService {
       throw new Error("Game state not found");
     }
 
-    gameState.currentAnsweringTeam = fastestTeam.teamId as any;
+    const answeringTeamId =
+      typeof fastestTeamOrTeamId === "string" ||
+      fastestTeamOrTeamId instanceof Types.ObjectId
+        ? fastestTeamOrTeamId
+        : (fastestTeamOrTeamId.teamId as any)?._id ||
+          fastestTeamOrTeamId.teamId;
+
+    gameState.currentAnsweringTeam = answeringTeamId as any;
     gameState.gameStatus = GameStatus.ANSWERING;
     gameState.answeringRoundStartTime = Date.now();
     // gameState.buzzerRoundStartTime = undefined; // Clear buzzer time
 
-    console.log("Here fastest team selected", fastestTeam);
+    console.log("Answering team selected", answeringTeamId);
     const options: any = {};
     if (this.session) {
       options.session = this.session;

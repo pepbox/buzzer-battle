@@ -6,7 +6,11 @@ import { useFetchOverallLeaderboardQuery } from "../services/teamApi";
 import { websocketService } from "../../../services/websocket/websocketService";
 import { Events } from "../../../services/websocket/enums/Events";
 
-const LeaderBoardPage: React.FC = () => {
+interface LeaderBoardPageProps {
+  isOverlay?: boolean;
+}
+
+const LeaderBoardPage: React.FC<LeaderBoardPageProps> = ({ isOverlay: _isOverlay }) => {
   const navigate = useNavigate();
   const { sessionId } = useParams<{ sessionId: string }>();
 

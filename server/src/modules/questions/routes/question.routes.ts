@@ -1,17 +1,54 @@
 import express from "express";
 import {
+  createFolder,
+  createQuestion,
+  fetchFolders,
   fetchAllQuestions,
   fetchCurrentQuestion,
   sendQuestionResponse,
+  uploadQuestionMedia,
 } from "../controllers/question.controller";
 import {
   authenticateUser,
   authorizeRoles,
 } from "../../../middlewares/authMiddleware";
+import { uploadMiddleware } from "../../../services/fileUpload/middleware";
 
 const router = express.Router();
 
 router.get("/", authenticateUser, authorizeRoles("ADMIN"), fetchAllQuestions);
+
+router.get("/folders", authenticateUser, authorizeRoles("ADMIN"), fetchFolders);
+
+router.post(
+  "/folders",
+  authenticateUser,
+  authorizeRoles("ADMIN"),
+  createFolder,
+);
+
+router.post("/", authenticateUser, authorizeRoles("ADMIN"), createQuestion);
+
+router.post(
+  "/upload",
+  authenticateUser,
+  authorizeRoles("ADMIN"),
+  uploadMiddleware.single("file", {
+    folder: "question-media",
+    maxFileSize: 50 * 1024 * 1024,
+    maxFiles: 1,
+    allowedMimeTypes: [
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+      "video/mp4",
+      "video/webm",
+      "video/quicktime",
+    ],
+  }),
+  uploadQuestionMedia,
+);
 
 // Team routes
 router.get("/current", authenticateUser, fetchCurrentQuestion);

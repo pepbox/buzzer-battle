@@ -82,20 +82,87 @@ export interface QuestionBankItem {
   _id: string;
   questionText: string;
   score: number;
+  folder?: string;
+  keepBuzzer?: boolean;
   options: Array<{
     optionId: string;
     optionText: string;
   }>;
   questionImage?: string;
   quetionVideo?: string;
+  questionContent?: {
+    text?: string;
+    media?: QuestionMediaItem[];
+  };
+  questionAssets?: QuestionMediaItem[];
+  answerContent?: {
+    text?: string;
+    media?: QuestionMediaItem[];
+  };
   createdAt: string;
   updatedAt: string;
+}
+
+export interface QuestionMediaItem {
+  type: "text" | "image" | "video" | "gif" | "file";
+  url?: string;
+  text?: string;
+  mimeType?: string;
+  fileId?: string;
+  name?: string;
+}
+
+export interface QuestionLibraryQuery {
+  search?: string;
+  folder?: string;
+  sort?: "newest" | "oldest";
+  page?: number;
+  limit?: number;
+}
+
+export interface CreateQuestionPayload {
+  questionText?: string;
+  questionImage?: string;
+  quetionVideo?: string;
+  options?: Array<{ optionId?: string; optionText: string }>;
+  correctAnswer?: string;
+  score?: number;
+  folder?: string;
+  keepBuzzer?: boolean;
+  questionContent?: {
+    text?: string;
+    media?: QuestionMediaItem[];
+  };
+  questionAssets?: QuestionMediaItem[];
+  answerContent?: {
+    text?: string;
+    media?: QuestionMediaItem[];
+  };
 }
 
 export interface QuestionBankResponse {
   message: string;
   data: {
     questions: QuestionBankItem[];
+    pagination?: {
+      total: number;
+      page: number;
+      limit: number;
+    };
+  };
+}
+
+export interface FolderListResponse {
+  message: string;
+  data: {
+    folders: string[];
+  };
+}
+
+export interface UploadMediaResponse {
+  message: string;
+  data: {
+    media: QuestionMediaItem;
   };
 }
 
@@ -203,12 +270,56 @@ export const adminApi = api.injectEndpoints({
       providesTags: ["Team", "GameState", "Session"],
     }),
 
-    fetchQuestionBank: builder.query<QuestionBankResponse, void>({
-      query: () => ({
+    fetchQuestionBank: builder.query<
+      QuestionBankResponse,
+      QuestionLibraryQuery | void
+    >({
+      query: (params) => ({
         url: "/questions",
         method: "GET",
+        params: params || undefined,
       }),
       providesTags: ["Question"],
+    }),
+
+    createQuestion: builder.mutation<
+      { message: string; data: { question: QuestionBankItem } },
+      CreateQuestionPayload
+    >({
+      query: (payload) => ({
+        url: "/questions",
+        method: "POST",
+        body: payload,
+      }),
+      invalidatesTags: ["Question", "Folder"],
+    }),
+
+    fetchQuestionFolders: builder.query<FolderListResponse, void>({
+      query: () => ({
+        url: "/questions/folders",
+        method: "GET",
+      }),
+      providesTags: ["Folder"],
+    }),
+
+    createQuestionFolder: builder.mutation<
+      { message: string; data: { folder: string } },
+      { name: string }
+    >({
+      query: (payload) => ({
+        url: "/questions/folders",
+        method: "POST",
+        body: payload,
+      }),
+      invalidatesTags: ["Folder"],
+    }),
+
+    uploadQuestionMedia: builder.mutation<UploadMediaResponse, FormData>({
+      query: (formData) => ({
+        url: "/questions/upload",
+        method: "POST",
+        body: formData,
+      }),
     }),
 
     // Update team (name or score) - single optimized endpoint
@@ -251,6 +362,10 @@ export const {
   useFetchTeamDashboardQuery,
   useLazyFetchTeamDashboardQuery,
   useFetchQuestionBankQuery,
+  useCreateQuestionMutation,
+  useFetchQuestionFoldersQuery,
+  useCreateQuestionFolderMutation,
+  useUploadQuestionMediaMutation,
   useUpdateTeamMutation,
   useFetchTeamResponsesQuery,
   useLazyFetchTeamResponsesQuery,

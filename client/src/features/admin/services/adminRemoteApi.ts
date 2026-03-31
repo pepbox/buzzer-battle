@@ -5,6 +5,7 @@ export type GameStateAction =
   | "PAUSE"
   | "RESUME"
   | "NEXT_QUESTION"
+  | "SHOW_ANSWER"
   | "SHOW_LEADERBOARD"
   | "PASS_TO_SECOND_TEAM"
   | "SET_ANSWERING_TEAM"
@@ -79,6 +80,14 @@ export const useNextQuestion = () => {
   const [update, result] = useUpdateGameStateMutation();
   return {
     nextQuestion: () => update({ action: "NEXT_QUESTION" }),
+    ...result,
+  };
+};
+
+export const useShowAnswer = () => {
+  const [update, result] = useUpdateGameStateMutation();
+  return {
+    showAnswer: () => update({ action: "SHOW_ANSWER" }),
     ...result,
   };
 };
