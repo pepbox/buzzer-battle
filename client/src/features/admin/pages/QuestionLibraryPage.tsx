@@ -285,7 +285,7 @@ const CreateQuestionModal: React.FC<CreateQuestionModalProps> = ({
             </Box>
           </Box>
 
-          <TextField
+          {/* <TextField
             label="Question Assets (optional text)"
             multiline
             minRows={2}
@@ -323,10 +323,10 @@ const CreateQuestionModal: React.FC<CreateQuestionModalProps> = ({
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 1 }}>
               {questionAssets.map(renderMediaPreview)}
             </Box>
-          </Box>
+          </Box> */}
 
           <TextField
-            label="Answer (required)"
+            label="Answer"
             multiline
             minRows={2}
             value={answerText}
