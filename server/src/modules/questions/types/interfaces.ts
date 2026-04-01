@@ -6,7 +6,7 @@ export interface option {
 }
 
 export interface IQuestionMedia {
-  type: "text" | "image" | "video" | "gif" | "file";
+  type: "text" | "image" | "video" | "audio" | "gif" | "file";
   url?: string;
   text?: string;
   mimeType?: string;

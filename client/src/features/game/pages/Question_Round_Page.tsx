@@ -227,7 +227,9 @@ const QuestionRoundPage: React.FC = () => {
     media: question.questionContent?.media?.length
       ? question.questionContent.media
       : question.questionAssets?.filter((item: any) =>
-          ["image", "video", "gif", "text", "file"].includes(item?.type),
+          ["image", "video", "audio", "gif", "text", "file"].includes(
+            item?.type,
+          ),
         ),
     score: question.score,
     options: question.options,

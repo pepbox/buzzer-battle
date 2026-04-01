@@ -12,7 +12,7 @@ export interface QuestionData {
   image?: string;
   video?: string;
   media?: Array<{
-    type: "text" | "image" | "video" | "gif" | "file";
+    type: "text" | "image" | "video" | "audio" | "gif" | "file";
     url?: string;
     text?: string;
     name?: string;
@@ -98,8 +98,9 @@ const Question: React.FC<QuestionProps> = ({
     return "#000000"; // Default dark text
   };
 
-  const getMediaType = (url: string): "image" | "video" => {
+  const getMediaType = (url: string): "image" | "video" | "audio" => {
     const extension = url.split(".").pop()?.toLowerCase();
+    const audioExtensions = ["mp3", "wav", "ogg", "m4a", "aac", "flac"];
     const videoExtensions = [
       "mp4",
       "webm",
@@ -110,6 +111,10 @@ const Question: React.FC<QuestionProps> = ({
       "flv",
       "m4v",
     ];
+
+    if (audioExtensions.includes(extension || "")) {
+      return "audio";
+    }
 
     if (videoExtensions.includes(extension || "")) {
       return "video";
@@ -124,7 +129,7 @@ const Question: React.FC<QuestionProps> = ({
       questionData.image ? { type: "image", url: questionData.image } : null,
       questionData.video ? { type: "video", url: questionData.video } : null,
     ].filter(Boolean) as Array<{
-      type: "text" | "image" | "video" | "gif" | "file";
+      type: "text" | "image" | "video" | "audio" | "gif" | "file";
       url?: string;
       text?: string;
       name?: string;
@@ -180,6 +185,20 @@ const Question: React.FC<QuestionProps> = ({
         );
       }
 
+      if (media.type === "audio" && media.url) {
+        return (
+          <Box
+            key={`media-audio-${index}`}
+            component="audio"
+            src={media.url}
+            controls
+            autoPlay
+            preload="auto"
+            sx={{ width: "100%", my: "10px" }}
+          />
+        );
+      }
+
       if (media.type === "file") {
         return (
           <Typography
@@ -202,6 +221,19 @@ const Question: React.FC<QuestionProps> = ({
               src={media.url}
               controls
               sx={mediaStyles}
+            />
+          );
+        }
+        if (derivedType === "audio") {
+          return (
+            <Box
+              key={`media-audio-fallback-${index}`}
+              component="audio"
+              src={media.url}
+              controls
+              autoPlay
+              preload="auto"
+              sx={{ width: "100%", my: "10px" }}
             />
           );
         }

@@ -84,6 +84,18 @@ const renderMediaPreview = (media: QuestionMediaItem, idx: number) => {
     );
   }
 
+  if (media.type === "audio") {
+    return (
+      <Box
+        key={`${media.url}-${idx}`}
+        component="audio"
+        src={media.url}
+        controls
+        sx={{ width: 180 }}
+      />
+    );
+  }
+
   return (
     <Chip
       key={`${media.url}-${idx}`}
@@ -271,7 +283,7 @@ const CreateQuestionModal: React.FC<CreateQuestionModalProps> = ({
               <input
                 hidden
                 type="file"
-                accept="image/*,video/*"
+                accept="image/*,video/*,audio/*"
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
@@ -344,7 +356,7 @@ const CreateQuestionModal: React.FC<CreateQuestionModalProps> = ({
               <input
                 hidden
                 type="file"
-                accept="image/*,video/*"
+                accept="image/*,video/*,audio/*"
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;

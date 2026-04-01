@@ -62,7 +62,7 @@ const questionSchema = new Schema<IQuestion>(
         {
           type: {
             type: String,
-            enum: ["text", "image", "video", "gif", "file"],
+            enum: ["text", "image", "video", "audio", "gif", "file"],
             required: true,
           },
           url: {
@@ -92,7 +92,7 @@ const questionSchema = new Schema<IQuestion>(
       {
         type: {
           type: String,
-          enum: ["text", "image", "video", "gif", "file"],
+          enum: ["text", "image", "video", "audio", "gif", "file"],
           required: true,
         },
         url: {
@@ -127,7 +127,7 @@ const questionSchema = new Schema<IQuestion>(
         {
           type: {
             type: String,
-            enum: ["text", "image", "video", "gif", "file"],
+            enum: ["text", "image", "video", "audio", "gif", "file"],
             required: true,
           },
           url: {

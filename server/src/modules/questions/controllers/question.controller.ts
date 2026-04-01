@@ -208,7 +208,9 @@ export const uploadQuestionMedia = async (
         : "image"
       : req.file.mimetype.startsWith("video/")
         ? "video"
-        : "file";
+        : req.file.mimetype.startsWith("audio/")
+          ? "audio"
+          : "file";
 
     res.status(201).json({
       message: "Media uploaded successfully.",

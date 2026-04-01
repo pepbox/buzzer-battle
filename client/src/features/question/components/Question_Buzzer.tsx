@@ -8,7 +8,7 @@ interface QuestionBuzzerProps {
   questionImage?: string;
   questionVideo?: string;
   questionMedia?: Array<{
-    type: "text" | "image" | "video" | "gif" | "file";
+    type: "text" | "image" | "video" | "audio" | "gif" | "file";
     url?: string;
     text?: string;
     name?: string;
@@ -24,8 +24,9 @@ const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
 }) => {
   const theme = useTheme();
 
-  const getMediaType = (url: string): "image" | "video" => {
+  const getMediaType = (url: string): "image" | "video" | "audio" => {
     const extension = url.split(".").pop()?.toLowerCase();
+    const audioExtensions = ["mp3", "wav", "ogg", "m4a", "aac", "flac"];
     const videoExtensions = [
       "mp4",
       "webm",
@@ -36,6 +37,10 @@ const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
       "flv",
       "m4v",
     ];
+
+    if (audioExtensions.includes(extension || "")) {
+      return "audio";
+    }
 
     if (videoExtensions.includes(extension || "")) {
       return "video";
@@ -49,7 +54,7 @@ const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
       questionImage ? { type: "image", url: questionImage } : null,
       questionVideo ? { type: "video", url: questionVideo } : null,
     ].filter(Boolean) as Array<{
-      type: "text" | "image" | "video" | "gif" | "file";
+      type: "text" | "image" | "video" | "audio" | "gif" | "file";
       url?: string;
       text?: string;
       name?: string;
@@ -105,6 +110,20 @@ const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
         );
       }
 
+      if (media.type === "audio" && media.url) {
+        return (
+          <Box
+            key={`buzzer-media-audio-${index}`}
+            component="audio"
+            src={media.url}
+            controls
+            autoPlay
+            preload="auto"
+            sx={{ width: "100%", my: "10px" }}
+          />
+        );
+      }
+
       if (media.url) {
         const derivedType = getMediaType(media.url);
         if (derivedType === "video") {
@@ -115,6 +134,19 @@ const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
               src={media.url}
               controls
               sx={mediaStyles}
+            />
+          );
+        }
+        if (derivedType === "audio") {
+          return (
+            <Box
+              key={`buzzer-media-audio-fallback-${index}`}
+              component="audio"
+              src={media.url}
+              controls
+              autoPlay
+              preload="auto"
+              sx={{ width: "100%", my: "10px" }}
             />
           );
         }
