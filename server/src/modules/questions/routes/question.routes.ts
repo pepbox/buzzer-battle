@@ -2,10 +2,12 @@ import express from "express";
 import {
   createFolder,
   createQuestion,
+  deleteQuestion,
   fetchFolders,
   fetchAllQuestions,
   fetchCurrentQuestion,
   sendQuestionResponse,
+  updateQuestion,
   uploadQuestionMedia,
 } from "../controllers/question.controller";
 import {
@@ -28,6 +30,20 @@ router.post(
 );
 
 router.post("/", authenticateUser, authorizeRoles("ADMIN"), createQuestion);
+
+router.put(
+  "/:questionId",
+  authenticateUser,
+  authorizeRoles("ADMIN"),
+  updateQuestion,
+);
+
+router.delete(
+  "/:questionId",
+  authenticateUser,
+  authorizeRoles("ADMIN"),
+  deleteQuestion,
+);
 
 router.post(
   "/upload",

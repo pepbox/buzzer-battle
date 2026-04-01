@@ -81,6 +81,7 @@ export interface TeamResponsesResponse {
 export interface QuestionBankItem {
   _id: string;
   questionText: string;
+  correctAnswer?: string;
   score: number;
   folder?: string;
   keepBuzzer?: boolean;
@@ -294,6 +295,29 @@ export const adminApi = api.injectEndpoints({
       invalidatesTags: ["Question", "Folder"],
     }),
 
+    updateQuestion: builder.mutation<
+      { message: string; data: { question: QuestionBankItem } },
+      { questionId: string; payload: CreateQuestionPayload }
+    >({
+      query: ({ questionId, payload }) => ({
+        url: `/questions/${questionId}`,
+        method: "PUT",
+        body: payload,
+      }),
+      invalidatesTags: ["Question", "Folder", "Session"],
+    }),
+
+    deleteQuestion: builder.mutation<
+      { message: string; success: boolean },
+      string
+    >({
+      query: (questionId) => ({
+        url: `/questions/${questionId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Question", "Session"],
+    }),
+
     fetchQuestionFolders: builder.query<FolderListResponse, void>({
       query: () => ({
         url: "/questions/folders",
@@ -363,6 +387,8 @@ export const {
   useLazyFetchTeamDashboardQuery,
   useFetchQuestionBankQuery,
   useCreateQuestionMutation,
+  useUpdateQuestionMutation,
+  useDeleteQuestionMutation,
   useFetchQuestionFoldersQuery,
   useCreateQuestionFolderMutation,
   useUploadQuestionMediaMutation,

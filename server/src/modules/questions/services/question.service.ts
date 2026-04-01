@@ -107,6 +107,94 @@ export default class QuestionService {
     return question;
   }
 
+  async updateQuestion(
+    questionId: Types.ObjectId | string,
+    input: {
+      questionText?: string;
+      questionImage?: string;
+      quetionVideo?: string;
+      options?: { optionId: string; optionText: string }[];
+      correctAnswer?: string;
+      score?: number;
+      folder?: string;
+      keepBuzzer?: boolean;
+      questionContent?: any;
+      questionAssets?: any[];
+      answerContent?: any;
+    },
+  ): Promise<IQuestion> {
+    const query = Question.findById(questionId);
+    if (this.session) {
+      query.session(this.session);
+    }
+
+    const question = await query;
+    if (!question) {
+      throw new Error("Question not found");
+    }
+
+    if (input.folder !== undefined) {
+      const normalizedFolder = (input.folder || "General").trim();
+      await QuestionFolder.findOneAndUpdate(
+        { name: normalizedFolder },
+        { $setOnInsert: { name: normalizedFolder } },
+        { upsert: true, new: true, session: this.session },
+      );
+      question.folder = normalizedFolder;
+    }
+
+    question.questionText =
+      input.questionText ??
+      input.questionContent?.text ??
+      question.questionText;
+    question.questionImage = input.questionImage;
+    question.quetionVideo = input.quetionVideo;
+    question.options = input.options || [];
+    question.correctAnswer = input.correctAnswer;
+    question.score = input.score ?? 0;
+    question.keepBuzzer = input.keepBuzzer ?? true;
+    question.questionContent = input.questionContent;
+    question.questionAssets = input.questionAssets || [];
+    question.answerContent = input.answerContent;
+
+    const options: any = {};
+    if (this.session) {
+      options.session = this.session;
+    }
+
+    await question.save(options);
+    return question;
+  }
+
+  async deleteQuestion(questionId: Types.ObjectId | string): Promise<void> {
+    const deleteQuery = Question.findByIdAndDelete(questionId);
+    if (this.session) {
+      deleteQuery.session(this.session);
+    }
+
+    const deletedQuestion = await deleteQuery;
+    if (!deletedQuestion) {
+      throw new Error("Question not found");
+    }
+
+    const sessionUpdateOptions: any = {};
+    if (this.session) {
+      sessionUpdateOptions.session = this.session;
+    }
+
+    await Session.updateMany(
+      { questions: questionId },
+      { $pull: { questions: questionId } },
+      sessionUpdateOptions,
+    );
+
+    const responseDeleteQuery = QuestionResponse.deleteMany({ questionId });
+    if (this.session) {
+      responseDeleteQuery.session(this.session);
+    }
+    await responseDeleteQuery;
+  }
+
   async fetchFolders(): Promise<string[]> {
     const query = QuestionFolder.find()
       .sort({ name: 1 })

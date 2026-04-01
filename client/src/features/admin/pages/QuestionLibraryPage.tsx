@@ -23,17 +23,22 @@ import {
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import SearchIcon from "@mui/icons-material/Search";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   CreateQuestionPayload,
+  QuestionBankItem,
   QuestionMediaItem,
   useCreateQuestionFolderMutation,
   useCreateQuestionMutation,
+  useDeleteQuestionMutation,
   useFetchQuestionBankQuery,
   useFetchQuestionFoldersQuery,
+  useUpdateQuestionMutation,
   useUpdateSessionQuestionsMutation,
   useUploadQuestionMediaMutation,
 } from "../services/admin.Api";
@@ -46,7 +51,9 @@ type CreateQuestionModalProps = {
   onClose: () => void;
   folders: string[];
   defaultFolder: string;
-  onCreated: () => void;
+  onSaved: () => void;
+  mode: "create" | "edit";
+  initialQuestion?: QuestionBankItem | null;
 };
 
 const renderMediaPreview = (media: QuestionMediaItem, idx: number) => {
@@ -115,10 +122,14 @@ const CreateQuestionModal: React.FC<CreateQuestionModalProps> = ({
   onClose,
   folders,
   defaultFolder,
-  onCreated,
+  onSaved,
+  mode,
+  initialQuestion,
 }) => {
   const [createQuestion, { isLoading: isCreating }] =
     useCreateQuestionMutation();
+  const [updateQuestion, { isLoading: isUpdating }] =
+    useUpdateQuestionMutation();
   const [createFolder, { isLoading: isCreatingFolder }] =
     useCreateQuestionFolderMutation();
   const [uploadMedia, { isLoading: isUploadingMedia }] =
@@ -131,16 +142,56 @@ const CreateQuestionModal: React.FC<CreateQuestionModalProps> = ({
   const [folder, setFolder] = useState(defaultFolder || "General");
   const [newFolderName, setNewFolderName] = useState("");
   const [optionText, setOptionText] = useState("");
-  const [options, setOptions] = useState<Array<{ optionText: string }>>([]);
+  const [options, setOptions] = useState<
+    Array<{ optionText: string; optionId?: string }>
+  >([]);
   const [questionMedia, setQuestionMedia] = useState<QuestionMediaItem[]>([]);
   const [questionAssets, setQuestionAssets] = useState<QuestionMediaItem[]>([]);
   const [answerMedia, setAnswerMedia] = useState<QuestionMediaItem[]>([]);
+  const [correctAnswer, setCorrectAnswer] = useState<string>("");
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
+
+    if (mode === "edit" && initialQuestion) {
+      setQuestionText(
+        initialQuestion.questionContent?.text ||
+          initialQuestion.questionText ||
+          "",
+      );
+      setAnswerText(initialQuestion.answerContent?.text || "");
+      setScore(initialQuestion.score ?? 0);
+      setKeepBuzzer(initialQuestion.keepBuzzer ?? true);
+      setFolder(initialQuestion.folder || "General");
+      setOptions(
+        (initialQuestion.options || []).map((opt) => ({
+          optionText: opt.optionText,
+          optionId: opt.optionId,
+        })),
+      );
+      setCorrectAnswer(initialQuestion.options?.[0]?.optionId || "");
+      setQuestionMedia(initialQuestion.questionContent?.media || []);
+      setQuestionAssets(initialQuestion.questionAssets || []);
+      setAnswerMedia(initialQuestion.answerContent?.media || []);
+      setSubmitError(null);
+      return;
+    }
+
     setFolder(defaultFolder || "General");
-  }, [open, defaultFolder]);
+    setQuestionText("");
+    setAnswerText("");
+    setScore(0);
+    setKeepBuzzer(true);
+    setOptionText("");
+    setOptions([]);
+    setCorrectAnswer("");
+    setQuestionMedia([]);
+    setQuestionAssets([]);
+    setAnswerMedia([]);
+    setNewFolderName("");
+    setSubmitError(null);
+  }, [open, defaultFolder, mode, initialQuestion]);
 
   const hasQuestion = questionText.trim() || questionMedia.length > 0;
   const hasAnswer = answerText.trim() || answerMedia.length > 0;
@@ -195,6 +246,7 @@ const CreateQuestionModal: React.FC<CreateQuestionModalProps> = ({
     setKeepBuzzer(true);
     setOptionText("");
     setOptions([]);
+    setCorrectAnswer("");
     setQuestionMedia([]);
     setQuestionAssets([]);
     setAnswerMedia([]);
@@ -220,7 +272,6 @@ const CreateQuestionModal: React.FC<CreateQuestionModalProps> = ({
       score: Number.isFinite(Number(score)) ? Number(score) : 0,
       folder,
       keepBuzzer,
-      options: options.map((opt) => ({ optionText: opt.optionText })),
       questionContent: {
         text: questionText.trim() || undefined,
         media: questionMedia,
@@ -244,22 +295,43 @@ const CreateQuestionModal: React.FC<CreateQuestionModalProps> = ({
     }
 
     if (options.length > 0) {
-      payload.correctAnswer = "a";
+      payload.options = options.map((opt, index) => ({
+        optionId: opt.optionId || String.fromCharCode(97 + index),
+        optionText: opt.optionText,
+      }));
+      payload.correctAnswer =
+        correctAnswer ||
+        payload.options[0]?.optionId ||
+        String.fromCharCode(97);
     }
 
     try {
-      await createQuestion(payload).unwrap();
+      if (mode === "edit" && initialQuestion?._id) {
+        await updateQuestion({
+          questionId: initialQuestion._id,
+          payload,
+        }).unwrap();
+      } else {
+        await createQuestion(payload).unwrap();
+      }
       resetForm();
-      onCreated();
+      onSaved();
       onClose();
     } catch (error: any) {
-      setSubmitError(error?.data?.message || "Failed to create question");
+      setSubmitError(
+        error?.data?.message ||
+          (mode === "edit"
+            ? "Failed to update question"
+            : "Failed to create question"),
+      );
     }
   };
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle>Create New Question</DialogTitle>
+      <DialogTitle>
+        {mode === "edit" ? "Edit Question" : "Create New Question"}
+      </DialogTitle>
       <DialogContent>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
           {submitError && <Alert severity="error">{submitError}</Alert>}
@@ -442,9 +514,15 @@ const CreateQuestionModal: React.FC<CreateQuestionModalProps> = ({
         <Button
           onClick={handleCreate}
           variant="contained"
-          disabled={isCreating || isUploadingMedia}
+          disabled={isCreating || isUpdating || isUploadingMedia}
         >
-          {isCreating ? "Creating..." : "Create Question"}
+          {isCreating || isUpdating
+            ? mode === "edit"
+              ? "Saving..."
+              : "Creating..."
+            : mode === "edit"
+              ? "Save Changes"
+              : "Create Question"}
         </Button>
       </DialogActions>
     </Dialog>
@@ -462,7 +540,13 @@ const QuestionLibraryPage: React.FC = () => {
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
   const [sortAnchorEl, setSortAnchorEl] = useState<null | HTMLElement>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingQuestion, setEditingQuestion] =
+    useState<QuestionBankItem | null>(null);
+  const [questionToDelete, setQuestionToDelete] =
+    useState<QuestionBankItem | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const { data: sessionResponse } = useFetchSessionQuery();
   const {
@@ -489,6 +573,8 @@ const QuestionLibraryPage: React.FC = () => {
   } = useFetchQuestionBankQuery(queryArgs);
   const [updateSessionQuestions, { isLoading: isSavingQuestions }] =
     useUpdateSessionQuestionsMutation();
+  const [deleteQuestion, { isLoading: isDeletingQuestion }] =
+    useDeleteQuestionMutation();
 
   const folders = useMemo(() => {
     const apiFolders = foldersResponse?.data?.folders || [];
@@ -524,6 +610,28 @@ const QuestionLibraryPage: React.FC = () => {
       navigate(`/admin/${sessionId}/dashboard`);
     } catch (error: any) {
       setSaveError(error?.data?.message || "Failed to save session questions");
+    }
+  };
+
+  const handleEditQuestion = (question: QuestionBankItem) => {
+    setEditingQuestion(question);
+    setEditModalOpen(true);
+  };
+
+  const handleDeleteQuestion = async () => {
+    if (!questionToDelete?._id) return;
+
+    setActionError(null);
+    try {
+      await deleteQuestion(questionToDelete._id).unwrap();
+      setSelectedQuestionIds((current) =>
+        current.filter((id) => id !== questionToDelete._id),
+      );
+      setQuestionToDelete(null);
+      refetchQuestions();
+      refetchFolders();
+    } catch (error: any) {
+      setActionError(error?.data?.message || "Failed to delete question");
     }
   };
 
@@ -606,6 +714,12 @@ const QuestionLibraryPage: React.FC = () => {
       {saveError && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {saveError}
+        </Alert>
+      )}
+
+      {actionError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {actionError}
         </Alert>
       )}
 
@@ -750,6 +864,21 @@ const QuestionLibraryPage: React.FC = () => {
                         >
                           {isSelected ? "Selected" : "Select"}
                         </Button>
+                        <Button
+                          variant="text"
+                          startIcon={<EditOutlinedIcon />}
+                          onClick={() => handleEditQuestion(question)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          color="error"
+                          variant="text"
+                          startIcon={<DeleteOutlineIcon />}
+                          onClick={() => setQuestionToDelete(question)}
+                        >
+                          Delete
+                        </Button>
                       </Box>
                     </Paper>
                   );
@@ -806,11 +935,52 @@ const QuestionLibraryPage: React.FC = () => {
         onClose={() => setCreateModalOpen(false)}
         folders={folders.filter((name) => name !== "all")}
         defaultFolder={selectedFolder === "all" ? "General" : selectedFolder}
-        onCreated={() => {
+        mode="create"
+        onSaved={() => {
           refetchQuestions();
           refetchFolders();
         }}
       />
+
+      <CreateQuestionModal
+        open={editModalOpen}
+        onClose={() => {
+          setEditModalOpen(false);
+          setEditingQuestion(null);
+        }}
+        folders={folders.filter((name) => name !== "all")}
+        defaultFolder={selectedFolder === "all" ? "General" : selectedFolder}
+        mode="edit"
+        initialQuestion={editingQuestion}
+        onSaved={() => {
+          refetchQuestions();
+          refetchFolders();
+        }}
+      />
+
+      <Dialog
+        open={Boolean(questionToDelete)}
+        onClose={() => setQuestionToDelete(null)}
+      >
+        <DialogTitle>Delete Question</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this question? This will also remove
+            it from all sessions.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setQuestionToDelete(null)}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={handleDeleteQuestion}
+            disabled={isDeletingQuestion}
+          >
+            {isDeletingQuestion ? "Deleting..." : "Delete"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

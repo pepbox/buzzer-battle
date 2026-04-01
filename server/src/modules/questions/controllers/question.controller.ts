@@ -182,6 +182,130 @@ export const createQuestion = async (
   }
 };
 
+export const updateQuestion = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { questionId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(questionId)) {
+      return next(new AppError("Invalid question ID.", 400));
+    }
+
+    const {
+      questionText,
+      questionImage,
+      quetionVideo,
+      options,
+      correctAnswer,
+      score,
+      folder,
+      keepBuzzer,
+      questionContent,
+      questionAssets,
+      answerContent,
+    } = req.body;
+
+    const hasQuestion = Boolean(
+      questionText ||
+      questionContent?.text ||
+      (Array.isArray(questionContent?.media) &&
+        questionContent.media.length > 0),
+    );
+
+    const hasAnswer = Boolean(
+      answerContent?.text ||
+      (Array.isArray(answerContent?.media) && answerContent.media.length > 0),
+    );
+
+    if (!hasQuestion) {
+      return next(
+        new AppError(
+          "Question is required (text or at least one media item).",
+          400,
+        ),
+      );
+    }
+
+    if (!hasAnswer) {
+      return next(
+        new AppError(
+          "Answer is required (text or at least one media item).",
+          400,
+        ),
+      );
+    }
+
+    const normalizedOptions = Array.isArray(options)
+      ? options
+          .filter((opt: any) => opt?.optionText)
+          .map((opt: any, index: number) => ({
+            optionId: opt.optionId || String.fromCharCode(97 + index),
+            optionText: String(opt.optionText),
+          }))
+      : [];
+
+    const selectedCorrectAnswer =
+      typeof correctAnswer === "string" && correctAnswer
+        ? correctAnswer
+        : normalizedOptions[0]?.optionId;
+
+    const question = await questionService.updateQuestion(questionId, {
+      questionText,
+      questionImage,
+      quetionVideo,
+      options: normalizedOptions,
+      correctAnswer: selectedCorrectAnswer,
+      score: Number(score || 0),
+      folder,
+      keepBuzzer,
+      questionContent,
+      questionAssets,
+      answerContent,
+    });
+
+    res.status(200).json({
+      message: "Question updated successfully.",
+      data: {
+        question,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error updating question:", error);
+    if (error.message === "Question not found") {
+      return next(new AppError(error.message, 404));
+    }
+    next(new AppError("Failed to update question.", 500));
+  }
+};
+
+export const deleteQuestion = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { questionId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(questionId)) {
+      return next(new AppError("Invalid question ID.", 400));
+    }
+
+    await questionService.deleteQuestion(questionId);
+
+    res.status(200).json({
+      message: "Question deleted successfully.",
+      success: true,
+    });
+  } catch (error: any) {
+    console.error("Error deleting question:", error);
+    if (error.message === "Question not found") {
+      return next(new AppError(error.message, 404));
+    }
+    next(new AppError("Failed to delete question.", 500));
+  }
+};
+
 export const uploadQuestionMedia = async (
   req: Request,
   res: Response,
