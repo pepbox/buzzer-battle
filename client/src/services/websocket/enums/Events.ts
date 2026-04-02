@@ -5,6 +5,7 @@ export enum Events {
   BUZZER_PRESSED_SUCCESS = "buzzer-pressed-success",
   BUZZER_ERROR = "buzzer-error",
   PRESS_BUZZER = "press-buzzer",
+  TIME_SYNC = "time-sync",
 
   // Team Management Events
   TEAM_JOINED = "team-joined", // When a new team joins the session

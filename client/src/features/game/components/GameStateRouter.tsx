@@ -81,6 +81,20 @@ const GameStateRouter = () => {
         ]),
       );
 
+      // Instantly clear the buzzer leaderboard cache to prevent the previous question's
+      // buzzer time from flashing on screen for a split second before the new fetch completes
+      dispatch(
+        api.util.updateQueryData(
+          "fetchBuzzerLeaderboard" as never,
+          undefined as never,
+          (draft: any) => {
+            if (draft?.data?.leaderboard) {
+              draft.data.leaderboard = [];
+            }
+          }
+        )
+      );
+
       // Reset Redux slices to clear stale state
       dispatch(resetBuzzer()); // Reset buzzer press state
       dispatch(clearResponseResult()); // Clear previous question response
@@ -162,8 +176,15 @@ const GameStateRouter = () => {
     const currentAnsweringTeam = currentGameState.currentAnsweringTeam;
     const currentTeamId = normalizeId(team._id);
 
-    // Check if current team is in buzzer queue
-    const teamInBuzzerQueue = buzzerData?.data?.leaderboard?.some(
+    // Detect if we are currently handling a question transition render cycle
+    const isTransitioning = 
+      previousQuestionIndexRef.current !== null && 
+      previousQuestionIndexRef.current !== currentGameState.currentQuestionIndex;
+
+    // Check if current team is in buzzer queue. 
+    // We intentionally force this to false if transitioning to prevent the router 
+    // from acting on stale data from the previous question before the cache clears.
+    const teamInBuzzerQueue = !isTransitioning && buzzerData?.data?.leaderboard?.some(
       (entry) => normalizeId(entry.teamId) === currentTeamId,
     );
 

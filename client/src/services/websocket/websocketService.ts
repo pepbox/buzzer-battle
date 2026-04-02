@@ -13,6 +13,7 @@ class SocketService {
   private isConnected: boolean = false;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
+  private serverTimeOffset: number = 0; // The calculated difference between server and client clock
 
   // Initialize Socket.IO connection
   connect(url: string, options: any = {}): Promise<void> {
@@ -36,6 +37,19 @@ class SocketService {
           console.log("Socket.IO connected:", this.socket?.id);
           this.isConnected = true;
           this.reconnectAttempts = 0;
+          
+          // Request time synchronization upon connection
+          if (this.socket) {
+            this.socket.emit("time-sync", { clientTime: Date.now() });
+            
+            // Listen for time sync response from server
+            this.socket.on("time-sync", (data: { clientTime: number, serverTime: number }) => {
+                const now = Date.now();
+                const latency = (now - data.clientTime) / 2;
+                this.serverTimeOffset = data.serverTime - (data.clientTime + latency);
+            });
+          }
+          
           resolve();
         });
 
@@ -310,6 +324,11 @@ class SocketService {
   // Get Socket.IO instance for advanced usage
   getSocket(): Socket | null {
     return this.socket;
+  }
+
+  // Get current timestamp synchronized with server clock
+  getSynchronizedTime(): number {
+    return Date.now() + this.serverTimeOffset;
   }
 }
 

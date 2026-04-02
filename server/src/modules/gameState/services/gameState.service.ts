@@ -198,7 +198,7 @@ export default class GameStateService {
 
     gameState.gameStatus = GameStatus.BUZZER_ROUND;
     gameState.currentAnsweringTeam = undefined;
-    gameState.buzzerRoundStartTime = Date.now();
+    gameState.buzzerRoundStartTime = Date.now() + 1500;
     gameState.answeringRoundStartTime = undefined; // Clear answering time
 
     const options: any = {};
@@ -340,7 +340,7 @@ export default class GameStateService {
       gameState.currentQuestionIndex = nextIndex;
       gameState.currentAnsweringTeam = undefined;
       gameState.gameStatus = GameStatus.BUZZER_ROUND;
-      gameState.buzzerRoundStartTime = undefined; // Clear timestamps
+      gameState.buzzerRoundStartTime = Date.now() + 1500; // 1.5s delay
       gameState.answeringRoundStartTime = undefined;
       gameState.teamsWhoAnsweredThisQuestion = []; // Reset for new question
       gameState.isNoBuzzerQuestion = false; // Reset no-buzzer flag

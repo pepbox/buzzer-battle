@@ -9,15 +9,19 @@ import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
 import Loader from "../../../components/ui/Loader";
 import Error from "../../../components/ui/Error";
+import { websocketService } from "../../../services/websocket/websocketService";
+import { Typography, Backdrop, CircularProgress } from "@mui/material";
 
 // Admin-controlled buzzer round - no timer, admin clicks "Allow Top Team" to proceed
 
 const BuzzerRound: React.FC = () => {
   const [buzzerPressed, setBuzzerPressed] = useState(false);
   const [buzzerError, setBuzzerError] = useState<string | null>(null);
+  const [isLocked, setIsLocked] = useState(false);
 
   // Get current team and game state from Redux
   const team = useAppSelector((state: RootState) => state.team.team);
+  const gameState = useAppSelector((state: RootState) => state.gameState.gameState);
 
   // Fetch current question
   const {
@@ -38,15 +42,37 @@ const BuzzerRound: React.FC = () => {
     setBuzzerError(null);
   }, [currentQuestionIndex]);
 
+  // Sync countdown logic
+  useEffect(() => {
+    if (gameState?.buzzerRoundStartTime) {
+      const checkLock = () => {
+        const now = websocketService.getSynchronizedTime();
+        const start = Number(gameState.buzzerRoundStartTime);
+        if (now < start) {
+          setIsLocked(true);
+        } else {
+          setIsLocked(false);
+        }
+      };
+
+      checkLock();
+      const interval = setInterval(checkLock, 100);
+      return () => clearInterval(interval);
+    } else {
+      setIsLocked(false);
+    }
+  }, [gameState?.buzzerRoundStartTime]);
+
   const handleBuzzerPress = async () => {
-    if (buzzerPressed || !team || isPressing) return;
+    if (buzzerPressed || !team || isPressing || isLocked) return;
 
     setBuzzerPressed(true);
     setBuzzerError(null);
 
     try {
-      // Call API to press buzzer
-      const timestamp = Date.now().toString();
+      // Call API to press buzzer using synchronized time
+      const syncTime = websocketService.getSynchronizedTime();
+      const timestamp = syncTime.toString();
       await pressBuzzer({ timestamp }).unwrap();
 
       // GameStateRouter will handle navigation to buzzer-leaderboard
@@ -164,10 +190,26 @@ const BuzzerRound: React.FC = () => {
             size="large"
             onPress={handleBuzzerPress}
             showPressText={true}
-            disabled={buzzerPressed || isPressing}
+            disabled={buzzerPressed || isPressing || isLocked}
           />
         </Box>
       </Box>
+
+      {/* Synchronized Reveal Overlay */}
+      <Backdrop
+        sx={{
+          color: '#fff',
+          zIndex: (theme) => theme.zIndex.drawer + 1,
+          flexDirection: 'column',
+          backgroundColor: 'rgba(0, 0, 0, 0.7)'
+        }}
+        open={isLocked}
+      >
+        <CircularProgress size={80} sx={{ color: '#FFD700', marginBottom: 3 }} />
+        <Typography variant="h4" fontWeight="medium" letterSpacing={1.5}>
+          Loading Question...
+        </Typography>
+      </Backdrop>
     </Box>
   );
 };

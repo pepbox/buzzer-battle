@@ -52,6 +52,14 @@ export const handlePressBuzzer = async (
             return;
         }
 
+        // Enforce synchronized delay validation (prevent cheating/mashing before lock lifts)
+        if (gameState.buzzerRoundStartTime && timestamp < BigInt(gameState.buzzerRoundStartTime)) {
+            socket.emit(Events.BUZZER_ERROR, {
+                message: "Buzzer pressed too early! Wait for the countdown.",
+            });
+            return;
+        }
+
         // Fetch current question
         const currentQuestion = await questionService.fetchCurrentQuestion(
             sessionId,
