@@ -239,13 +239,17 @@ const QuestionRoundPage: React.FC = () => {
     <>
       {/* Phase 1: Question Phase - Show question without options (verbal answer flow) */}
       {(!answerStatus || answerStatus === "waiting") && (
-        <Box sx={{ position: "relative" }}>
+        <Box
+          sx={{
+            position: "relative",
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
           <QuestionRound
             questionData={questionDataFormatted}
-            teamName={team?.teamName || ""}
-            teamNumber={team?.teamNumber || 0}
-            totalPoints={team?.teamScore || 0}
-            questionPoints={questionDataFormatted.score || 0}
+            questionNumber={(currentQuestionIndex || 0) + 1}
             disabled={true} // Always disabled - no MCQ selection
             showOptions={false} // Hide options for verbal answer flow
             showVerbalHint={isAnsweringTeam}
@@ -254,8 +258,8 @@ const QuestionRoundPage: React.FC = () => {
           {/* Waiting Overlay - Different message for answering team vs others */}
           <Box
             sx={{
-              position: "fixed",
-              bottom: 80, // Above team info bar
+              position: "absolute",
+              bottom: "16px", // Above team info bar, properly nested
               left: 0,
               right: 0,
               display: "flex",

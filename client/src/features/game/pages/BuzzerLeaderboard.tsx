@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Box, Typography } from "@mui/material";
 import { useNavigate, useParams } from "react-router-dom";
 import { useFetchBuzzerLeaderboardQuery } from "../services/buzzerApi";
@@ -91,6 +91,46 @@ const BuzzerLeaderboard: React.FC = () => {
     return `${rank}th`;
   };
 
+  const fallbackRoundStartFromQueue = useMemo(() => {
+    const timestamps = leaderboard
+      .map((entry) => Number(entry.timestamp))
+      .filter((value) => Number.isFinite(value));
+
+    if (!timestamps.length) return undefined;
+    return Math.min(...timestamps);
+  }, [leaderboard]);
+
+  const getElapsedMs = (
+    entryTimestamp: string | number | undefined,
+    roundStartTimestamp: number | undefined,
+  ): number => {
+    const timestamp = Number(entryTimestamp);
+    const roundStart = Number(roundStartTimestamp);
+
+    if (!Number.isFinite(timestamp)) {
+      return 0;
+    }
+
+    if (Number.isFinite(roundStart) && roundStart > 0) {
+      const elapsed = timestamp - roundStart;
+
+      // Ignore clearly invalid values caused by stale round-start data.
+      if (elapsed >= 0 && elapsed <= 10 * 60 * 1000) {
+        return elapsed;
+      }
+    }
+
+    // Fallback: show relative time against the earliest press in this queue.
+    if (
+      Number.isFinite(fallbackRoundStartFromQueue) &&
+      fallbackRoundStartFromQueue !== undefined
+    ) {
+      return Math.max(0, timestamp - fallbackRoundStartFromQueue);
+    }
+
+    return 0;
+  };
+
   // Format timestamp to show minutes:seconds:milliseconds (e.g., "00:01:42")
   const formatTime = (timestamp: string): string => {
     try {
@@ -116,11 +156,9 @@ const BuzzerLeaderboard: React.FC = () => {
   return (
     <Box
       sx={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        width: "100vw",
-        height: "100vh",
+        width: "100%",
+        flex: "1 0 auto",
+        minHeight: "100%",
         background: "linear-gradient(180deg, #87CEEB 0%, #4682B4 100%)",
         backgroundImage: `url(${normalBg})`,
         backgroundSize: "cover",
@@ -130,7 +168,6 @@ const BuzzerLeaderboard: React.FC = () => {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        overflow: "hidden",
         padding: "24px",
       }}
     >
@@ -273,10 +310,9 @@ const BuzzerLeaderboard: React.FC = () => {
               >
                 {formatTime(
                   String(
-                    Math.max(
-                      0,
-                      Number(myTeamEntry.timestamp || 0) -
-                        Number(gameState?.buzzerRoundStartTime || 0),
+                    getElapsedMs(
+                      myTeamEntry.timestamp,
+                      gameState?.buzzerRoundStartTime,
                     ),
                   ),
                 )}

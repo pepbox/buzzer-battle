@@ -95,6 +95,8 @@ export const updateGameStateUnified = async (
           gameStatus: gameState.gameStatus,
           currentQuestionIndex: gameState.currentQuestionIndex,
           currentAnsweringTeam: gameState.currentAnsweringTeam,
+          buzzerRoundStartTime: gameState.buzzerRoundStartTime,
+          answeringStartTime: gameState.answeringRoundStartTime,
         });
         break;
 
@@ -106,6 +108,8 @@ export const updateGameStateUnified = async (
           gameStatus: gameState.gameStatus,
           currentQuestionIndex: gameState.currentQuestionIndex,
           currentAnsweringTeam: gameState.currentAnsweringTeam,
+          buzzerRoundStartTime: gameState.buzzerRoundStartTime,
+          answeringStartTime: gameState.answeringRoundStartTime,
         });
         break;
 

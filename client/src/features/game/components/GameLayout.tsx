@@ -3,13 +3,15 @@ import { Box } from '@mui/material';
 import Overlay from '../../../components/ui/Overlay';
 import GameStateRouter from './GameStateRouter';
 import GameFooter from './GameFooter';
+import GameHeader from './GameHeader';
 import LeaderBoardPage from '../pages/LeaderBoard_Page';
 
 const GameLayout: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'game' | 'leaderboard'>('game');
 
   return (
-    <Box sx={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden' }}>
+    <Box sx={{ position: 'relative', width: '100%', height: '100%', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <GameHeader />
       <Overlay>
         {/* Leaderboard Overlay Layer */}
         {activeTab === 'leaderboard' && (
@@ -19,7 +21,7 @@ const GameLayout: React.FC = () => {
               top: 0, 
               left: 0, 
               right: 0, 
-              bottom: '64px', // Space for footer
+              bottom: 0, 
               zIndex: 100, 
               backgroundColor: 'white',
               overflowY: 'auto',
@@ -33,8 +35,10 @@ const GameLayout: React.FC = () => {
         {/* Game State Router Layer */}
         <Box 
           sx={{ 
-            display: activeTab === 'game' ? 'block' : 'none',
-            height: 'calc(100vh - 64px)', 
+            display: activeTab === 'game' ? 'flex' : 'none',
+            flex: 1,
+            minHeight: 0,
+            flexDirection: 'column',
             overflowY: 'auto',
             overflowX: 'hidden'
           }}

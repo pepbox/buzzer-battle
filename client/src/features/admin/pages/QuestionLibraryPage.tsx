@@ -24,6 +24,7 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import SearchIcon from "@mui/icons-material/Search";
@@ -541,6 +542,10 @@ const QuestionLibraryPage: React.FC = () => {
   const [sortAnchorEl, setSortAnchorEl] = useState<null | HTMLElement>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [currentListModalOpen, setCurrentListModalOpen] = useState(false);
+  const [draggingQuestionId, setDraggingQuestionId] = useState<string | null>(
+    null,
+  );
   const [editingQuestion, setEditingQuestion] =
     useState<QuestionBankItem | null>(null);
   const [questionToDelete, setQuestionToDelete] =
@@ -571,6 +576,11 @@ const QuestionLibraryPage: React.FC = () => {
     isLoading: isQuestionLoading,
     refetch: refetchQuestions,
   } = useFetchQuestionBankQuery(queryArgs);
+  const { data: allQuestionsResponse } = useFetchQuestionBankQuery({
+    sort: "newest",
+    page: 1,
+    limit: 500,
+  });
   const [updateSessionQuestions, { isLoading: isSavingQuestions }] =
     useUpdateSessionQuestionsMutation();
   const [deleteQuestion, { isLoading: isDeletingQuestion }] =
@@ -582,7 +592,16 @@ const QuestionLibraryPage: React.FC = () => {
   }, [foldersResponse]);
 
   const questionBank = questionBankResponse?.data?.questions || [];
+  const allQuestions = allQuestionsResponse?.data?.questions || [];
   const currentSessionQuestionIds = sessionResponse?.data?.questions || [];
+
+  const questionLookup = useMemo(() => {
+    const map = new Map<string, QuestionBankItem>();
+    [...allQuestions, ...questionBank].forEach((question) => {
+      map.set(question._id, question);
+    });
+    return map;
+  }, [allQuestions, questionBank]);
 
   useEffect(() => {
     setSelectedQuestionIds(currentSessionQuestionIds);
@@ -616,6 +635,53 @@ const QuestionLibraryPage: React.FC = () => {
   const handleEditQuestion = (question: QuestionBankItem) => {
     setEditingQuestion(question);
     setEditModalOpen(true);
+  };
+
+  const handleDragStart = (questionId: string) => {
+    setDraggingQuestionId(questionId);
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+  };
+
+  const handleDrop = (targetQuestionId: string) => {
+    if (!draggingQuestionId || draggingQuestionId === targetQuestionId) {
+      setDraggingQuestionId(null);
+      return;
+    }
+
+    setSelectedQuestionIds((current) => {
+      const fromIndex = current.indexOf(draggingQuestionId);
+      const toIndex = current.indexOf(targetQuestionId);
+
+      if (fromIndex === -1 || toIndex === -1) return current;
+
+      const reordered = [...current];
+      const [moved] = reordered.splice(fromIndex, 1);
+      reordered.splice(toIndex, 0, moved);
+      return reordered;
+    });
+
+    setDraggingQuestionId(null);
+  };
+
+  const handleEditFromCurrentList = (questionId: string) => {
+    const question = questionLookup.get(questionId);
+    if (!question) {
+      setActionError("Question details not loaded yet. Please try again.");
+      return;
+    }
+
+    setEditingQuestion(question);
+    setEditModalOpen(true);
+    setCurrentListModalOpen(false);
+  };
+
+  const handleRemoveFromCurrentList = (questionId: string) => {
+    setSelectedQuestionIds((current) =>
+      current.filter((id) => id !== questionId),
+    );
   };
 
   const handleDeleteQuestion = async () => {
@@ -666,9 +732,14 @@ const QuestionLibraryPage: React.FC = () => {
           <Typography variant="h5" fontWeight={700}>
             Question Library
           </Typography>
-          <Button onClick={() => navigate(`/admin/${sessionId}/dashboard`)}>
-            Back to Dashboard
-          </Button>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Button onClick={() => setCurrentListModalOpen(true)}>
+              Current Question List
+            </Button>
+            <Button onClick={() => navigate(`/admin/${sessionId}/dashboard`)}>
+              Back to Dashboard
+            </Button>
+          </Box>
         </Box>
 
         <Box sx={{ display: "flex", gap: 1, alignItems: "center", mt: 2 }}>
@@ -978,6 +1049,101 @@ const QuestionLibraryPage: React.FC = () => {
             disabled={isDeletingQuestion}
           >
             {isDeletingQuestion ? "Deleting..." : "Delete"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={currentListModalOpen}
+        onClose={() => {
+          setCurrentListModalOpen(false);
+          setDraggingQuestionId(null);
+        }}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Current Question List</DialogTitle>
+        <DialogContent>
+          {!selectedQuestionIds.length ? (
+            <Typography color="text.secondary">
+              No questions selected yet.
+            </Typography>
+          ) : (
+            <List sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              {selectedQuestionIds.map((questionId, index) => {
+                const question = questionLookup.get(questionId);
+
+                return (
+                  <Paper
+                    key={questionId}
+                    variant="outlined"
+                    draggable
+                    onDragStart={() => handleDragStart(questionId)}
+                    onDragOver={handleDragOver}
+                    onDrop={() => handleDrop(questionId)}
+                    sx={{
+                      p: 1.25,
+                      borderColor:
+                        draggingQuestionId === questionId
+                          ? "primary.main"
+                          : "divider",
+                      opacity: draggingQuestionId === questionId ? 0.65 : 1,
+                      cursor: "grab",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                      }}
+                    >
+                      <DragIndicatorIcon sx={{ color: "text.secondary" }} />
+                      <Typography
+                        variant="body2"
+                        sx={{ minWidth: 28, fontWeight: 700 }}
+                      >
+                        {index + 1}.
+                      </Typography>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography noWrap fontWeight={600}>
+                          {question?.questionContent?.text ||
+                            question?.questionText ||
+                            "Question details unavailable"}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Score: {question?.score ?? 0}
+                        </Typography>
+                      </Box>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleEditFromCurrentList(questionId)}
+                        disabled={!question}
+                      >
+                        <EditOutlinedIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => handleRemoveFromCurrentList(questionId)}
+                      >
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  </Paper>
+                );
+              })}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setCurrentListModalOpen(false);
+              setDraggingQuestionId(null);
+            }}
+          >
+            Close
           </Button>
         </DialogActions>
       </Dialog>

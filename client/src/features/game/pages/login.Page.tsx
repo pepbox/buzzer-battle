@@ -248,22 +248,19 @@ const LoginPage: React.FC = () => {
   return (
     <Box
       sx={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        width: "100vw",
-        height: "100vh",
+        flex: 1,
+        width: "100%",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
         background: "linear-gradient(180deg, #2196F3 0%, #1976D2 100%)",
         backgroundImage: `url(${normalBg})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
         padding: 2,
-        overflow: "hidden",
+        overflowY: "auto",
       }}
     >
       {/* Main Content */}

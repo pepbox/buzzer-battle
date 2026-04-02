@@ -251,8 +251,9 @@ export default class GameStateService {
     }
 
     gameState.gameStatus = GameStatus.PAUSED;
-    gameState.buzzerRoundStartTime = undefined; // Clear timestamps
-    gameState.answeringRoundStartTime = undefined;
+    // Do not clear round timestamps on pause.
+    // Frontend uses these for elapsed-time displays (e.g. buzzer leaderboard)
+    // and clearing them causes 00:00:00 or invalid fallback values after resume.
 
     const options: any = {};
     if (this.session) {
@@ -277,6 +278,14 @@ export default class GameStateService {
 
     // Resume to BUZZER_ROUND by default
     gameState.gameStatus = GameStatus.BUZZER_ROUND;
+
+    // If buzzer start time is missing (legacy records), initialize a fresh one.
+    if (
+      !gameState.buzzerRoundStartTime &&
+      gameState.currentQuestionIndex >= 0
+    ) {
+      gameState.buzzerRoundStartTime = Date.now() + 1500;
+    }
 
     const options: any = {};
     if (this.session) {

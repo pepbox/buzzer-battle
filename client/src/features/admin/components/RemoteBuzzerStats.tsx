@@ -17,6 +17,8 @@ interface RemoteBuzzerStatsProps {
   teamsRemaining: number;
   totalTeams: number;
   buzzerRoundStartTime?: number; // Added for elapsed time calculation
+  onPressedTeamsClick?: () => void;
+  onRemainingTeamsClick?: () => void;
 }
 
 // Format elapsed time as MM:SS:CC (minutes:seconds:centiseconds)
@@ -25,7 +27,7 @@ const formatElapsedTime = (elapsedMs: number): string => {
   const seconds = Math.floor((elapsedMs % 60000) / 1000);
   const centiseconds = Math.floor((elapsedMs % 1000) / 10);
 
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}:${String(centiseconds).padStart(2, '0')}`;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}:${String(centiseconds).padStart(2, "0")}`;
 };
 
 const RemoteBuzzerStats: React.FC<RemoteBuzzerStatsProps> = ({
@@ -34,6 +36,8 @@ const RemoteBuzzerStats: React.FC<RemoteBuzzerStatsProps> = ({
   teamsRemaining,
   totalTeams,
   buzzerRoundStartTime,
+  onPressedTeamsClick,
+  onRemainingTeamsClick,
 }) => {
   return (
     <Box
@@ -125,8 +129,14 @@ const RemoteBuzzerStats: React.FC<RemoteBuzzerStatsProps> = ({
                     color: "#10B981",
                   }}
                 >
-                  ⏱️ {buzzerRoundStartTime
-                    ? formatElapsedTime(Math.max(0, Number(fastestTeam.timestamp) - buzzerRoundStartTime))
+                  ⏱️{" "}
+                  {buzzerRoundStartTime
+                    ? formatElapsedTime(
+                        Math.max(
+                          0,
+                          Number(fastestTeam.timestamp) - buzzerRoundStartTime,
+                        ),
+                      )
                     : "--:--:--"}
                 </Typography>
               </Box>
@@ -197,7 +207,9 @@ const RemoteBuzzerStats: React.FC<RemoteBuzzerStatsProps> = ({
                 borderRadius: "6px",
                 padding: "8px",
                 textAlign: "center",
+                cursor: onPressedTeamsClick ? "pointer" : "default",
               }}
+              onClick={onPressedTeamsClick}
             >
               <GroupsIcon sx={{ color: "#10B981", fontSize: "18px" }} />
               <Typography
@@ -231,7 +243,9 @@ const RemoteBuzzerStats: React.FC<RemoteBuzzerStatsProps> = ({
                 borderRadius: "6px",
                 padding: "8px",
                 textAlign: "center",
+                cursor: onRemainingTeamsClick ? "pointer" : "default",
               }}
+              onClick={onRemainingTeamsClick}
             >
               <HourglassEmptyIcon sx={{ color: "#FBBF24", fontSize: "18px" }} />
               <Typography

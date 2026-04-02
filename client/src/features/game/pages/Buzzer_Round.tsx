@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Box, Alert } from "@mui/material";
-import QuestionBuzzer from "../../question/components/Question_Buzzer";
+import Question, { QuestionData } from "../../question/components/Question";
 import Buzzer from "../../../components/ui/Buzzer";
 import normalBg from "../../../assets/background/question_bg.webp";
 import { useFetchCurrentQuestionQuery } from "../../question/services/questions.api";
@@ -21,7 +21,9 @@ const BuzzerRound: React.FC = () => {
 
   // Get current team and game state from Redux
   const team = useAppSelector((state: RootState) => state.team.team);
-  const gameState = useAppSelector((state: RootState) => state.gameState.gameState);
+  const gameState = useAppSelector(
+    (state: RootState) => state.gameState.gameState,
+  );
 
   // Fetch current question
   const {
@@ -35,6 +37,22 @@ const BuzzerRound: React.FC = () => {
 
   const question = questionData?.data?.question;
   const currentQuestionIndex = questionData?.data?.currentQuestionIndex;
+
+  const questionDataFormatted: QuestionData = {
+    id: question?._id || "",
+    text: question?.questionContent?.text || question?.questionText,
+    image: question?.questionImage,
+    video: question?.quetionVideo,
+    media: question?.questionContent?.media?.length
+      ? question.questionContent.media
+      : question?.questionAssets?.filter((item: any) =>
+          ["image", "video", "audio", "gif", "text", "file"].includes(
+            item?.type,
+          ),
+        ),
+    score: question?.score,
+    options: [],
+  };
 
   // Reset buzzer state when question changes
   useEffect(() => {
@@ -109,11 +127,9 @@ const BuzzerRound: React.FC = () => {
   return (
     <Box
       sx={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        width: "100vw",
-        height: "100vh",
+        width: "100%",
+        flex: "1 0 auto",
+        minHeight: "100%",
         background: "linear-gradient(180deg, #87CEEB 0%, #4682B4 100%)",
         backgroundImage: `url(${normalBg})`,
         backgroundSize: "cover",
@@ -121,8 +137,7 @@ const BuzzerRound: React.FC = () => {
         backgroundRepeat: "no-repeat",
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-around",
-        overflow: "auto",
+        justifyContent: "center",
       }}
     >
       {/* Error Alert */}
@@ -156,21 +171,15 @@ const BuzzerRound: React.FC = () => {
             width: "100%",
             display: "flex",
             justifyContent: "center",
-            marginBottom: "32px",
+            marginBottom: "20px",
           }}
         >
-          <QuestionBuzzer
+          <Question
+            questionData={questionDataFormatted}
             questionNumber={(currentQuestionIndex || 0) + 1}
-            questionText={
-              question?.questionContent?.text || question?.questionText || ""
-            }
-            questionImage={question?.questionImage}
-            questionVideo={question?.quetionVideo}
-            questionMedia={
-              question?.questionContent?.media?.length
-                ? question.questionContent.media
-                : question?.questionAssets
-            }
+            showOptions={false}
+            showVerbalHint={false}
+            disabled={true}
           />
         </Box>
 
@@ -198,14 +207,17 @@ const BuzzerRound: React.FC = () => {
       {/* Synchronized Reveal Overlay */}
       <Backdrop
         sx={{
-          color: '#fff',
+          color: "#fff",
           zIndex: (theme) => theme.zIndex.drawer + 1,
-          flexDirection: 'column',
-          backgroundColor: 'rgba(0, 0, 0, 0.7)'
+          flexDirection: "column",
+          backgroundColor: "rgba(0, 0, 0, 0.7)",
         }}
         open={isLocked}
       >
-        <CircularProgress size={80} sx={{ color: '#FFD700', marginBottom: 3 }} />
+        <CircularProgress
+          size={80}
+          sx={{ color: "#FFD700", marginBottom: 3 }}
+        />
         <Typography variant="h4" fontWeight="medium" letterSpacing={1.5}>
           Loading Question...
         </Typography>

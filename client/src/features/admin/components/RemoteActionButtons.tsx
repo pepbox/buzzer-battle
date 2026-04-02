@@ -22,6 +22,7 @@ interface RemoteActionButtonsProps {
   onMarkWrong?: () => void;
   canPassToSecondTeam: boolean;
   hasFastestTeam: boolean;
+  isAnswerShown?: boolean;
   isLoading?: boolean;
   lastAnswerWasWrong?: boolean;
 }
@@ -40,6 +41,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
   onMarkWrong,
   canPassToSecondTeam,
   hasFastestTeam,
+  isAnswerShown = false,
   isLoading = false,
   lastAnswerWasWrong = false,
 }) => {
@@ -154,7 +156,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
           isLoading ? <CircularProgress size={20} /> : <CheckCircleIcon />
         }
         onClick={onShowAnswer}
-        disabled={isLoading || currentQuestionIndex < 0}
+        disabled={isLoading || currentQuestionIndex < 0 || isAnswerShown}
         sx={{
           ...buttonBaseStyles,
           backgroundColor: "#14B8A6",
@@ -164,7 +166,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
           },
         }}
       >
-        👁️ Show Answer
+         Show Answer
       </Button>
 
       {!hasQuestions && (
@@ -212,7 +214,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
             },
           }}
         >
-          ⚡ Allow Top Team to Answer
+           Allow Top Team to Answer
         </Button>
       )}
 
@@ -232,7 +234,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
             },
           }}
         >
-          ⏸️ Pause Game
+           Pause Game
         </Button>
       ) : (
         <Button
@@ -251,7 +253,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
             },
           }}
         >
-          ▶️ Resume Game
+           Resume Game
         </Button>
       )}
 
@@ -293,7 +295,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
             },
           }}
         >
-          🔄 Pass to 2nd Team
+           Pass to Next Team
         </Button>
       )}
 

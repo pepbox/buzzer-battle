@@ -110,9 +110,16 @@ const GameMain = () => {
     <div
       style={{
         maxWidth: "480px",
+        width: "100%",
         margin: "0 auto",
-        minHeight: window.innerHeight,
+        height: "100vh",
+        minHeight: "100dvh", // Modern browsers prefer dvh
         background: "#FFFFFF",
+        position: "relative",
+        boxShadow: "0px 0px 20px rgba(0,0,0,0.1)",
+        overflowX: "hidden",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
       <Routes>

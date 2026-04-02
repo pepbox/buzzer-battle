@@ -2,6 +2,10 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   Box,
   Alert,
+  Chip,
+  List,
+  ListItem,
+  ListItemText,
   Snackbar,
   Dialog,
   DialogTitle,
@@ -16,9 +20,9 @@ import {
   Typography,
   Paper,
 } from "@mui/material";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import { useParams } from "react-router-dom";
 import normalBg from "../../../assets/background/normal_bg.webp";
-import RemoteHeader from "../components/RemoteHeader";
-import RemoteGameStatus from "../components/RemoteGameStatus";
 import RemoteTeamInfo from "../components/RemoteTeamInfo";
 import RemoteActionButtons from "../components/RemoteActionButtons";
 import RemoteBuzzerStats from "../components/RemoteBuzzerStats";
@@ -48,6 +52,7 @@ import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
 
 const RemoteControl: React.FC = () => {
+  const { sessionId } = useParams<{ sessionId: string }>();
   const { session } = useAppSelector((state: RootState) => state.session);
 
   // State
@@ -58,6 +63,10 @@ const RemoteControl: React.FC = () => {
     "success",
   );
   const [showAnswerModalOpen, setShowAnswerModalOpen] = useState(false);
+  const [isAnswerShown, setIsAnswerShown] = useState(false);
+  const [teamListModalType, setTeamListModalType] = useState<
+    "pressed" | "remaining" | null
+  >(null);
   const [buzzerStatsCache, setBuzzerStatsCache] = useState<any>(null);
   const [attemptedTeamIds, setAttemptedTeamIds] = useState<string[]>([]);
 
@@ -105,6 +114,10 @@ const RemoteControl: React.FC = () => {
   const currentQuestionIndex = gameState?.currentQuestionIndex ?? -1;
   const totalQuestions = session?.questions?.length || 0;
   const gameStatus = gameState?.gameStatus || "paused";
+  const displayGameStatus =
+    gameStatus === "buzzer_round" ? "Playing" : gameStatus;
+  const displayQuestionNumber =
+    totalQuestions > 0 ? Math.max(0, currentQuestionIndex + 1) : 0;
   const currentAnsweringTeamRaw = gameState?.currentAnsweringTeam;
 
   // Get actual question ID from the current question
@@ -147,11 +160,34 @@ const RemoteControl: React.FC = () => {
   const buzzerLeaderboard = buzzerLeaderboardData?.data?.leaderboard || [];
   const canPassToSecondTeam = buzzerLeaderboard.length >= 2;
 
+  const pressedTeamIds = new Set(
+    buzzerLeaderboard.map((entry: any) => String(entry.teamId)),
+  );
+  const pressedTeams = buzzerLeaderboard.map((entry: any, index: number) => ({
+    id: String(entry.teamId),
+    rank: index + 1,
+    teamNumber: entry.teamNumber,
+    teamName: entry.teamName,
+  }));
+  const currentAnsweringTeamRank = currentAnsweringTeam
+    ? (() => {
+        const index = buzzerLeaderboard.findIndex(
+          (entry: any) =>
+            String(entry.teamId) === String(currentAnsweringTeam._id) ||
+            String((entry as any).teamId?._id) ===
+              String(currentAnsweringTeam._id),
+        );
+        return index >= 0 ? index + 1 : undefined;
+      })()
+    : undefined;
+  const remainingTeams = teams.filter((team) => !pressedTeamIds.has(team._id));
+
   // Clear cache and reset team selection when question changes
   useEffect(() => {
     setBuzzerStatsCache(null);
     setSelectedTeamIdForNoBuzzer("");
     setAttemptedTeamIds([]);
+    setIsAnswerShown(false);
   }, [currentQuestionId]);
 
   // Ensure keepBuzzer/question metadata stays fresh when question index changes.
@@ -221,6 +257,7 @@ const RemoteControl: React.FC = () => {
     const handleGameStateChanged = (data: any) => {
       if (data.gameStatus === "buzzer_round") {
         setLastAnswerWasWrong(false); // Reset on new question
+        setIsAnswerShown(false);
         // Clear cache and refetch buzzer stats when buzzer round starts
         setBuzzerStatsCache(null);
         if (refetchBuzzerStats) {
@@ -239,8 +276,16 @@ const RemoteControl: React.FC = () => {
         setSelectedTeamIdForNoBuzzer("");
       }
 
+      if (data?.forceAnswerReveal) {
+        setIsAnswerShown(true);
+      }
+
       // Always refresh current question metadata on game state transitions.
       refetchCurrentQuestion();
+    };
+
+    const handleShowAnswerEvent = () => {
+      setIsAnswerShown(true);
     };
 
     const handleBuzzerPressed = () => {
@@ -262,6 +307,7 @@ const RemoteControl: React.FC = () => {
     websocketService.on(Events.ANSWER_MARKED_WRONG, handleAnswerMarkedWrong);
     websocketService.on(Events.GAME_STATE_CHANGED, handleGameStateChanged);
     websocketService.on(Events.BUZZER_PRESSED, handleBuzzerPressed);
+    websocketService.on(Events.SHOW_ANSWER, handleShowAnswerEvent);
 
     return () => {
       websocketService.off(Events.ANSWER_SUBMITTED, handleAnswerSubmitted);
@@ -272,6 +318,7 @@ const RemoteControl: React.FC = () => {
       websocketService.off(Events.ANSWER_MARKED_WRONG, handleAnswerMarkedWrong);
       websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChanged);
       websocketService.off(Events.BUZZER_PRESSED, handleBuzzerPressed);
+      websocketService.off(Events.SHOW_ANSWER, handleShowAnswerEvent);
     };
   }, [gameStatus, refetchBuzzerStats, refetchCurrentQuestion]);
 
@@ -301,6 +348,7 @@ const RemoteControl: React.FC = () => {
     try {
       await showAnswer().unwrap();
       setShowAnswerModalOpen(false);
+      setIsAnswerShown(true);
       showSnackbar("Answer revealed to all users and presenter", "success");
       setLastAnswerWasWrong(false);
     } catch (error: any) {
@@ -411,6 +459,15 @@ const RemoteControl: React.FC = () => {
     setSnackbarOpen(false);
   };
 
+  const handleOpenPresenter = () => {
+    if (!sessionId) return;
+    window.open(
+      `/admin/${sessionId}/presenter`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+  };
+
   // Loading state
   if (gameStateLoading) {
     return <Loader />;
@@ -475,15 +532,30 @@ const RemoteControl: React.FC = () => {
             },
           }}
         >
-          {/* Header */}
-          <RemoteHeader
-            sessionName={session?.sessionName || "Session"}
-            currentQuestionIndex={currentQuestionIndex}
-            totalQuestions={totalQuestions}
-          />
-
-          {/* Game Status */}
-          <RemoteGameStatus gameStatus={gameStatus} />
+          <Box sx={{ p: 2, borderBottom: "1px solid #E2E8F0" }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+              {session?.sessionName || "Session"}
+            </Typography>
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+              <Chip
+                label={`Status: ${displayGameStatus}`}
+                color="primary"
+                variant="outlined"
+              />
+              <Chip
+                icon={<OpenInNewIcon />}
+                label="Leaderboard"
+                clickable
+                onClick={handleOpenPresenter}
+                color="secondary"
+                variant="outlined"
+              />
+              <Chip
+                label={`Question: ${displayQuestionNumber}/${totalQuestions}`}
+                variant="outlined"
+              />
+            </Box>
+          </Box>
 
           {/* No-Buzzer Team Selection or Current Team Info */}
           {isNoBuzzerMode ? (
@@ -523,6 +595,7 @@ const RemoteControl: React.FC = () => {
           ) : (
             <RemoteTeamInfo
               currentAnsweringTeam={currentAnsweringTeam}
+              answeringTeamRank={currentAnsweringTeamRank}
               buzzerTimestamp={
                 currentAnsweringTeam
                   ? buzzerLeaderboard.find(
@@ -543,6 +616,8 @@ const RemoteControl: React.FC = () => {
               teamsRemaining={buzzerStats.teamsRemaining}
               totalTeams={buzzerStats.totalTeams}
               buzzerRoundStartTime={gameState?.buzzerRoundStartTime}
+              onPressedTeamsClick={() => setTeamListModalType("pressed")}
+              onRemainingTeamsClick={() => setTeamListModalType("remaining")}
             />
           )}
 
@@ -561,6 +636,7 @@ const RemoteControl: React.FC = () => {
             onMarkWrong={handleMarkWrong}
             canPassToSecondTeam={canPassToSecondTeam}
             hasFastestTeam={!!buzzerStats?.fastestTeam}
+            isAnswerShown={isAnswerShown}
             isLoading={isAnyLoading}
             lastAnswerWasWrong={lastAnswerWasWrong}
           />
@@ -594,6 +670,55 @@ const RemoteControl: React.FC = () => {
           >
             Confirm
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={teamListModalType !== null}
+        onClose={() => setTeamListModalType(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>
+          {teamListModalType === "pressed"
+            ? "Pressed Teams"
+            : "Remaining Teams"}
+        </DialogTitle>
+        <DialogContent>
+          {teamListModalType === "pressed" ? (
+            pressedTeams.length ? (
+              <List dense>
+                {pressedTeams.map((team) => (
+                  <ListItem key={team.id}>
+                    <ListItemText
+                      primary={`#${team.rank} - Team ${team.teamNumber}`}
+                      secondary={team.teamName}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            ) : (
+              <Typography color="text.secondary">
+                No team has pressed yet.
+              </Typography>
+            )
+          ) : remainingTeams.length ? (
+            <List dense>
+              {remainingTeams.map((team) => (
+                <ListItem key={team._id}>
+                  <ListItemText
+                    primary={`Team ${team.teamNumber}`}
+                    secondary={team.teamName}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          ) : (
+            <Typography color="text.secondary">No remaining teams.</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTeamListModalType(null)}>Close</Button>
         </DialogActions>
       </Dialog>
 

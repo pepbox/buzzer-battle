@@ -12,13 +12,11 @@ const GameFooter: React.FC<GameFooterProps> = ({ activeTab, onTabChange }) => {
   return (
     <Paper 
       sx={{ 
-        position: 'fixed', 
-        bottom: 0, 
-        left: 0, 
-        right: 0, 
-        zIndex: 1000,
         maxWidth: "480px",
-        margin: "0 auto" 
+        width: "100%",
+        margin: "0 auto",
+        flexShrink: 0,
+        paddingBottom: "env(safe-area-inset-bottom)"
       }} 
       elevation={5}
     >

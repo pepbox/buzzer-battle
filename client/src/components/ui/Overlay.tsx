@@ -246,11 +246,16 @@ const Overlay: React.FC<OverlayProps> = ({
   };
 
   return (
-    <Box sx={{ position: "relative", width: "100%", height: "100%" }}>
+    <Box sx={{ position: "relative", width: "100%", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
       {/* Main content */}
       <Box
         sx={{
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
           transition: "opacity 0.3s ease-in-out",
+          overflow: "hidden"
         }}
       >
         {children}

@@ -62,11 +62,10 @@ const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams }) => {
   return (
     <Box
       sx={{
-        width: "100vw",
-        minHeight: "100vh",
+        width: "100%",
+        flex: 1,
         display: "flex",
         flexDirection: "column",
-        overflowY: "auto",
         // justifyContent: "space-between",
         pt: "16px",
       }}

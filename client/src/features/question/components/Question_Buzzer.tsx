@@ -65,7 +65,7 @@ const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
 
     const mediaStyles = {
       width: "100%",
-      maxHeight: "220px",
+      maxHeight: "520px",
       objectFit: "contain" as const,
       borderRadius: "12px",
       my: "10px",
@@ -169,7 +169,7 @@ const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
       sx={{
         position: "relative",
         width: "100%",
-        maxWidth: "380px",
+        maxWidth: "980px",
         flex: "1",
         margin: "0 auto",
         display: "flex",
@@ -219,13 +219,13 @@ const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
       <Box
         sx={{
           position: "relative",
-          width: "78%",
+          width: "94%",
           backgroundColor: "white",
           borderRadius: "20px",
           padding: {
-            xs: "25px 20px 70px 20px",
-            sm: "30px 25px 70px 25px",
-            md: "35px 30px 70px 30px",
+            xs: "22px 18px 36px 18px",
+            sm: "28px 22px 40px 22px",
+            md: "34px 28px 46px 28px",
           },
           boxShadow: "0px 3.67px 3.67px 1.83px #00000040",
           border: `6px solid ${theme.palette.primary.dark}`,
@@ -246,6 +246,11 @@ const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
             fontWeight: 700,
             textAlign: "center",
             lineHeight: 1.5,
+            fontSize: {
+              xs: "30px",
+              sm: "38px",
+              md: "44px",
+            },
           }}
         >
           {questionText}

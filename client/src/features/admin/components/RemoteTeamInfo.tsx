@@ -9,6 +9,7 @@ interface RemoteTeamInfoProps {
     teamName: string;
     teamScore: number;
   } | null;
+  answeringTeamRank?: number;
   buzzerTimestamp?: string;
   buzzerRoundStartTime?: number; // Added for elapsed time calculation
 }
@@ -19,11 +20,12 @@ const formatElapsedTime = (elapsedMs: number): string => {
   const seconds = Math.floor((elapsedMs % 60000) / 1000);
   const centiseconds = Math.floor((elapsedMs % 1000) / 10);
 
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}:${String(centiseconds).padStart(2, '0')}`;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}:${String(centiseconds).padStart(2, "0")}`;
 };
 
 const RemoteTeamInfo: React.FC<RemoteTeamInfoProps> = ({
   currentAnsweringTeam,
+  answeringTeamRank,
   buzzerTimestamp,
   buzzerRoundStartTime,
 }) => {
@@ -53,9 +55,10 @@ const RemoteTeamInfo: React.FC<RemoteTeamInfoProps> = ({
   }
 
   // Calculate elapsed time
-  const elapsedTime = buzzerTimestamp && buzzerRoundStartTime
-    ? Math.max(0, Number(buzzerTimestamp) - buzzerRoundStartTime)
-    : null;
+  const elapsedTime =
+    buzzerTimestamp && buzzerRoundStartTime
+      ? Math.max(0, Number(buzzerTimestamp) - buzzerRoundStartTime)
+      : null;
 
   return (
     <Box
@@ -98,7 +101,7 @@ const RemoteTeamInfo: React.FC<RemoteTeamInfoProps> = ({
             fontSize: "18px",
           }}
         >
-          {currentAnsweringTeam.teamNumber}
+          {answeringTeamRank || currentAnsweringTeam.teamNumber}
         </Avatar>
 
         {/* Team Details */}
@@ -121,8 +124,10 @@ const RemoteTeamInfo: React.FC<RemoteTeamInfoProps> = ({
               color: "#64748B",
             }}
           >
-            Team #{currentAnsweringTeam.teamNumber} • Score:{" "}
-            {currentAnsweringTeam.teamScore}
+            {answeringTeamRank
+              ? `Rank #${answeringTeamRank} in buzzer queue`
+              : `Team #${currentAnsweringTeam.teamNumber}`}{" "}
+            • Score: {currentAnsweringTeam.teamScore}
           </Typography>
         </Box>
 

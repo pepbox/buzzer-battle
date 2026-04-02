@@ -204,7 +204,7 @@ const PresenterGameView: React.FC<PresenterGameViewProps> = ({ session }) => {
 
       // Do not reveal answer by default on idle; reveal only after a correct answer event.
       return shouldRevealAnswer ? (
-        <AnswerRevealPage />
+        <AnswerRevealPage presenterMode />
       ) : (
         <PresenterBuzzerRound />
       );
