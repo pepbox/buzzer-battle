@@ -2,6 +2,7 @@ import { Socket } from "socket.io";
 import BuzzerQueueService from "../../../modules/buzzerQueue/services/buzzerQueue.service";
 import GameStateService from "../../../modules/gameState/services/gameState.service";
 import QuestionService from "../../../modules/questions/services/question.service";
+import TeamService from "../../../modules/teams/services/team.service";
 import { GameStatus } from "../../../modules/gameState/types/enums";
 import { SessionEmitters } from "../sessionEmitters";
 import { Events } from "../enums/Events";
@@ -9,6 +10,7 @@ import { Events } from "../enums/Events";
 const buzzerQueueService = new BuzzerQueueService();
 const gameStateService = new GameStateService();
 const questionService = new QuestionService();
+const teamService = new TeamService();
 
 interface PressBuzzerPayload {
     timestamp: string; // bigint as string
@@ -33,7 +35,16 @@ export const handlePressBuzzer = async (
 
         const teamId = user.id;
         const sessionId = user.sessionId;
-        const timestamp = BigInt(payload.timestamp);
+        const normalizedTimestamp = Number(payload.timestamp);
+        if (!Number.isFinite(normalizedTimestamp)) {
+            socket.emit(Events.BUZZER_ERROR, {
+                message: "Invalid buzzer timestamp.",
+            });
+            return;
+        }
+
+        const roundedTimestamp = Math.round(normalizedTimestamp);
+        const timestamp = BigInt(roundedTimestamp);
 
         // Fetch game state
         const gameState = await gameStateService.fetchGameStateBySessionId(sessionId);
@@ -91,6 +102,9 @@ export const handlePressBuzzer = async (
         // Calculate TTL (e.g., 1 hour from now for auto-cleanup)
         const ttl = new Date();
         ttl.setHours(ttl.getHours() + 1);
+        const reactionTimeMs = gameState.buzzerRoundStartTime
+            ? Math.max(0, roundedTimestamp - gameState.buzzerRoundStartTime)
+            : 0;
 
         // Create buzzer entry
         const buzzerEntry = await buzzerQueueService.createBuzzerEntry({
@@ -99,14 +113,17 @@ export const handlePressBuzzer = async (
             teamId,
             questionId,
             timestamp,
+            reactionTimeMs,
             ttl,
         });
+        await teamService.recordBuzzerReactionTime(teamId, reactionTimeMs);
 
         // Emit to the team that their buzzer press was successful
         socket.emit(Events.BUZZER_PRESSED_SUCCESS, {
             message: "Buzzer pressed successfully!",
             data: {
                 timestamp: buzzerEntry.timestamp.toString(),
+                reactionTimeMs: buzzerEntry.reactionTimeMs,
                 questionId: buzzerEntry.questionId,
             },
         });
@@ -115,6 +132,7 @@ export const handlePressBuzzer = async (
         SessionEmitters.toSession(sessionId, Events.BUZZER_PRESSED, {
             teamId,
             timestamp: buzzerEntry.timestamp.toString(),
+            reactionTimeMs: buzzerEntry.reactionTimeMs,
             questionId: buzzerEntry.questionId,
         });
 

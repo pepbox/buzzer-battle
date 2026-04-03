@@ -8,11 +8,20 @@ import { Events } from "../../../services/websocket/enums/Events";
 
 interface LeaderBoardPageProps {
   isOverlay?: boolean;
+  navigationBase?: "game" | "admin";
 }
 
-const LeaderBoardPage: React.FC<LeaderBoardPageProps> = ({ isOverlay: _isOverlay }) => {
+const LeaderBoardPage: React.FC<LeaderBoardPageProps> = ({
+  isOverlay: _isOverlay,
+  navigationBase = "game",
+}) => {
   const navigate = useNavigate();
   const { sessionId } = useParams<{ sessionId: string }>();
+  const basePath = navigationBase === "admin" ? "admin" : "game";
+  const returnPath =
+    navigationBase === "admin"
+      ? `/${basePath}/${sessionId}/remote-control`
+      : `/${basePath}/${sessionId}/buzzer`;
 
   // Fetch overall leaderboard
   const { data, isLoading, error } = useFetchOverallLeaderboardQuery();
@@ -21,8 +30,7 @@ const LeaderBoardPage: React.FC<LeaderBoardPageProps> = ({ isOverlay: _isOverlay
   useEffect(() => {
     const handleGameStateChange = (data: any) => {
       if (data.gameStatus === "buzzer_round") {
-        // Navigate back to buzzer round when next question starts
-        navigate(`/game/${sessionId}/buzzer`);
+        navigate(returnPath);
       }
     };
 
@@ -31,11 +39,10 @@ const LeaderBoardPage: React.FC<LeaderBoardPageProps> = ({ isOverlay: _isOverlay
     return () => {
       websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChange);
     };
-  }, [navigate, sessionId]);
+  }, [navigate, returnPath, sessionId]);
 
   const handleBack = () => {
-    // Navigate back to buzzer round or home
-    navigate(`/game/${sessionId}/buzzer`);
+    navigate(returnPath);
   };
 
   if (isLoading) {
@@ -45,7 +52,8 @@ const LeaderBoardPage: React.FC<LeaderBoardPageProps> = ({ isOverlay: _isOverlay
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          minHeight: "100vh",
+          flex: 1,
+          minHeight: "100%",
         }}
       >
         <CircularProgress />
@@ -60,7 +68,8 @@ const LeaderBoardPage: React.FC<LeaderBoardPageProps> = ({ isOverlay: _isOverlay
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          minHeight: "100vh",
+          flex: 1,
+          minHeight: "100%",
         }}
       >
         <Typography color="error">Failed to load leaderboard</Typography>

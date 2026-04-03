@@ -26,6 +26,11 @@ const buzzerQueueSchema = new Schema<IBuzzerQueue>({
         type: Schema.Types.BigInt,
         required: true
     },
+    reactionTimeMs: {
+        type: Number,
+        required: true,
+        min: 0,
+    },
     questionId: {
         type: Schema.Types.ObjectId,
         ref: 'Question',

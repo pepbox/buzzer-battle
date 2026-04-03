@@ -10,7 +10,18 @@ const GameLayout: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'game' | 'leaderboard'>('game');
 
   return (
-    <Box sx={{ position: 'relative', width: '100%', height: '100%', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <Box
+      sx={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        flex: 1,
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
       <GameHeader />
       <Overlay>
         {/* Leaderboard Overlay Layer */}

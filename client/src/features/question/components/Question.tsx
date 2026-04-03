@@ -217,8 +217,7 @@ const Question: React.FC<QuestionProps> = ({
             component="audio"
             src={media.url}
             controls
-            autoPlay
-            preload="auto"
+            preload="metadata"
             sx={{ width: "100%", my: "10px" }}
           />
         );
@@ -256,8 +255,7 @@ const Question: React.FC<QuestionProps> = ({
               component="audio"
               src={media.url}
               controls
-              autoPlay
-              preload="auto"
+              preload="metadata"
               sx={{ width: "100%", my: "10px" }}
             />
           );

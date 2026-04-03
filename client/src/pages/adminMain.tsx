@@ -23,6 +23,7 @@ import Loader from "../components/ui/Loader";
 import { websocketService } from "../services/websocket/websocketService";
 import { Events } from "../services/websocket/enums/Events";
 import { clearAdmin } from "../features/admin/services/adminSlice";
+import LeaderBoardPage from "../features/game/pages/LeaderBoard_Page";
 
 const AdminMain = () => {
   const [FetchAdmin] = useLazyFetchAdminQuery();
@@ -103,6 +104,10 @@ const AdminMain = () => {
         >
           <Route path="/remote-control" element={<RemoteControl />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route
+            path="/leaderboard"
+            element={<LeaderBoardPage navigationBase="admin" />}
+          />
           <Route path="/presenter" element={<PresenterView />} />
           <Route path="/questions" element={<QuestionLibraryPage />} />
         </Route>

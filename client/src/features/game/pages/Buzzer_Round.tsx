@@ -29,6 +29,7 @@ const BuzzerRound: React.FC = () => {
   const {
     data: questionData,
     isLoading,
+    isFetching,
     error,
   } = useFetchCurrentQuestionQuery();
 
@@ -37,20 +38,26 @@ const BuzzerRound: React.FC = () => {
 
   const question = questionData?.data?.question;
   const currentQuestionIndex = questionData?.data?.currentQuestionIndex;
+  const expectedQuestionIndex = gameState?.currentQuestionIndex;
+  const isQuestionTransitioning =
+    expectedQuestionIndex !== undefined &&
+    expectedQuestionIndex >= 0 &&
+    currentQuestionIndex !== expectedQuestionIndex;
+  const activeQuestion = isQuestionTransitioning ? undefined : question;
 
   const questionDataFormatted: QuestionData = {
-    id: question?._id || "",
-    text: question?.questionContent?.text || question?.questionText,
-    image: question?.questionImage,
-    video: question?.quetionVideo,
-    media: question?.questionContent?.media?.length
-      ? question.questionContent.media
-      : question?.questionAssets?.filter((item: any) =>
+    id: activeQuestion?._id || "",
+    text: activeQuestion?.questionContent?.text || activeQuestion?.questionText,
+    image: activeQuestion?.questionImage,
+    video: activeQuestion?.quetionVideo,
+    media: activeQuestion?.questionContent?.media?.length
+      ? activeQuestion.questionContent.media
+      : activeQuestion?.questionAssets?.filter((item: any) =>
           ["image", "video", "audio", "gif", "text", "file"].includes(
             item?.type,
           ),
         ),
-    score: question?.score,
+    score: activeQuestion?.score,
     options: [],
   };
 
@@ -105,15 +112,15 @@ const BuzzerRound: React.FC = () => {
   };
 
   // Show loading state
-  if (isLoading) {
+  if (isLoading && !activeQuestion) {
     return <Loader />;
   }
 
   // Show error state
-  if (error || !question) {
+  if (error || (!activeQuestion && !isFetching && !isQuestionTransitioning)) {
     return (
       <Box
-        minHeight={"100vh"}
+        minHeight={"100%"}
         flex={1}
         display={"flex"}
         justifyContent={"center"}
@@ -174,13 +181,16 @@ const BuzzerRound: React.FC = () => {
             marginBottom: "20px",
           }}
         >
-          <Question
-            questionData={questionDataFormatted}
-            questionNumber={(currentQuestionIndex || 0) + 1}
-            showOptions={false}
-            showVerbalHint={false}
-            disabled={true}
-          />
+          {activeQuestion && (
+            <Question
+              key={questionDataFormatted.id}
+              questionData={questionDataFormatted}
+              questionNumber={(currentQuestionIndex || 0) + 1}
+              showOptions={false}
+              showVerbalHint={false}
+              disabled={true}
+            />
+          )}
         </Box>
 
         {/* Buzzer Section */}
@@ -199,7 +209,9 @@ const BuzzerRound: React.FC = () => {
             size="large"
             onPress={handleBuzzerPress}
             showPressText={true}
-            disabled={buzzerPressed || isPressing || isLocked}
+            disabled={
+              buzzerPressed || isPressing || isLocked || isQuestionTransitioning
+            }
           />
         </Box>
       </Box>
@@ -212,7 +224,9 @@ const BuzzerRound: React.FC = () => {
           flexDirection: "column",
           backgroundColor: "rgba(0, 0, 0, 0.7)",
         }}
-        open={isLocked}
+        open={
+          isLocked || isQuestionTransitioning || (isFetching && !activeQuestion)
+        }
       >
         <CircularProgress
           size={80}

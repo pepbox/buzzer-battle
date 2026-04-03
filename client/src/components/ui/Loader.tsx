@@ -2,7 +2,13 @@ import { CircularProgress, Stack } from "@mui/material"
 
 const Loader = () => {
   return (
-    <Stack justifyContent={"center"} alignItems={"center"} minHeight={window.innerHeight}><CircularProgress/></Stack>
+    <Stack
+      justifyContent={"center"}
+      alignItems={"center"}
+      sx={{ width: "100%", flex: 1, minHeight: "100%" }}
+    >
+      <CircularProgress />
+    </Stack>
   )
 }
 

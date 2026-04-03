@@ -5,6 +5,8 @@ export interface Team {
   teamNumber: number;
   teamName: string;
   teamScore: number;
+  totalBuzzerReactionTimeMs?: number;
+  totalBuzzerPressCount?: number;
   joinedAt: Date;
   sessionId: string;
 }
@@ -28,6 +30,8 @@ export interface LeaderboardTeam {
   teamNumber: number;
   teamName: string;
   teamScore: number;
+  totalBuzzerReactionTimeMs?: number;
+  totalBuzzerPressCount?: number;
   joinedAt: Date;
 }
 

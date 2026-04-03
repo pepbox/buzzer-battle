@@ -7,6 +7,7 @@ import TeamService from '../../teams/services/team.service';
 import { Types } from 'mongoose';
 import { SessionEmitters } from '../../../services/socket/sessionEmitters';
 import { Events } from '../../../services/socket/enums/Events';
+import { GameStatus } from '../../gameState/types/enums';
 
 const buzzerQueueService = new BuzzerQueueService();
 const gameStateService = new GameStateService();
@@ -36,10 +37,38 @@ export const pressBuzzer = async (
             return next(new AppError("Timestamp is required.", 400));
         }
 
+        const normalizedTimestamp = Number(timestamp);
+        if (!Number.isFinite(normalizedTimestamp)) {
+            return next(new AppError("Invalid buzzer timestamp.", 400));
+        }
+
+        const roundedTimestamp = Math.round(normalizedTimestamp);
+
         // Fetch game state to get current question
         const gameState = await gameStateService.fetchGameStateBySessionId(sessionId);
         if (!gameState) {
             return next(new AppError("Game state not found.", 404));
+        }
+
+        if (gameState.gameStatus !== GameStatus.BUZZER_ROUND) {
+            return next(
+                new AppError(
+                    "Buzzer can only be pressed during the buzzer round.",
+                    400
+                )
+            );
+        }
+
+        if (
+            gameState.buzzerRoundStartTime &&
+            roundedTimestamp < gameState.buzzerRoundStartTime
+        ) {
+            return next(
+                new AppError(
+                    "Buzzer pressed too early! Wait for the countdown.",
+                    400
+                )
+            );
         }
 
         // Fetch current question
@@ -67,6 +96,9 @@ export const pressBuzzer = async (
         // Calculate TTL (10 minutes from now)
         const ttl = new Date();
         ttl.setMinutes(ttl.getMinutes() + 10);
+        const reactionTimeMs = gameState.buzzerRoundStartTime
+            ? Math.max(0, roundedTimestamp - gameState.buzzerRoundStartTime)
+            : 0;
 
         // Create buzzer entry
         const buzzerEntry = await buzzerQueueService.createBuzzerEntry({
@@ -74,9 +106,11 @@ export const pressBuzzer = async (
             sessionId: new Types.ObjectId(sessionId),
             teamId: new Types.ObjectId(teamId),
             questionId,
-            timestamp: BigInt(timestamp),
+            timestamp: BigInt(roundedTimestamp),
+            reactionTimeMs,
             ttl,
         });
+        await teamService.recordBuzzerReactionTime(teamId, reactionTimeMs);
 
         // Get current rank by counting entries with smaller timestamp
         const leaderboard = await buzzerQueueService.fetchBuzzerLeaderboard(
@@ -98,7 +132,8 @@ export const pressBuzzer = async (
             teamId,
             teamName,
             rank,
-            timestamp: timestamp.toString(),
+            timestamp: roundedTimestamp.toString(),
+            reactionTimeMs,
             questionId: questionId.toString(),
             totalTeamsPressed: leaderboard.length,
         });
@@ -108,11 +143,12 @@ export const pressBuzzer = async (
             data: {
                 rank,
                 teamId,
-                timestamp: timestamp.toString(),
+                timestamp: roundedTimestamp.toString(),
                 buzzerEntry: {
                     _id: (buzzerEntry as any)._id,
                     questionId: buzzerEntry.questionId,
                     timestamp: buzzerEntry.timestamp.toString(),
+                    reactionTimeMs: buzzerEntry.reactionTimeMs,
                     createdAt: buzzerEntry.createdAt,
                 },
             },
@@ -173,6 +209,7 @@ export const fetchBuzzerLeaderboard = async (
             teamName: (entry.teamId as any).teamName,
             teamScore: (entry.teamId as any).teamScore,
             timestamp: entry.timestamp.toString(),
+            reactionTimeMs: entry.reactionTimeMs,
             pressedAt: entry.createdAt,
         }));
 
@@ -225,6 +262,7 @@ export const fetchBuzzerLeaderboardByQuestion = async (
             teamName: (entry.teamId as any).teamName,
             teamScore: (entry.teamId as any).teamScore,
             timestamp: entry.timestamp.toString(),
+            reactionTimeMs: entry.reactionTimeMs,
             pressedAt: entry.createdAt,
         }));
 
@@ -295,6 +333,7 @@ export const fetchBuzzerStats = async (
             teamNumber: (leaderboard[0].teamId as any).teamNumber,
             teamName: (leaderboard[0].teamId as any).teamName,
             timestamp: leaderboard[0].timestamp.toString(),
+            reactionTimeMs: leaderboard[0].reactionTimeMs,
             pressedAt: leaderboard[0].createdAt,
         } : null;
 

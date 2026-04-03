@@ -20,6 +20,7 @@ const PresenterBuzzerRound: React.FC = () => {
   const {
     data: questionData,
     isLoading,
+    isFetching,
     error,
     refetch,
   } = useFetchCurrentQuestionQuery();
@@ -36,11 +37,18 @@ const PresenterBuzzerRound: React.FC = () => {
   }, [gameState?.currentQuestionIndex, refetch]);
 
   const question = questionData?.data?.question;
+  const fetchedQuestionIndex = questionData?.data?.currentQuestionIndex;
   // Use game state's currentQuestionIndex as source of truth, fallback to API response
   const currentQuestionIndex =
     (gameState?.currentQuestionIndex ??
       questionData?.data?.currentQuestionIndex ??
       0) + 1;
+  const expectedQuestionIndex = gameState?.currentQuestionIndex;
+  const isQuestionTransitioning =
+    expectedQuestionIndex !== undefined &&
+    expectedQuestionIndex >= 0 &&
+    fetchedQuestionIndex !== expectedQuestionIndex;
+  const activeQuestion = isQuestionTransitioning ? undefined : question;
   const isAnsweringState = gameState?.gameStatus === "answering";
 
   const normalizeId = (value: any): string | undefined => {
@@ -78,12 +86,42 @@ const PresenterBuzzerRound: React.FC = () => {
   // const { progress } = useTimerSync(gameState?.buzzerRoundStartTime, timeLimit);
 
   // Show loading state
-  if (isLoading) {
+  if (isLoading && !activeQuestion) {
     return <Loader />;
   }
 
   // Show error state
-  if (error || !question) {
+  if (isQuestionTransitioning || (isFetching && !activeQuestion)) {
+    return (
+      <Box
+        sx={{
+          width: "100%",
+          height: "100%",
+          backgroundImage: `url(${normalBg})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Typography
+          sx={{
+            color: "#FFFFFF",
+            fontWeight: 800,
+            fontSize: { xs: "20px", sm: "24px", md: "28px" },
+            textAlign: "center",
+            textShadow: "2px 2px 8px rgba(0, 0, 0, 0.8)",
+          }}
+        >
+          Loading question...
+        </Typography>
+      </Box>
+    );
+  }
+
+  if (error || !activeQuestion) {
     return <Error />;
   }
 
@@ -169,14 +207,16 @@ const PresenterBuzzerRound: React.FC = () => {
           <QuestionBuzzer
             questionNumber={currentQuestionIndex}
             questionText={
-              question?.questionContent?.text || question?.questionText || ""
+              activeQuestion?.questionContent?.text ||
+              activeQuestion?.questionText ||
+              ""
             }
-            questionImage={question?.questionImage}
-            questionVideo={question?.quetionVideo}
+            questionImage={activeQuestion?.questionImage}
+            questionVideo={activeQuestion?.quetionVideo}
             questionMedia={
-              question?.questionContent?.media?.length
-                ? question.questionContent.media
-                : question?.questionAssets
+              activeQuestion?.questionContent?.media?.length
+                ? activeQuestion.questionContent.media
+                : activeQuestion?.questionAssets
             }
           />
         </Box>

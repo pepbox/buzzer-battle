@@ -95,6 +95,21 @@ const GameStateRouter = () => {
         )
       );
 
+      // Clear the cached current question immediately so the previous question's
+      // text/assets do not flash on screen while the new question request is in flight.
+      dispatch(
+        api.util.updateQueryData(
+          "fetchCurrentQuestion" as never,
+          undefined as never,
+          (draft: any) => {
+            if (draft?.data) {
+              draft.data.question = undefined;
+              draft.data.currentQuestionIndex = -1;
+            }
+          }
+        )
+      );
+
       // Reset Redux slices to clear stale state
       dispatch(resetBuzzer()); // Reset buzzer press state
       dispatch(clearResponseResult()); // Clear previous question response

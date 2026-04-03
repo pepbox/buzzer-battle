@@ -16,6 +16,7 @@ export default class BuzzerQueueService {
         teamId,
         questionId,
         timestamp,
+        reactionTimeMs,
         ttl,
     }: {
         gameStateId: Types.ObjectId | string;
@@ -23,6 +24,7 @@ export default class BuzzerQueueService {
         teamId: Types.ObjectId | string;
         questionId: Types.ObjectId | string;
         timestamp: bigint;
+        reactionTimeMs: number;
         ttl: Date;
     }): Promise<IBuzzerQueue> {
         const buzzerEntry = new BuzzerQueue({
@@ -31,6 +33,7 @@ export default class BuzzerQueueService {
             teamId,
             questionId,
             timestamp,
+            reactionTimeMs,
             ttl,
         });
 

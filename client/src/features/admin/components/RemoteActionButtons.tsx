@@ -146,7 +146,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
           },
         }}
       >
-        {currentQuestionIndex === -1 ? "➡️ Start Game" : "➡️ Next Question"}
+        {currentQuestionIndex === -1 ? " Start Game" : " Next Question"}
       </Button>
 
       {/* Show Answer Button */}

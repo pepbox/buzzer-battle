@@ -53,11 +53,18 @@ const QuestionRoundPage: React.FC = () => {
   const {
     data: questionData,
     isLoading,
+    isFetching,
     error,
   } = useFetchCurrentQuestionQuery();
 
   const question = questionData?.data?.question;
   const currentQuestionIndex = questionData?.data?.currentQuestionIndex;
+  const expectedQuestionIndex = gameState?.currentQuestionIndex;
+  const isQuestionTransitioning =
+    expectedQuestionIndex !== undefined &&
+    expectedQuestionIndex >= 0 &&
+    currentQuestionIndex !== expectedQuestionIndex;
+  const activeQuestion = isQuestionTransitioning ? undefined : question;
 
   // Check if current team is the answering team
   const isAnsweringTeam =
@@ -185,11 +192,30 @@ const QuestionRoundPage: React.FC = () => {
     answerResult?.isCorrect,
   ]);
 
-  if (isLoading) {
+  if (isLoading && !activeQuestion) {
     return <Loader />;
   }
 
-  if (error || !question) {
+  if (isQuestionTransitioning || (isFetching && !activeQuestion)) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          flex: 1,
+          minHeight: "100%",
+          gap: 2,
+        }}
+      >
+        <CircularProgress />
+        <Typography>Loading question...</Typography>
+      </Box>
+    );
+  }
+
+  if (error || !activeQuestion) {
     return <Error />;
   }
 
@@ -207,7 +233,8 @@ const QuestionRoundPage: React.FC = () => {
           flexDirection: "column",
           justifyContent: "center",
           alignItems: "center",
-          minHeight: "100vh",
+          flex: 1,
+          minHeight: "100%",
           gap: 2,
         }}
       >
@@ -220,19 +247,19 @@ const QuestionRoundPage: React.FC = () => {
 
   // Convert question to QuestionData format
   const questionDataFormatted: QuestionData = {
-    id: question._id,
-    text: question.questionContent?.text || question.questionText,
-    image: question.questionImage,
-    video: question.quetionVideo,
-    media: question.questionContent?.media?.length
-      ? question.questionContent.media
-      : question.questionAssets?.filter((item: any) =>
+    id: activeQuestion._id,
+    text: activeQuestion.questionContent?.text || activeQuestion.questionText,
+    image: activeQuestion.questionImage,
+    video: activeQuestion.quetionVideo,
+    media: activeQuestion.questionContent?.media?.length
+      ? activeQuestion.questionContent.media
+      : activeQuestion.questionAssets?.filter((item: any) =>
           ["image", "video", "audio", "gif", "text", "file"].includes(
             item?.type,
           ),
         ),
-    score: question.score,
-    options: question.options,
+    score: activeQuestion.score,
+    options: activeQuestion.options,
   };
 
   return (

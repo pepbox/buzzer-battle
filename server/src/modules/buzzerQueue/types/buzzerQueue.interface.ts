@@ -6,6 +6,7 @@ export interface IBuzzerQueue extends Document {
     ttl: Date;
     teamId: Types.ObjectId;
     timestamp: bigint;
+    reactionTimeMs: number;
     questionId: Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;

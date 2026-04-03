@@ -1135,13 +1135,33 @@ const QuestionLibraryPage: React.FC = () => {
               })}
             </List>
           )}
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
+      </DialogContent>
+      <DialogActions>
+        <Button
+          variant="contained"
+          onClick={async () => {
+            setSaveError(null);
+            try {
+              await updateSessionQuestions({
+                questions: selectedQuestionIds,
+              }).unwrap();
               setCurrentListModalOpen(false);
               setDraggingQuestionId(null);
-            }}
+            } catch (error: any) {
+              setSaveError(
+                error?.data?.message || "Failed to save session questions",
+              );
+            }
+          }}
+          disabled={isSavingQuestions}
+        >
+          {isSavingQuestions ? "Saving..." : "Save"}
+        </Button>
+        <Button
+          onClick={() => {
+            setCurrentListModalOpen(false);
+            setDraggingQuestionId(null);
+          }}
           >
             Close
           </Button>

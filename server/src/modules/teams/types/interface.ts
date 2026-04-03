@@ -5,6 +5,8 @@ export interface ITeam extends Document {
     teamNumber: number;
     teamName: string;
     teamScore: number;
+    totalBuzzerReactionTimeMs: number;
+    totalBuzzerPressCount: number;
     joinedAt: Date;
     session: mongoose.Types.ObjectId;
 }

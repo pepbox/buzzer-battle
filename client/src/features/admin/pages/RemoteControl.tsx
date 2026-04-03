@@ -21,7 +21,7 @@ import {
   Paper,
 } from "@mui/material";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import normalBg from "../../../assets/background/normal_bg.webp";
 import RemoteTeamInfo from "../components/RemoteTeamInfo";
 import RemoteActionButtons from "../components/RemoteActionButtons";
@@ -53,6 +53,7 @@ import { RootState } from "../../../app/store";
 
 const RemoteControl: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const navigate = useNavigate();
   const { session } = useAppSelector((state: RootState) => state.session);
 
   // State
@@ -224,7 +225,7 @@ const RemoteControl: React.FC = () => {
       if (data.isCorrect === false) {
         setLastAnswerWasWrong(true);
         showSnackbar(
-          "Answer was incorrect. You can pass to 2nd team.",
+          "Answer was incorrect. You can pass to next team.",
           "error",
         );
       } else if (data.isCorrect === true) {
@@ -251,7 +252,7 @@ const RemoteControl: React.FC = () => {
           prev.includes(failedTeamId) ? prev : [...prev, failedTeamId],
         );
       }
-      showSnackbar("Answer marked wrong. You can pass to 2nd team.", "error");
+      showSnackbar("Answer marked wrong. You can pass to next team.", "error");
     };
 
     const handleGameStateChanged = (data: any) => {
@@ -400,11 +401,11 @@ const RemoteControl: React.FC = () => {
 
     try {
       await passToSecondTeam(currentQuestionId).unwrap();
-      showSnackbar("Question passed to 2nd team", "success");
+      showSnackbar("Question passed to next team", "success");
       setLastAnswerWasWrong(false);
     } catch (error: any) {
       showSnackbar(
-        error?.data?.message || "Failed to pass to 2nd team",
+        error?.data?.message || "Failed to pass to next team",
         "error",
       );
     }
@@ -459,13 +460,9 @@ const RemoteControl: React.FC = () => {
     setSnackbarOpen(false);
   };
 
-  const handleOpenPresenter = () => {
+  const handleOpenLeaderboard = () => {
     if (!sessionId) return;
-    window.open(
-      `/admin/${sessionId}/presenter`,
-      "_blank",
-      "noopener,noreferrer",
-    );
+    navigate(`/admin/${sessionId}/leaderboard`);
   };
 
   // Loading state
@@ -546,7 +543,7 @@ const RemoteControl: React.FC = () => {
                 icon={<OpenInNewIcon />}
                 label="Leaderboard"
                 clickable
-                onClick={handleOpenPresenter}
+                onClick={handleOpenLeaderboard}
                 color="secondary"
                 variant="outlined"
               />

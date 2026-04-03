@@ -168,11 +168,11 @@ export const updateGameStateUnified = async (
             break;
           }
 
-          // Game is continuing - start buzzer round for this question
-          const buzzerStartTime = Date.now();
-
           // Update to BUZZER_ROUND status and save timestamp
           gameState = await gameStateService.startBuzzerRound(sessionId);
+
+          const buzzerStartTime =
+            gameState.buzzerRoundStartTime ?? Date.now() + 1500;
 
           // Get session to fetch questionTimeLimit
           const session = await Session.findById(sessionId);

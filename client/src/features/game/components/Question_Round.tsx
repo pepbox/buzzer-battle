@@ -60,6 +60,7 @@ const QuestionRound: React.FC<QuestionRoundProps> = ({
         }}
       >
         <Question
+          key={questionData.id}
           questionData={questionData}
           questionNumber={questionNumber}
           selectedOptionId={selectedAnswer}

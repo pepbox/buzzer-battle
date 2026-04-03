@@ -328,7 +328,9 @@ class SocketService {
 
   // Get current timestamp synchronized with server clock
   getSynchronizedTime(): number {
-    return Date.now() + this.serverTimeOffset;
+    // Round to whole milliseconds so downstream BigInt parsing for buzzer
+    // timestamps never receives values like "1712345678901.5".
+    return Math.round(Date.now() + this.serverTimeOffset);
   }
 }
 

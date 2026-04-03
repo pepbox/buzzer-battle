@@ -79,14 +79,72 @@ export default class TeamService {
     sessionId: Types.ObjectId | string,
   ): Promise<ITeam[]> {
     const query = Team.find({ session: sessionId })
-      .sort({ teamScore: -1, joinedAt: 1 }) // Sort by score descending, then by joined time ascending
-      .select("teamNumber teamName teamScore joinedAt");
+      .select(
+        "teamNumber teamName teamScore joinedAt totalBuzzerReactionTimeMs totalBuzzerPressCount",
+      );
 
     if (this.session) {
       query.session(this.session);
     }
 
-    return await query;
+    const teams = await query;
+
+    return teams.sort((teamA, teamB) => {
+      if (teamA.teamScore !== teamB.teamScore) {
+        return teamB.teamScore - teamA.teamScore;
+      }
+
+      const teamAHasBuzzerData = (teamA.totalBuzzerPressCount ?? 0) > 0;
+      const teamBHasBuzzerData = (teamB.totalBuzzerPressCount ?? 0) > 0;
+
+      if (teamAHasBuzzerData !== teamBHasBuzzerData) {
+        return teamAHasBuzzerData ? -1 : 1;
+      }
+
+      if (teamAHasBuzzerData && teamBHasBuzzerData) {
+        const reactionTimeDifference =
+          (teamA.totalBuzzerReactionTimeMs ?? 0) -
+          (teamB.totalBuzzerReactionTimeMs ?? 0);
+
+        if (reactionTimeDifference !== 0) {
+          return reactionTimeDifference;
+        }
+      }
+
+      const joinedAtDifference =
+        new Date(teamA.joinedAt).getTime() - new Date(teamB.joinedAt).getTime();
+
+      if (joinedAtDifference !== 0) {
+        return joinedAtDifference;
+      }
+
+      return teamA.teamNumber - teamB.teamNumber;
+    });
+  }
+
+  async recordBuzzerReactionTime(
+    teamId: Types.ObjectId | string,
+    reactionTimeMs: number,
+  ): Promise<void> {
+    const options: any = {};
+    if (this.session) {
+      options.session = this.session;
+    }
+
+    const updateResult = await Team.updateOne(
+      { _id: teamId },
+      {
+        $inc: {
+          totalBuzzerReactionTimeMs: reactionTimeMs,
+          totalBuzzerPressCount: 1,
+        },
+      },
+      options,
+    );
+
+    if (updateResult.matchedCount === 0) {
+      throw new Error("Team not found");
+    }
   }
 
   // Update team score
