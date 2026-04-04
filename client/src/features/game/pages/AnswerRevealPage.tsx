@@ -29,6 +29,12 @@ const AnswerRevealPage: React.FC<AnswerRevealPageProps> = ({
   if (isLoading) return <Loader />;
   if (error || !question) return <Error />;
 
+  const inlineVideoProps = {
+    controls: true,
+    playsInline: true,
+    preload: "metadata" as const,
+  };
+
   // Render media arrays helpers
   const renderMediaList = (mediaArray?: any[]) => {
     if (!mediaArray || !Array.isArray(mediaArray)) return null;
@@ -55,8 +61,8 @@ const AnswerRevealPage: React.FC<AnswerRevealPageProps> = ({
           <Box
             key={idx}
             component="video"
-            controls
             src={media.url}
+            {...inlineVideoProps}
             sx={{
               width: "100%",
               maxHeight: presenterMode ? "520px" : "250px",
@@ -187,14 +193,14 @@ const AnswerRevealPage: React.FC<AnswerRevealPageProps> = ({
 
           {!question.questionContent?.media?.length &&
             question.quetionVideo && (
-              <Box
-                component="video"
-                controls
-                src={question.quetionVideo}
-                sx={{
-                  width: "100%",
-                  maxHeight: presenterMode ? "520px" : "250px",
-                  borderRadius: "12px",
+            <Box
+              component="video"
+              src={question.quetionVideo}
+              {...inlineVideoProps}
+              sx={{
+                width: "100%",
+                maxHeight: presenterMode ? "520px" : "250px",
+                borderRadius: "12px",
                   mb: 2,
                 }}
               />

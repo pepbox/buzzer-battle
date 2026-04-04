@@ -121,6 +121,23 @@ const GameStateRouter = () => {
       setIsDelayingAnswer(false);
       setAnsweredWrong(false);
       setForceAnswerReveal(false);
+
+      // Clean up session storage for old questions
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < sessionStorage.length; i++) {
+          const key = sessionStorage.key(i);
+          if (key && (key.startsWith("answerStatus_") || key.startsWith("answerResult_"))) {
+            // If the key doesn't belong to the NEW question index, remove it
+            if (!key.endsWith(`_${currentQuestionIndex}`)) {
+              keysToRemove.push(key);
+            }
+          }
+        }
+        keysToRemove.forEach(k => sessionStorage.removeItem(k));
+      } catch (e) {
+        console.error("Error cleaning up sessionStorage", e);
+      }
     }
 
     // Update the ref
@@ -144,6 +161,16 @@ const GameStateRouter = () => {
       // If it's this team, mark that we got it wrong so router stops forcing us to question page
       if (normalizeId(data?.teamId) === normalizeId(team?._id)) {
         setAnsweredWrong(true);
+
+        // Also save to sessionStorage immediately if we have question index
+        const qIndex = currentGameState?.currentQuestionIndex;
+        if (qIndex !== undefined && sessionId) {
+          sessionStorage.setItem(`answerStatus_${sessionId}_${qIndex}`, JSON.stringify("status"));
+          sessionStorage.setItem(`answerResult_${sessionId}_${qIndex}`, JSON.stringify({
+            isCorrect: false,
+            pointsAwarded: 0
+          }));
+        }
       }
 
       setTimeout(() => {
@@ -256,9 +283,10 @@ const GameStateRouter = () => {
           // For buzzer questions, only answering team sees question
           const answeringTeamId = normalizeId(currentAnsweringTeam);
 
-          // If this team was just marked wrong, keep them on CloseCall
-          // until answer reveal is shown (IDLE state).
-          if (answeringTeamId === currentTeamId || answeredWrong) {
+          // Only keep the team on the question page if THEY are still the one answering.
+          // If the admin passes to another team (answeringTeamId !== currentTeamId), 
+          // all other teams should go back to the buzzer leaderboard.
+          if (answeringTeamId === currentTeamId) {
             safeNavigate("/question");
           } else {
             safeNavigate("/buzzer-leaderboard");

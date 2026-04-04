@@ -111,6 +111,9 @@ export interface QuestionMediaItem {
   mimeType?: string;
   fileId?: string;
   name?: string;
+  clientId?: string;
+  previewUrl?: string;
+  uploadStatus?: "uploading" | "uploaded";
 }
 
 export interface QuestionLibraryQuery {

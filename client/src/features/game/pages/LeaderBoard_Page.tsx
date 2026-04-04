@@ -85,6 +85,7 @@ const LeaderBoardPage: React.FC<LeaderBoardPageProps> = ({
       score: leaderboardTeam.teamScore,
       scoreChange: 0, // We don't have previous scores to calculate change
       rank: index + 1,
+      totalBuzzerReactionTimeMs: leaderboardTeam.totalBuzzerReactionTimeMs,
     })
   );
 

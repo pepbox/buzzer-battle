@@ -147,6 +147,12 @@ const Question: React.FC<QuestionProps> = ({
     return "image"; // Default to image (includes gif, jpg, png, webp, etc.)
   };
 
+  const inlineVideoProps = {
+    controls: true,
+    playsInline: true,
+    preload: "metadata" as const,
+  };
+
   const renderMedia = () => {
     const explicitMedia = questionData.media || [];
     const legacyMedia = [
@@ -204,7 +210,7 @@ const Question: React.FC<QuestionProps> = ({
             key={`media-video-${index}`}
             component="video"
             src={media.url}
-            controls
+            {...inlineVideoProps}
             sx={mediaStyles}
           />
         );
@@ -243,7 +249,7 @@ const Question: React.FC<QuestionProps> = ({
               key={`media-video-fallback-${index}`}
               component="video"
               src={media.url}
-              controls
+              {...inlineVideoProps}
               sx={mediaStyles}
             />
           );
@@ -428,21 +434,7 @@ const Question: React.FC<QuestionProps> = ({
         </Box>
 
         {/* Verbal Answer Hint - Only show when options are hidden */}
-        {!showOptions && showVerbalHint && (
-          <Typography
-            variant="body2"
-            sx={{
-              fontSize: "14px",
-              fontWeight: 500,
-              textAlign: "center",
-              color: "#64748B",
-              marginTop: "8px",
-              fontStyle: "italic",
-            }}
-          >
-            🎤 Speak your answer aloud
-          </Typography>
-        )}
+
 
         {/* Options Section - Only show when showOptions is true */}
         {showOptions && (
@@ -531,6 +523,21 @@ const Question: React.FC<QuestionProps> = ({
           </Box>
         )}
       </Box>
+      {!showOptions && showVerbalHint && (
+        <Typography
+          variant="body2"
+          sx={{
+            fontSize: "14px",
+            fontWeight: 500,
+            textAlign: "center",
+            color: "#FFF",
+            marginTop: "28px",
+            fontStyle: "italic",
+          }}
+        >
+          You’ve been chosen. Speak your answer aloud
+        </Typography>
+      )}
     </Box>
   );
 };

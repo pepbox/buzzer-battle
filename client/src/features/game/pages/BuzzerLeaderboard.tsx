@@ -7,6 +7,8 @@ import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
 import Loader from "../../../components/ui/Loader";
 import Error from "../../../components/ui/Error";
+import { websocketService } from "../../../services/websocket/websocketService";
+import { Events } from "../../../services/websocket/enums/Events";
 
 // Import assets
 import normalBg from "../../../assets/background/normal_bg.webp";
@@ -42,6 +44,76 @@ const BuzzerLeaderboard: React.FC = () => {
   // Fetch current question to check if it's a no-buzzer question
   const { data: questionData } = useFetchCurrentQuestionQuery();
   const isNoBuzzerQuestion = questionData?.data?.question?.keepBuzzer === false;
+  const currentQuestionIndex = questionData?.data?.currentQuestionIndex;
+
+  // Check if our team previously answered wrong for this specific question
+  const [wasMarkedWrong, setWasMarkedWrong] = React.useState(false);
+
+  useEffect(() => {
+    if (sessionId && currentQuestionIndex !== undefined) {
+      const resultKey = `answerResult_${sessionId}_${currentQuestionIndex}`;
+      const savedResult = sessionStorage.getItem(resultKey);
+      if (savedResult) {
+        try {
+          const parsed = JSON.parse(savedResult);
+          if (parsed && parsed.isCorrect === false) {
+            setWasMarkedWrong(true);
+          } else {
+            setWasMarkedWrong(false);
+          }
+        } catch {
+          setWasMarkedWrong(false);
+        }
+      } else {
+        setWasMarkedWrong(false);
+      }
+    }
+  }, [sessionId, currentQuestionIndex, gameState?.gameStatus]);
+
+  // Shared state: Is anyone currently marked wrong but we're still in the answering phase?
+  const [isWaitingAfterWrong, setIsWaitingAfterWrong] = React.useState(false);
+
+  // Persistence for isWaitingAfterWrong
+  useEffect(() => {
+    if (sessionId && currentQuestionIndex !== undefined) {
+      const waitKey = `isWaitingAfterWrong_${sessionId}_${currentQuestionIndex}`;
+      const saved = sessionStorage.getItem(waitKey);
+      if (saved) setIsWaitingAfterWrong(JSON.parse(saved));
+    }
+  }, [sessionId, currentQuestionIndex]);
+
+  useEffect(() => {
+    if (sessionId && currentQuestionIndex !== undefined) {
+      const waitKey = `isWaitingAfterWrong_${sessionId}_${currentQuestionIndex}`;
+      sessionStorage.setItem(waitKey, JSON.stringify(isWaitingAfterWrong));
+    }
+  }, [isWaitingAfterWrong, sessionId, currentQuestionIndex]);
+
+  useEffect(() => {
+    const handleAnswerMarkedWrong = () => {
+      setIsWaitingAfterWrong(true);
+    };
+
+    const handleTeamSelected = () => {
+      setIsWaitingAfterWrong(false);
+    };
+
+    const handleGameStateChanged = (data: any) => {
+      if (data.gameStatus !== "answering") {
+        setIsWaitingAfterWrong(false);
+      }
+    };
+
+    websocketService.on(Events.ANSWER_MARKED_WRONG, handleAnswerMarkedWrong);
+    websocketService.on(Events.TEAM_SELECTED, handleTeamSelected);
+    websocketService.on(Events.GAME_STATE_CHANGED, handleGameStateChanged);
+
+    return () => {
+      websocketService.off(Events.ANSWER_MARKED_WRONG, handleAnswerMarkedWrong);
+      websocketService.off(Events.TEAM_SELECTED, handleTeamSelected);
+      websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChanged);
+    };
+  }, []);
 
   // Fetch buzzer leaderboard
   const {
@@ -172,7 +244,7 @@ const BuzzerLeaderboard: React.FC = () => {
       }}
     >
       {/* Answering Team Indicator */}
-      {isAnsweringState && answeringTeamId && (
+      {isAnsweringState && (
         <Typography
           variant="h6"
           sx={{
@@ -186,9 +258,14 @@ const BuzzerLeaderboard: React.FC = () => {
             borderRadius: "12px",
           }}
         >
-          {isMyTeamAnswering
-            ? "🎯 Your turn to answer!"
-            : "🎯 Another team is answering..."}
+          {isMyTeamAnswering ? (
+            "🎯 Your turn to answer!"
+          ) : (
+            `🎯 ${typeof gameState?.currentAnsweringTeam === "object"
+              ? (gameState.currentAnsweringTeam as any).teamName
+              : "Another team"
+            } is answering...`
+          )}
         </Typography>
       )}
 
@@ -210,12 +287,12 @@ const BuzzerLeaderboard: React.FC = () => {
             <Typography
               variant="h5"
               sx={{
-                color: "#4CAF50",
+                color: wasMarkedWrong ? "#EF4444" : "#4CAF50",
                 fontWeight: "bold",
                 marginBottom: "24px",
               }}
             >
-              🎉 Buzzer Pressed!
+              {wasMarkedWrong ? "❌ Your answer was wrong" : "🎉 Buzzer Pressed!"}
             </Typography>
 
             {/* Rank Badge */}
@@ -353,7 +430,7 @@ const BuzzerLeaderboard: React.FC = () => {
             >
               {isNoBuzzerQuestion
                 ? "Waiting for admin to select your team..."
-                : "You haven't pressed the buzzer yet"}
+                : "You haven't pressed the buzzer"}
             </Typography>
           </>
         )}

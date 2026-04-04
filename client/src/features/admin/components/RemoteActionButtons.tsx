@@ -98,7 +98,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
               },
             }}
           >
-            ✅ Correct
+            Correct
           </Button>
           <Button
             variant="contained"
@@ -117,7 +117,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
               },
             }}
           >
-            ❌ Wrong
+            Wrong
           </Button>
         </Box>
       )}

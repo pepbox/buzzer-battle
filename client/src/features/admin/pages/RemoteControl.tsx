@@ -50,6 +50,8 @@ import { Events } from "../../../services/websocket/enums/Events";
 import Loader from "../../../components/ui/Loader";
 import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
+import QuestionPreviewModal from "../components/QuestionPreviewModal";
+import { QuestionBankItem } from "../types/interfaces";
 
 const RemoteControl: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -70,6 +72,7 @@ const RemoteControl: React.FC = () => {
   >(null);
   const [buzzerStatsCache, setBuzzerStatsCache] = useState<any>(null);
   const [attemptedTeamIds, setAttemptedTeamIds] = useState<string[]>([]);
+  const [questionPreviewOpen, setQuestionPreviewOpen] = useState(false);
 
   // Fetch game state
   const {
@@ -465,6 +468,27 @@ const RemoteControl: React.FC = () => {
     navigate(`/admin/${sessionId}/leaderboard`);
   };
 
+  const previewQuestion = useMemo<QuestionBankItem | null>(() => {
+    const question = currentQuestionData?.data?.question;
+    if (!question) return null;
+
+    return {
+      _id: question._id,
+      questionText: question.questionText,
+      correctAnswer: question.correctAnswer,
+      score: question.score,
+      keepBuzzer: question.keepBuzzer,
+      options: question.options || [],
+      questionImage: question.questionImage,
+      quetionVideo: question.quetionVideo,
+      questionContent: question.questionContent,
+      questionAssets: question.questionAssets,
+      answerContent: question.answerContent,
+      createdAt: String(question.createdAt),
+      updatedAt: String(question.updatedAt),
+    };
+  }, [currentQuestionData]);
+
   // Loading state
   if (gameStateLoading) {
     return <Loader />;
@@ -550,6 +574,18 @@ const RemoteControl: React.FC = () => {
               <Chip
                 label={`Question: ${displayQuestionNumber}/${totalQuestions}`}
                 variant="outlined"
+              />
+              <Chip
+                label={`Buzzer: ${currentQuestionKeepBuzzer === false ? "Off" : "On"}`}
+                variant="outlined"
+                color={currentQuestionKeepBuzzer === false ? "warning" : "success"}
+              />
+              <Chip
+                label="Question Preview"
+                clickable
+                onClick={() => setQuestionPreviewOpen(true)}
+                variant="outlined"
+                disabled={!previewQuestion}
               />
             </Box>
           </Box>
@@ -720,6 +756,12 @@ const RemoteControl: React.FC = () => {
       </Dialog>
 
       {/* Snackbar for notifications */}
+      <QuestionPreviewModal
+        open={questionPreviewOpen}
+        onClose={() => setQuestionPreviewOpen(false)}
+        question={previewQuestion}
+      />
+
       <Snackbar
         open={snackbarOpen}
         autoHideDuration={3000}

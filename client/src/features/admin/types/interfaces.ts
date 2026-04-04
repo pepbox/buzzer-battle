@@ -49,6 +49,45 @@ export interface TeamResponse {
   answeredAt: string;
 }
 
+// Question Types
+export interface QuestionMediaItem {
+  type: "text" | "image" | "video" | "audio" | "gif" | "file";
+  url?: string;
+  text?: string;
+  mimeType?: string;
+  fileId?: string;
+  name?: string;
+  clientId?: string;
+  previewUrl?: string;
+  uploadStatus?: "uploading" | "uploaded";
+}
+
+export interface QuestionBankItem {
+  _id: string;
+  questionText: string;
+  correctAnswer?: string;
+  score: number;
+  folder?: string;
+  keepBuzzer?: boolean;
+  options: Array<{
+    optionId: string;
+    optionText: string;
+  }>;
+  questionImage?: string;
+  quetionVideo?: string;
+  questionContent?: {
+    text?: string;
+    media?: QuestionMediaItem[];
+  };
+  questionAssets?: QuestionMediaItem[];
+  answerContent?: {
+    text?: string;
+    media?: QuestionMediaItem[];
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Keep old Player types for backward compatibility (if needed)
 export interface PlayerTableProps {
   players: Player[];
@@ -104,6 +143,12 @@ export interface DashboardHeaderProps {
   onTransactionsChange?: (status: boolean) => void;
   transaction?: boolean;
   hasQuestions?: boolean;
+  selectedQuestionIds?: string[];
+  questionLookup?: Map<string, QuestionBankItem>;
+  folders?: string[];
+  onSaveQuestions?: (questionIds: string[]) => Promise<void>;
+  onEditQuestion?: (question: QuestionBankItem) => void;
+  onAddQuestionsToModal?: () => void;
 }
 
 export interface DashboardProps {
@@ -114,6 +159,12 @@ export interface DashboardProps {
     data: { teamName?: string; teamScore?: number },
   ) => void;
   onViewResponses: (teamId: string) => void;
+  selectedQuestionIds?: string[];
+  questionLookup?: Map<string, QuestionBankItem>;
+  folders?: string[];
+  onSaveQuestions?: (questionIds: string[]) => Promise<void>;
+  onEditQuestion?: (question: QuestionBankItem) => void;
+  onAddQuestionsToModal?: () => void;
 }
 
 // Leaderboard Types

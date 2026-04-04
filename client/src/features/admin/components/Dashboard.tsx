@@ -20,6 +20,12 @@ const Dashboard: React.FC<DashboardProps> = ({
   teams,
   onUpdateTeam,
   onViewResponses,
+  selectedQuestionIds = [],
+  questionLookup = new Map(),
+  folders = [],
+  onSaveQuestions,
+  onEditQuestion,
+  onAddQuestionsToModal,
 }) => {
   const [transaction, setTransaction] = useState<boolean>(false);
   const hasQuestions = (headerData.totalQuestions || 0) > 0;
@@ -73,6 +79,12 @@ const Dashboard: React.FC<DashboardProps> = ({
         transaction={transaction}
         onTransactionsChange={onTransactionsChange}
         hasQuestions={hasQuestions}
+        selectedQuestionIds={selectedQuestionIds}
+        questionLookup={questionLookup}
+        folders={folders}
+        onSaveQuestions={onSaveQuestions}
+        onEditQuestion={onEditQuestion}
+        onAddQuestionsToModal={onAddQuestionsToModal}
       />
       <Box sx={{ px: 4 }}>
         <TeamTable

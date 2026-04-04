@@ -201,7 +201,7 @@ const BuzzerRound: React.FC = () => {
             width: "100%",
             display: "flex",
             justifyContent: "center",
-            marginTop: "45px",
+            marginTop: "-15px",
             marginBottom: "16px",
           }}
         >

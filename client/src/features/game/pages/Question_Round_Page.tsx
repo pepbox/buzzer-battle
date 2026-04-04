@@ -43,7 +43,7 @@ const QuestionRoundPage: React.FC = () => {
     pointsAwarded: number;
   } | null>(null);
 
-  // Get team from Redux
+  // Get team and game state from Redux
   const team = useAppSelector((state: RootState) => state.team?.team);
   const gameState = useAppSelector(
     (state: RootState) => state.gameState.gameState,
@@ -72,6 +72,62 @@ const QuestionRoundPage: React.FC = () => {
 
   // Track current question index to detect changes
   const previousQuestionIndexRef = useRef<number | undefined>(undefined);
+
+  // Shared state: Is anyone currently marked wrong but we're still in the answering/idle phase?
+  const [isWaitingAfterWrong, setIsWaitingAfterWrong] = useState(false);
+
+  // Persistence for isWaitingAfterWrong
+  useEffect(() => {
+    if (sessionId && currentQuestionIndex !== undefined) {
+      const waitKey = `isWaitingAfterWrong_${sessionId}_${currentQuestionIndex}`;
+      const saved = sessionStorage.getItem(waitKey);
+      if (saved) setIsWaitingAfterWrong(JSON.parse(saved));
+    }
+  }, [sessionId, currentQuestionIndex]);
+
+  useEffect(() => {
+    if (sessionId && currentQuestionIndex !== undefined) {
+      const waitKey = `isWaitingAfterWrong_${sessionId}_${currentQuestionIndex}`;
+      sessionStorage.setItem(waitKey, JSON.stringify(isWaitingAfterWrong));
+    }
+  }, [isWaitingAfterWrong, sessionId, currentQuestionIndex]);
+
+
+
+  // Load from session storage to avoid losing state on refresh
+  useEffect(() => {
+    if (currentQuestionIndex === undefined || !sessionId) return;
+    
+    const statusKey = `answerStatus_${sessionId}_${currentQuestionIndex}`;
+    const resultKey = `answerResult_${sessionId}_${currentQuestionIndex}`;
+    
+    // Only hydrate if we are currently null
+    if (answerStatus === null) {
+      const savedStatus = sessionStorage.getItem(statusKey);
+      if (savedStatus) setAnswerStatus(JSON.parse(savedStatus));
+    }
+    
+    if (answerResult === null) {
+      const savedResult = sessionStorage.getItem(resultKey);
+      if (savedResult) setAnswerResult(JSON.parse(savedResult));
+    }
+  }, [currentQuestionIndex, sessionId, answerStatus, answerResult]);
+
+  // Save to session storage when status/result updates
+  useEffect(() => {
+    if (currentQuestionIndex === undefined || !sessionId) return;
+    
+    const statusKey = `answerStatus_${sessionId}_${currentQuestionIndex}`;
+    const resultKey = `answerResult_${sessionId}_${currentQuestionIndex}`;
+    
+    if (answerStatus !== null) {
+      sessionStorage.setItem(statusKey, JSON.stringify(answerStatus));
+    }
+    
+    if (answerResult !== null) {
+      sessionStorage.setItem(resultKey, JSON.stringify(answerResult));
+    }
+  }, [answerStatus, answerResult, sessionId, currentQuestionIndex]);
 
   // Reset answer state when question changes
   useEffect(() => {
@@ -107,6 +163,8 @@ const QuestionRoundPage: React.FC = () => {
     const handleAnswerMarkedWrong = (data: any) => {
       console.log("❌ Answer marked wrong by admin:", data);
 
+      setIsWaitingAfterWrong(true);
+
       // Only process if this is for the current team
       if (normalizeId(data?.teamId) === normalizeId(team?._id)) {
         setAnswerResult({
@@ -117,6 +175,10 @@ const QuestionRoundPage: React.FC = () => {
 
         // GameStateRouter automatically navigates us after 2 seconds because it watches the same socket event!
       }
+    };
+
+    const handleTeamSelected = () => {
+      setIsWaitingAfterWrong(false);
     };
 
     const handleGameStateChanged = (data: any) => {
@@ -135,6 +197,7 @@ const QuestionRoundPage: React.FC = () => {
 
       // If game transitions to buzzer_round (new question), navigate accordingly
       if (data.gameStatus === "buzzer_round") {
+        setIsWaitingAfterWrong(false);
         navigate(`/game/${sessionId}/buzzer`);
       }
     };
@@ -144,7 +207,7 @@ const QuestionRoundPage: React.FC = () => {
 
       // If current team was passed (they answered wrong), navigate to waiting
       if (normalizeId(data?.previousTeamId) === normalizeId(team?._id)) {
-        navigate(`/game/${sessionId}/leaderboard`);
+        navigate(`/game/${sessionId}/buzzer-leaderboard`);
       }
     };
 
@@ -155,6 +218,7 @@ const QuestionRoundPage: React.FC = () => {
     websocketService.on(Events.ANSWER_MARKED_WRONG, handleAnswerMarkedWrong);
     websocketService.on(Events.GAME_STATE_CHANGED, handleGameStateChanged);
     websocketService.on(Events.QUESTION_PASSED, handleQuestionPassed);
+    websocketService.on(Events.TEAM_SELECTED, handleTeamSelected);
 
     return () => {
       websocketService.off(
@@ -164,6 +228,7 @@ const QuestionRoundPage: React.FC = () => {
       websocketService.off(Events.ANSWER_MARKED_WRONG, handleAnswerMarkedWrong);
       websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChanged);
       websocketService.off(Events.QUESTION_PASSED, handleQuestionPassed);
+      websocketService.off(Events.TEAM_SELECTED, handleTeamSelected);
     };
   }, [team?._id, sessionId, navigate, answerStatus, isAnsweringTeam]);
 
@@ -254,16 +319,17 @@ const QuestionRoundPage: React.FC = () => {
     media: activeQuestion.questionContent?.media?.length
       ? activeQuestion.questionContent.media
       : activeQuestion.questionAssets?.filter((item: any) =>
-          ["image", "video", "audio", "gif", "text", "file"].includes(
-            item?.type,
-          ),
+        ["image", "video", "audio", "gif", "text", "file"].includes(
+          item?.type,
         ),
+      ),
     score: activeQuestion.score,
     options: activeQuestion.options,
   };
 
   return (
     <>
+      {/* <Typography color="#000">{JSON.stringify(answerStatus)}</Typography> */}
       {/* Phase 1: Question Phase - Show question without options (verbal answer flow) */}
       {(!answerStatus || answerStatus === "waiting") && (
         <Box
@@ -311,11 +377,13 @@ const QuestionRoundPage: React.FC = () => {
               <Typography sx={{ fontWeight: 600, color: "#FFF" }}>
                 {isAnsweringTeam
                   ? "Waiting for admin to mark your answer..."
-                  : `Waiting for ${
-                      typeof gameState?.currentAnsweringTeam === "object"
-                        ? gameState.currentAnsweringTeam?.teamName
-                        : "the selected team"
-                    } to answer...`}
+                  : gameState?.currentAnsweringTeam
+                    ? `🎯 ${typeof gameState?.currentAnsweringTeam === "object"
+                      ? gameState.currentAnsweringTeam?.teamName
+                      : "Another team"
+                    } is answering...`
+                    : "Waiting for admin to select a team..."
+                }
               </Typography>
             </Box>
           </Box>

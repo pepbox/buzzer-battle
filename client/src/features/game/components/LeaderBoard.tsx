@@ -11,6 +11,7 @@ export interface LeaderBoardTeam {
   score: number;
   scoreChange: number; // positive for increase, negative for decrease
   rank: number;
+  totalBuzzerReactionTimeMs?: number;
 }
 
 interface LeaderBoardProps {
@@ -22,7 +23,7 @@ const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams }) => {
   // Sort teams by rank and get top 3 for podium
   const sortedTeams = [...teams].sort((a, b) => a.rank - b.rank);
   const topThree = sortedTeams.slice(0, 3);
-  const remainingTeams = sortedTeams.slice(3);
+  const leaderboardTeams = sortedTeams;
 
   const getPodiumPosition = (rank: number) => {
     switch (rank) {
@@ -47,16 +48,9 @@ const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams }) => {
     }
   };
 
-  const getScoreChangeColor = (change: number) => {
-    if (change > 0) return "#10B981"; // Green for positive
-    if (change < 0) return "#EF4444"; // Red for negative
-    return "#64748B"; // Gray for no change
-  };
-
-  const getScoreChangeIcon = (change: number) => {
-    if (change > 0) return "▲";
-    if (change < 0) return "▼";
-    return "";
+  const formatBuzzerTime = (totalBuzzerReactionTimeMs?: number) => {
+    if (!totalBuzzerReactionTimeMs) return "0.00s";
+    return `${(totalBuzzerReactionTimeMs / 1000).toFixed(2)}s`;
   };
 
   return (
@@ -152,13 +146,13 @@ const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams }) => {
                 sx={{
                   color: "#A613BF",
                   fontWeight: 700,
-                  fontSize: "clamp(6px, 2vw, 8px)", // Responsive font size
+                  fontSize: "clamp(9px, 2.7vw, 14px)",
                   textAlign: "center",
                   marginBottom: "clamp(2px, 1vw, 4px)", // Responsive margin
                   whiteSpace: "nowrap",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
-                  maxWidth: "60px",
+                  maxWidth: "96px",
                 }}
               >
                 {team.name}
@@ -209,7 +203,7 @@ const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams }) => {
           overflowY: "auto",
         }}
       >
-        {remainingTeams.map((team) => (
+        {leaderboardTeams.map((team) => (
           <Box
             key={team.id}
             sx={{
@@ -267,25 +261,26 @@ const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams }) => {
               </Typography>
             </Box>
 
-            {/* Right side - Score change and total */}
+            {/* Right side - Buzzer time and total */}
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              {/* Score Change */}
               <Box
                 sx={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 0.5,
+                  backgroundColor: "white",
+                  borderRadius: "12px",
+                  padding: "4px 8px",
                 }}
               >
                 <Typography
                   variant="body2"
                   sx={{
-                    color: getScoreChangeColor(team.scoreChange),
+                    color: "#0F766E",
                     fontWeight: 600,
-                    fontSize: "14px",
+                    fontSize: "12px",
                   }}
                 >
-                  {getScoreChangeIcon(team.scoreChange)} {team.scoreChange}
+                  Buzz: {formatBuzzerTime(team.totalBuzzerReactionTimeMs)}
                 </Typography>
               </Box>
 

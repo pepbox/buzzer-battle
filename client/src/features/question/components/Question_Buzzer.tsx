@@ -23,6 +23,11 @@ const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
   questionMedia,
 }) => {
   const theme = useTheme();
+  const inlineVideoProps = {
+    controls: true,
+    playsInline: true,
+    preload: "metadata" as const,
+  };
 
   const getMediaType = (url: string): "image" | "video" | "audio" => {
     const extension = url.split(".").pop()?.toLowerCase();
@@ -104,7 +109,7 @@ const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
             key={`buzzer-media-video-${index}`}
             component="video"
             src={media.url}
-            controls
+            {...inlineVideoProps}
             sx={mediaStyles}
           />
         );
@@ -131,7 +136,7 @@ const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
               key={`buzzer-media-video-fallback-${index}`}
               component="video"
               src={media.url}
-              controls
+              {...inlineVideoProps}
               sx={mediaStyles}
             />
           );

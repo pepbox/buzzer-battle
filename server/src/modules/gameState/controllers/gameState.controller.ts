@@ -117,6 +117,19 @@ export const updateGameStateUnified = async (
         // Cancel any active timers for this session
         timerManager.cancelSessionTimers(sessionId);
 
+        if (existingGameState.currentQuestionIndex < 0) {
+          const joinedTeams = await teamService.fetchTeamsBySession(sessionId);
+          const joinedTeamCount = joinedTeams.length;
+          const session = await Session.findById(sessionId).select(
+            "numberOfTeams",
+          );
+
+          if (session && session.numberOfTeams !== joinedTeamCount) {
+            session.numberOfTeams = joinedTeamCount;
+            await session.save();
+          }
+        }
+
         const result =
           await gameStateService.moveToNextQuestionWithCheck(sessionId);
         gameState = result.gameState;

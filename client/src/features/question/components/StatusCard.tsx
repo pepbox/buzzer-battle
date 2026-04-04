@@ -47,11 +47,11 @@ const StatusCard: React.FC<StatusCardProps> = ({
   return (
     <Box
       sx={{
-        position: "fixed",
+        position: "absolute",
         top: 0,
         left: 0,
-        width: "100vw",
-        height: "100vh",
+        right: 0,
+        bottom: 0,
         backgroundImage: `url(${bgImage})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
@@ -59,6 +59,7 @@ const StatusCard: React.FC<StatusCardProps> = ({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        zIndex: 2000,
       }}
     >
       <Box

@@ -27,6 +27,7 @@ import GroupIcon from "@mui/icons-material/Group";
 import QuizIcon from "@mui/icons-material/Quiz";
 import EditIcon from "@mui/icons-material/Edit";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
+import ListIcon from "@mui/icons-material/List";
 import {
   useAdminLogoutMutation,
   useUpdateNumberOfTeamsMutation,
@@ -35,14 +36,19 @@ import GlobalButton from "../../../components/ui/button";
 import { useAppDispatch, useAppSelector } from "../../../app/rootReducer";
 import { RootState } from "../../../app/store";
 import { clearAdmin } from "../services/adminSlice";
+import CurrentQuestionsModal from "./CurrentQuestionsModal";
 
 // Dashboard Header Component
 const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   data,
   onGameStatusChange,
   onTransactionsChange,
-  transaction = false, // Default value for transaction
+  transaction = false,
   hasQuestions = true,
+  selectedQuestionIds = [],
+  questionLookup = new Map(),
+  onSaveQuestions,
+  onEditQuestion,
 }) => {
   const [AdminLogout] = useAdminLogoutMutation();
   const [UpdateNumberOfTeams] = useUpdateNumberOfTeamsMutation();
@@ -63,6 +69,10 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     open: false,
     value: "",
   });
+
+  // State for current questions modal
+  const [currentQuestionsModalOpen, setCurrentQuestionsModalOpen] =
+    useState(false);
 
   const handleLogout = () => {
     AdminLogout({})
@@ -136,6 +146,28 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         </Typography>
 
         <Box display="flex" gap={1} alignItems="center">
+          <Button
+            variant="outlined"
+            color="secondary"
+            startIcon={<ListIcon />}
+            onClick={() => setCurrentQuestionsModalOpen(true)}
+            disabled={(selectedQuestionIds?.length || 0) === 0}
+            sx={{
+              textTransform: "none",
+              borderRadius: "8px",
+              fontWeight: 500,
+              minWidth: isMobile ? "auto" : "fit-content",
+            }}
+          >
+            <Box
+              sx={{
+                display: { xs: "none", sm: "inline" },
+              }}
+            >
+              Current Questions
+            </Box>
+          </Button>
+
           <Button
             variant="outlined"
             color="secondary"
@@ -453,6 +485,16 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/*Current Questions Modal */}
+      <CurrentQuestionsModal
+        open={currentQuestionsModalOpen}
+        onClose={() => setCurrentQuestionsModalOpen(false)}
+        selectedQuestionIds={selectedQuestionIds}
+        questionLookup={questionLookup}
+        onSave={onSaveQuestions || (async () => {})}
+        onEdit={onEditQuestion || (() => {})}
+      />
     </>
   );
 };
