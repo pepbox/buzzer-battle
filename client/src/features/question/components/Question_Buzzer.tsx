@@ -1,6 +1,7 @@
 import React from "react";
 import { Box, Typography, useTheme } from "@mui/material";
 import collarImage from "../../../assets/questions/collor.webp";
+import SmartMedia from "../../../components/ui/SmartMedia";
 
 interface QuestionBuzzerProps {
   questionNumber: number;
@@ -23,36 +24,6 @@ const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
   questionMedia,
 }) => {
   const theme = useTheme();
-  const inlineVideoProps = {
-    controls: true,
-    playsInline: true,
-    preload: "metadata" as const,
-  };
-
-  const getMediaType = (url: string): "image" | "video" | "audio" => {
-    const extension = url.split(".").pop()?.toLowerCase();
-    const audioExtensions = ["mp3", "wav", "ogg", "m4a", "aac", "flac"];
-    const videoExtensions = [
-      "mp4",
-      "webm",
-      "ogg",
-      "avi",
-      "mov",
-      "wmv",
-      "flv",
-      "m4v",
-    ];
-
-    if (audioExtensions.includes(extension || "")) {
-      return "audio";
-    }
-
-    if (videoExtensions.includes(extension || "")) {
-      return "video";
-    }
-
-    return "image"; // Default to image (includes gif, jpg, png, webp, etc.)
-  };
   const renderMedia = () => {
     const explicitMedia = questionMedia || [];
     const legacyMedia = [
@@ -91,80 +62,16 @@ const QuestionBuzzer: React.FC<QuestionBuzzerProps> = ({
         );
       }
 
-      if ((media.type === "image" || media.type === "gif") && media.url) {
-        return (
-          <Box
-            key={`buzzer-media-image-${index}`}
-            component="img"
-            src={media.url}
-            alt={media.name || `Question media ${index + 1}`}
-            sx={mediaStyles}
-          />
-        );
-      }
-
-      if (media.type === "video" && media.url) {
-        return (
-          <Box
-            key={`buzzer-media-video-${index}`}
-            component="video"
-            src={media.url}
-            {...inlineVideoProps}
-            sx={mediaStyles}
-          />
-        );
-      }
-
-      if (media.type === "audio" && media.url) {
-        return (
-          <Box
-            key={`buzzer-media-audio-${index}`}
-            component="audio"
-            src={media.url}
-            controls
-            preload="metadata"
-            sx={{ width: "100%", my: "10px" }}
-          />
-        );
-      }
-
-      if (media.url) {
-        const derivedType = getMediaType(media.url);
-        if (derivedType === "video") {
-          return (
-            <Box
-              key={`buzzer-media-video-fallback-${index}`}
-              component="video"
-              src={media.url}
-              {...inlineVideoProps}
-              sx={mediaStyles}
-            />
-          );
-        }
-        if (derivedType === "audio") {
-          return (
-            <Box
-              key={`buzzer-media-audio-fallback-${index}`}
-              component="audio"
-              src={media.url}
-              controls
-              preload="metadata"
-              sx={{ width: "100%", my: "10px" }}
-            />
-          );
-        }
-        return (
-          <Box
-            key={`buzzer-media-image-fallback-${index}`}
-            component="img"
-            src={media.url}
-            alt={media.name || `Question media ${index + 1}`}
-            sx={mediaStyles}
-          />
-        );
-      }
-
-      return null;
+      return (
+        <SmartMedia
+          key={`buzzer-smart-media-${index}`}
+          media={media}
+          alt={media.name || `Question media ${index + 1}`}
+          sx={mediaStyles}
+          audioSx={{ width: "100%", my: "10px" }}
+          iframeSx={{ minHeight: 420, my: "10px" }}
+        />
+      );
     });
   };
   return (

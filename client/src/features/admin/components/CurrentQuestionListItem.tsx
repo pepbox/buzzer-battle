@@ -5,6 +5,8 @@ import {
   Typography,
   IconButton,
   CircularProgress,
+  Switch,
+  FormControlLabel,
 } from "@mui/material";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
@@ -23,6 +25,8 @@ export interface CurrentQuestionListItemProps {
   onEdit: (questionId: string) => void;
   onRemove: (questionId: string) => void;
   onPreview?: (question: QuestionBankItem) => void;
+  onToggleHide?: (question: QuestionBankItem, checked: boolean) => void;
+  isTogglingHide?: boolean;
   loading?: boolean;
 }
 
@@ -37,6 +41,8 @@ const CurrentQuestionListItem: React.FC<CurrentQuestionListItemProps> = ({
   onEdit,
   onRemove,
   onPreview,
+  onToggleHide,
+  isTogglingHide = false,
   loading = false,
 }) => {
   return (
@@ -88,6 +94,25 @@ const CurrentQuestionListItem: React.FC<CurrentQuestionListItemProps> = ({
         </Box>
 
         <Box sx={{ display: "flex", gap: 0.5, flexShrink: 0 }}>
+          {question && (
+            <Box sx={{ mt: 0.5 }}>
+              <FormControlLabel
+                sx={{ m: 0 }}
+                control={
+                  <Switch
+                    size="small"
+                    checked={question.hideFromUsers === true}
+                    disabled={loading || isTogglingHide}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={(event) =>
+                      onToggleHide?.(question, event.target.checked)
+                    }
+                  />
+                }
+                label="Hide question"
+              />
+            </Box>
+          )}
           {onPreview && question && (
             <IconButton
               size="small"
@@ -117,7 +142,7 @@ const CurrentQuestionListItem: React.FC<CurrentQuestionListItemProps> = ({
             <DeleteOutlineIcon fontSize="small" />
           </IconButton>
 
-          {loading && <CircularProgress size={20} />}
+          {(loading || isTogglingHide) && <CircularProgress size={20} />}
         </Box>
       </Box>
     </Paper>

@@ -14,6 +14,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import SmartMedia from "../../../components/ui/SmartMedia";
 import {
   CreateQuestionPayload,
   QuestionBankItem,
@@ -24,6 +25,7 @@ import {
 } from "../services/admin.Api";
 import MediaUploadField from "./MediaUploadField";
 import { QuestionMediaItem } from "../types/interfaces";
+import { buildLinkedMediaItem } from "../utils/questionPayload";
 
 type EditableMediaItem = QuestionMediaItem & {
   clientId: string;
@@ -87,6 +89,13 @@ const cleanupMediaItems = (mediaItems: EditableMediaItem[]) => {
 const previewMediaSource = (media: QuestionMediaItem) =>
   media.url || media.previewUrl || "";
 
+const formatFolderLabel = (folderPath: string) => {
+  const segments = folderPath.split("/").filter(Boolean);
+  const depth = Math.max(0, segments.length - 1);
+  const label = segments[segments.length - 1] || folderPath;
+  return `${"  ".repeat(depth)}${label}`;
+};
+
 const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
   open,
   onClose,
@@ -117,8 +126,11 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
   const [answerText, setAnswerText] = useState("");
   const [score, setScore] = useState<number>(0);
   const [keepBuzzer, setKeepBuzzer] = useState(true);
+  const [hideFromUsers, setHideFromUsers] = useState(false);
   const [folder, setFolder] = useState(defaultFolder || "General");
   const [newFolderName, setNewFolderName] = useState("");
+  const [questionLinkInput, setQuestionLinkInput] = useState("");
+  const [answerLinkInput, setAnswerLinkInput] = useState("");
   const [optionText, setOptionText] = useState("");
   const [options, setOptions] = useState<
     Array<{ optionText: string; optionId?: string }>
@@ -153,6 +165,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
       setAnswerText(initialQuestion.answerContent?.text || "");
       setScore(initialQuestion.score ?? 0);
       setKeepBuzzer(initialQuestion.keepBuzzer ?? true);
+      setHideFromUsers(initialQuestion.hideFromUsers ?? false);
       setFolder(initialQuestion.folder || defaultFolder || "General");
       setOptions(
         (initialQuestion.options || []).map((opt) => ({
@@ -172,9 +185,13 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
             : initialQuestion.questionAssets,
         ),
       );
-      setAnswerMedia(toEditableMediaItems(initialQuestion.answerContent?.media));
+      setAnswerMedia(
+        toEditableMediaItems(initialQuestion.answerContent?.media),
+      );
       setSubmitError(null);
       setNewFolderName("");
+      setQuestionLinkInput("");
+      setAnswerLinkInput("");
       setOptionText("");
       return;
     }
@@ -183,7 +200,10 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
     setAnswerText("");
     setScore(0);
     setKeepBuzzer(true);
+    setHideFromUsers(false);
     setFolder(defaultFolder || "General");
+    setQuestionLinkInput("");
+    setAnswerLinkInput("");
     setOptionText("");
     setOptions([]);
     setCorrectAnswer("");
@@ -233,10 +253,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
     setAnswerMedia((items) => updater(items));
   };
 
-  const handleUpload = async (
-    file: File,
-    target: "question" | "answer",
-  ) => {
+  const handleUpload = async (file: File, target: "question" | "answer") => {
     const clientId = toClientId();
     const previewUrl =
       file.type.startsWith("image/") ||
@@ -318,6 +335,42 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
     }
   };
 
+  const handleAddLink = (target: "question" | "answer") => {
+    const rawValue =
+      target === "question" ? questionLinkInput : answerLinkInput;
+    const trimmedUrl = rawValue.trim();
+
+    if (!trimmedUrl) return;
+
+    let normalizedUrl = trimmedUrl;
+    if (!/^https?:\/\//i.test(normalizedUrl)) {
+      normalizedUrl = `https://${normalizedUrl}`;
+    }
+
+    try {
+      new URL(normalizedUrl);
+    } catch {
+      setSubmitError("Enter a valid asset URL.");
+      return;
+    }
+
+    const linkedMedia: EditableMediaItem = {
+      ...buildLinkedMediaItem(normalizedUrl),
+      clientId: toClientId(),
+      uploadStatus: "uploaded",
+    };
+
+    updateCollection(target, (items) => [...items, linkedMedia]);
+    setSubmitError(null);
+
+    if (target === "question") {
+      setQuestionLinkInput("");
+      return;
+    }
+
+    setAnswerLinkInput("");
+  };
+
   const handleAddOption = () => {
     if (!optionText.trim()) return;
 
@@ -359,6 +412,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
       score: Number.isFinite(Number(score)) ? Number(score) : 0,
       folder,
       keepBuzzer,
+      hideFromUsers,
       questionContent: {
         text: questionText.trim() || undefined,
         media: cleanQuestionAssets,
@@ -432,15 +486,42 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
               onChange={(e) => setQuestionText(e.target.value)}
             />
 
-            <MediaUploadField
-              label="Upload Question Media"
-              mediaItems={questionAssets}
-              onUpload={(file) => handleUpload(file, "question")}
-              onRemove={(clientId) => handleRemoveMedia("question", clientId)}
-              onPreview={setPreviewMedia}
-              isUploading={isUploadingMedia}
-              accept="image/*,video/*,audio/*"
-            />
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                gap: 1,
+                maxWidth: "100%",
+                width: "100%",
+              }}
+            >
+              <MediaUploadField
+                label="Upload Question Media"
+                mediaItems={questionAssets}
+                onUpload={(file) => handleUpload(file, "question")}
+                onRemove={(clientId) => handleRemoveMedia("question", clientId)}
+                onPreview={setPreviewMedia}
+                isUploading={isUploadingMedia}
+                accept="image/*,video/*,audio/*"
+              />
+              <Box sx={{ gap: 1, display: "flex", flexDirection: "row" }}>
+                <TextField
+                  // fullWidth
+                  style={{ width: "100%" }}
+                  label="Question Asset Link (optional)"
+                  placeholder="https://..."
+                  value={questionLinkInput}
+                  onChange={(e) => setQuestionLinkInput(e.target.value)}
+                />
+                <Button
+                  sx={{ height: "fit-content", width: "200px" }}
+                  variant="outlined"
+                  onClick={() => handleAddLink("question")}
+                >
+                  Add Link
+                </Button>
+              </Box>
+            </Box>
 
             <TextField
               label="Answer"
@@ -449,15 +530,41 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
               value={answerText}
               onChange={(e) => setAnswerText(e.target.value)}
             />
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                gap: 1,
+                maxWidth: "100%",
+                width: "100%",
+              }}
+            >
+              <MediaUploadField
+                label="Upload Answer Media"
+                mediaItems={answerMedia}
+                onUpload={(file) => handleUpload(file, "answer")}
+                onRemove={(clientId) => handleRemoveMedia("answer", clientId)}
+                onPreview={setPreviewMedia}
+                isUploading={isUploadingMedia}
+              />
 
-            <MediaUploadField
-              label="Upload Answer Media"
-              mediaItems={answerMedia}
-              onUpload={(file) => handleUpload(file, "answer")}
-              onRemove={(clientId) => handleRemoveMedia("answer", clientId)}
-              onPreview={setPreviewMedia}
-              isUploading={isUploadingMedia}
-            />
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <TextField
+                  fullWidth
+                  label="Answer Asset Link (optional)"
+                  placeholder="https://..."
+                  value={answerLinkInput}
+                  onChange={(e) => setAnswerLinkInput(e.target.value)}
+                />
+                <Button
+                  sx={{ height: "fit-content", width: "200px" }}
+                  variant="outlined"
+                  onClick={() => handleAddLink("answer")}
+                >
+                  Add Link
+                </Button>
+              </Box>
+            </Box>
 
             <FormControlLabel
               control={
@@ -467,6 +574,16 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
                 />
               }
               label="Keep Buzzer"
+            />
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={hideFromUsers}
+                  onChange={(e) => setHideFromUsers(e.target.checked)}
+                />
+              }
+              label="Hide Question From User Screens"
             />
 
             <TextField
@@ -517,7 +634,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
             >
               {folders.map((folderName) => (
                 <MenuItem key={folderName} value={folderName}>
-                  {folderName}
+                  {formatFolderLabel(folderName)}
                 </MenuItem>
               ))}
             </TextField>
@@ -601,7 +718,18 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
               )}
 
               {previewMedia.type === "file" && (
-                <Typography>{previewMedia.name || previewMediaSource(previewMedia)}</Typography>
+                <SmartMedia
+                  media={previewMedia}
+                  alt={previewMedia.name || "Preview"}
+                  sx={{
+                    width: "100%",
+                    maxHeight: "70vh",
+                    objectFit: "contain",
+                    borderRadius: 2,
+                  }}
+                  audioSx={{ width: "100%" }}
+                  iframeSx={{ minHeight: 520 }}
+                />
               )}
             </Box>
           )}

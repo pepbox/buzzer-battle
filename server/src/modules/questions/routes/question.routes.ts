@@ -2,10 +2,12 @@ import express from "express";
 import {
   createFolder,
   createQuestion,
+  deleteFolder,
   deleteQuestion,
   fetchFolders,
   fetchAllQuestions,
   fetchCurrentQuestion,
+  renameFolder,
   sendQuestionResponse,
   updateQuestion,
   uploadQuestionMedia,
@@ -27,6 +29,20 @@ router.post(
   authenticateUser,
   authorizeRoles("ADMIN"),
   createFolder,
+);
+
+router.put(
+  "/folders/:folderPath(*)",
+  authenticateUser,
+  authorizeRoles("ADMIN"),
+  renameFolder,
+);
+
+router.delete(
+  "/folders/:folderPath(*)",
+  authenticateUser,
+  authorizeRoles("ADMIN"),
+  deleteFolder,
 );
 
 router.post("/", authenticateUser, authorizeRoles("ADMIN"), createQuestion);

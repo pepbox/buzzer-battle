@@ -28,6 +28,7 @@ export interface IQuestion extends Document {
   score: number;
   folder?: string;
   keepBuzzer?: boolean;
+  hideFromUsers?: boolean;
   questionContent?: IQuestionContent;
   questionAssets?: IQuestionMedia[];
   answerContent?: IQuestionContent;

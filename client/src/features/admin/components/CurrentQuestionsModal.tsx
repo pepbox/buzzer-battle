@@ -17,6 +17,8 @@ import CurrentQuestionListItem from "./CurrentQuestionListItem";
 import { useDragDropReorder } from "../hooks/useDragDropReorder";
 import QuestionPreviewModal from "./QuestionPreviewModal";
 import QuestionLibraryManager from "./QuestionLibraryManager";
+import { useUpdateQuestionMutation } from "../services/admin.Api";
+import { questionToPayload } from "../utils/questionPayload";
 
 export interface CurrentQuestionsModalProps {
   open: boolean;
@@ -55,14 +57,47 @@ const CurrentQuestionsModal: React.FC<CurrentQuestionsModalProps> = ({
   const [previewQuestion, setPreviewQuestion] =
     useState<QuestionBankItem | null>(null);
   const [questionLibraryOpen, setQuestionLibraryOpen] = useState(false);
+  const [hiddenOverrides, setHiddenOverrides] = useState<
+    Record<string, boolean>
+  >({});
+  const [togglingQuestionId, setTogglingQuestionId] = useState<string | null>(
+    null,
+  );
+  const [updateQuestion] = useUpdateQuestionMutation();
 
   // Sync items with selectedQuestionIds when modal opens
   React.useEffect(() => {
     if (open) {
       setItems(selectedQuestionIds);
       setLocalError(null);
+      setHiddenOverrides({});
     }
   }, [open, selectedQuestionIds, setItems]);
+
+  const handleToggleHide = async (
+    question: QuestionBankItem,
+    checked: boolean,
+  ) => {
+    setLocalError(null);
+    setTogglingQuestionId(question._id);
+
+    try {
+      await updateQuestion({
+        questionId: question._id,
+        payload: questionToPayload(question, { hideFromUsers: checked }),
+      }).unwrap();
+      setHiddenOverrides((current) => ({
+        ...current,
+        [question._id]: checked,
+      }));
+    } catch (err: any) {
+      setLocalError(
+        err?.data?.message || "Failed to update question visibility",
+      );
+    } finally {
+      setTogglingQuestionId(null);
+    }
+  };
 
   const handleRemoveQuestion = (questionId: string) => {
     setItems((prev) => prev.filter((id) => id !== questionId));
@@ -122,25 +157,44 @@ const CurrentQuestionsModal: React.FC<CurrentQuestionsModalProps> = ({
           <List sx={{ display: "flex", flexDirection: "column", gap: 1, p: 0 }}>
             {items.map((questionId: string, index: number) => {
               const question = questionLookup.get(questionId);
+              const mergedQuestion = question
+                ? {
+                    ...question,
+                    hideFromUsers:
+                      hiddenOverrides[questionId] ?? question.hideFromUsers,
+                  }
+                : undefined;
 
               return (
                 <CurrentQuestionListItem
                   key={`question-${questionId}`}
                   questionId={questionId}
-                  question={question}
+                  question={mergedQuestion}
                   index={index}
                   isDragging={draggingId === questionId}
                   onDragStart={handleDragStart}
                   onDragOver={(e) => handleDragOver(e)}
                   onDrop={handleDrop}
                   onEdit={(qId) => {
-                    const q = questionLookup.get(qId);
+                    const q = items
+                      .map((id) => {
+                        const baseQuestion = questionLookup.get(id);
+                        if (!baseQuestion) return undefined;
+                        return {
+                          ...baseQuestion,
+                          hideFromUsers:
+                            hiddenOverrides[id] ?? baseQuestion.hideFromUsers,
+                        };
+                      })
+                      .find((item) => item?._id === qId);
                     if (q) onEdit(q);
                   }}
                   onRemove={(qId) => {
                     handleRemoveQuestion(qId);
                   }}
                   onPreview={(question) => setPreviewQuestion(question)}
+                  onToggleHide={handleToggleHide}
+                  isTogglingHide={togglingQuestionId === questionId}
                   loading={isLoading}
                 />
               );

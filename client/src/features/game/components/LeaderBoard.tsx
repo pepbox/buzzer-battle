@@ -280,7 +280,7 @@ const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams }) => {
                     fontSize: "12px",
                   }}
                 >
-                  Buzz: {formatBuzzerTime(team.totalBuzzerReactionTimeMs)}
+                  Time: {formatBuzzerTime(team.totalBuzzerReactionTimeMs)}
                 </Typography>
               </Box>
 

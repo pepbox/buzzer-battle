@@ -44,13 +44,19 @@ const BuzzerRound: React.FC = () => {
     expectedQuestionIndex >= 0 &&
     currentQuestionIndex !== expectedQuestionIndex;
   const activeQuestion = isQuestionTransitioning ? undefined : question;
+  const isHiddenQuestion = activeQuestion?.hideFromUsers === true;
 
   const questionDataFormatted: QuestionData = {
     id: activeQuestion?._id || "",
-    text: activeQuestion?.questionContent?.text || activeQuestion?.questionText,
-    image: activeQuestion?.questionImage,
-    video: activeQuestion?.quetionVideo,
-    media: activeQuestion?.questionContent?.media?.length
+    isHiddenPlaceholder: isHiddenQuestion,
+    text: isHiddenQuestion
+      ? "Question is visible on the presenter screen."
+      : activeQuestion?.questionContent?.text || activeQuestion?.questionText,
+    image: isHiddenQuestion ? undefined : activeQuestion?.questionImage,
+    video: isHiddenQuestion ? undefined : activeQuestion?.quetionVideo,
+    media: isHiddenQuestion
+      ? undefined
+      : activeQuestion?.questionContent?.media?.length
       ? activeQuestion.questionContent.media
       : activeQuestion?.questionAssets?.filter((item: any) =>
           ["image", "video", "audio", "gif", "text", "file"].includes(

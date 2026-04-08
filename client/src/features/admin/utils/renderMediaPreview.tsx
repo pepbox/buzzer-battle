@@ -156,7 +156,7 @@ export const renderMediaPreview = ({
     );
   }
 
-  return (
+  return mediaWrapper(
     <Chip
       key={`${mediaUrl}-${idx}`}
       size="small"
@@ -166,6 +166,15 @@ export const renderMediaPreview = ({
       clickable
       target="_blank"
       rel="noreferrer"
-    />
+      sx={{
+        maxWidth: 240,
+        "& .MuiChip-label": {
+          display: "block",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        },
+      }}
+    />,
   );
 };

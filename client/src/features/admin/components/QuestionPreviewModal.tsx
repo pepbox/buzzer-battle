@@ -156,6 +156,14 @@ const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
                 {question.keepBuzzer === false ? "Off" : "On"}
               </Typography>
             </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                Hidden From Users
+              </Typography>
+              <Typography variant="body2" fontWeight={600}>
+                {question.hideFromUsers ? "Yes" : "No"}
+              </Typography>
+            </Box>
           </Box>
 
           {/* Options if any */}

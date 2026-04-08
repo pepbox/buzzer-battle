@@ -52,6 +52,10 @@ const questionSchema = new Schema<IQuestion>(
       type: Boolean,
       default: true,
     },
+    hideFromUsers: {
+      type: Boolean,
+      default: false,
+    },
     questionContent: {
       text: {
         type: String,
@@ -164,6 +168,8 @@ questionSchema.index({
   questionText: "text",
   folder: "text",
   "options.optionText": "text",
+  "questionContent.text": "text",
+  "answerContent.text": "text",
 });
 
 export const Question = model<IQuestion>("Question", questionSchema);

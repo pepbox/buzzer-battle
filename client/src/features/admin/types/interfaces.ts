@@ -69,6 +69,7 @@ export interface QuestionBankItem {
   score: number;
   folder?: string;
   keepBuzzer?: boolean;
+  hideFromUsers?: boolean;
   options: Array<{
     optionId: string;
     optionText: string;

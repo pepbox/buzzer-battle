@@ -4,6 +4,7 @@ import { useFetchCurrentQuestionQuery } from "../../question/services/questions.
 import Loader from "../../../components/ui/Loader";
 import Error from "../../../components/ui/Error";
 import normalBg from "../../../assets/background/question_bg.webp";
+import SmartMedia from "../../../components/ui/SmartMedia";
 
 interface AnswerRevealPageProps {
   presenterMode?: boolean;
@@ -29,61 +30,41 @@ const AnswerRevealPage: React.FC<AnswerRevealPageProps> = ({
   if (isLoading) return <Loader />;
   if (error || !question) return <Error />;
 
-  const inlineVideoProps = {
-    controls: true,
-    playsInline: true,
-    preload: "metadata" as const,
-  };
-
   // Render media arrays helpers
   const renderMediaList = (mediaArray?: any[]) => {
     if (!mediaArray || !Array.isArray(mediaArray)) return null;
     return mediaArray.map((media, idx) => {
-      if (media.type === "image" || media.type === "gif") {
+      if (media.type === "text") {
         return (
-          <Box
-            key={idx}
-            component="img"
-            src={media.url}
-            alt={media.name || "Media"}
-            sx={{
-              width: "100%",
-              maxHeight: presenterMode ? "520px" : "250px",
-              objectFit: "contain",
-              borderRadius: "12px",
-              mb: 2,
-            }}
-          />
+          <Typography
+            key={`answer-reveal-text-${idx}`}
+            variant="body2"
+            sx={{ textAlign: "center", color: "#475569", mb: 2 }}
+          >
+            {media.text}
+          </Typography>
         );
       }
-      if (media.type === "video") {
-        return (
-          <Box
-            key={idx}
-            component="video"
-            src={media.url}
-            {...inlineVideoProps}
-            sx={{
-              width: "100%",
-              maxHeight: presenterMode ? "520px" : "250px",
-              borderRadius: "12px",
-              mb: 2,
-            }}
-          />
-        );
-      }
-      if (media.type === "audio") {
-        return (
-          <Box
-            key={idx}
-            component="audio"
-            controls
-            src={media.url}
-            sx={{ width: "100%", mb: 2 }}
-          />
-        );
-      }
-      return null;
+
+      return (
+        <SmartMedia
+          key={`answer-reveal-media-${idx}`}
+          media={media}
+          alt={media.name || "Media"}
+          sx={{
+            width: "100%",
+            maxHeight: presenterMode ? "520px" : "250px",
+            objectFit: "contain",
+            borderRadius: "12px",
+            mb: 2,
+          }}
+          audioSx={{ width: "100%", mb: 2 }}
+          iframeSx={{
+            minHeight: presenterMode ? 520 : 320,
+            mb: 2,
+          }}
+        />
+      );
     });
   };
 
@@ -196,7 +177,9 @@ const AnswerRevealPage: React.FC<AnswerRevealPageProps> = ({
             <Box
               component="video"
               src={question.quetionVideo}
-              {...inlineVideoProps}
+              controls
+              playsInline
+              preload="metadata"
               sx={{
                 width: "100%",
                 maxHeight: presenterMode ? "520px" : "250px",

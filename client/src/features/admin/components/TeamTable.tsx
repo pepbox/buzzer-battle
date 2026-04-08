@@ -68,6 +68,8 @@ const TeamTable: React.FC<TeamTableProps> = ({
     value: '',
   });
 
+  const shouldHideRank = teams.length > 0 && teams.every((team) => team.teamScore === 0);
+
   // Handle sort
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -164,6 +166,7 @@ const TeamTable: React.FC<TeamTableProps> = ({
 
   // Get rank display with trophy
   const getRankDisplay = (rank: number) => {
+    if (shouldHideRank) return '-';
     if (rank === 1) return <TrophyIcon sx={{ color: '#FFD700', fontSize: 24 }} />;
     if (rank === 2) return <TrophyIcon sx={{ color: '#C0C0C0', fontSize: 24 }} />;
     if (rank === 3) return <TrophyIcon sx={{ color: '#CD7F32', fontSize: 24 }} />;
@@ -202,7 +205,7 @@ const TeamTable: React.FC<TeamTableProps> = ({
                       <Typography variant="h6" component="div">
                         {getRankDisplay(team.rank)}
                       </Typography>
-                      {typeof team.rank === 'number' && team.rank > 3 && (
+                      {!shouldHideRank && typeof team.rank === 'number' && team.rank > 3 && (
                         <Typography variant="h6" color="text.secondary">
                           #{team.rank}
                         </Typography>

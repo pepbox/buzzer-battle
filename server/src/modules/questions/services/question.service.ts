@@ -32,7 +32,11 @@ export default class QuestionService {
     const limit = Math.min(100, Math.max(1, Number(filters?.limit || 50)));
 
     if (filters?.folder && filters.folder !== "all") {
-      queryFilter.folder = filters.folder;
+      const escapedFolder = filters.folder.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&",
+      );
+      queryFilter.folder = new RegExp(`^${escapedFolder}(?:/|$)`, "i");
     }
 
     if (filters?.search) {
@@ -72,6 +76,7 @@ export default class QuestionService {
     score?: number;
     folder?: string;
     keepBuzzer?: boolean;
+    hideFromUsers?: boolean;
     questionContent?: any;
     questionAssets?: any[];
     answerContent?: any;
@@ -93,6 +98,7 @@ export default class QuestionService {
       score: input.score ?? 0,
       folder: normalizedFolder,
       keepBuzzer: input.keepBuzzer ?? true,
+      hideFromUsers: input.hideFromUsers ?? false,
       questionContent: input.questionContent,
       questionAssets: input.questionAssets || [],
       answerContent: input.answerContent,
@@ -118,6 +124,7 @@ export default class QuestionService {
       score?: number;
       folder?: string;
       keepBuzzer?: boolean;
+      hideFromUsers?: boolean;
       questionContent?: any;
       questionAssets?: any[];
       answerContent?: any;
@@ -153,6 +160,9 @@ export default class QuestionService {
     question.correctAnswer = input.correctAnswer;
     question.score = input.score ?? 0;
     question.keepBuzzer = input.keepBuzzer ?? true;
+    if (input.hideFromUsers !== undefined) {
+      question.hideFromUsers = input.hideFromUsers;
+    }
     question.questionContent = input.questionContent;
     question.questionAssets = input.questionAssets || [];
     question.answerContent = input.answerContent;
@@ -214,14 +224,25 @@ export default class QuestionService {
     return names;
   }
 
-  async createFolder(name: string): Promise<string> {
+  async createFolder(name: string, parentPath?: string): Promise<string> {
     const normalized = name.trim();
 
     if (!normalized) {
       throw new Error("Folder name is required");
     }
+    if (normalized.includes("/")) {
+      throw new Error("Folder name cannot contain '/'");
+    }
 
-    const existingQuery = QuestionFolder.findOne({ name: normalized });
+    const normalizedParent =
+      typeof parentPath === "string" && parentPath.trim().length > 0
+        ? parentPath.trim()
+        : "";
+    const fullPath = normalizedParent
+      ? `${normalizedParent}/${normalized}`
+      : normalized;
+
+    const existingQuery = QuestionFolder.findOne({ name: fullPath });
     if (this.session) {
       existingQuery.session(this.session);
     }
@@ -231,7 +252,7 @@ export default class QuestionService {
       throw new Error("Folder already exists");
     }
 
-    const folder = new QuestionFolder({ name: normalized });
+    const folder = new QuestionFolder({ name: fullPath });
     const options: any = {};
     if (this.session) {
       options.session = this.session;
@@ -239,6 +260,142 @@ export default class QuestionService {
     await folder.save(options);
 
     return folder.name;
+  }
+
+  async renameFolder(folderPath: string, newName: string): Promise<string> {
+    const normalizedPath = folderPath.trim();
+    const normalizedName = newName.trim();
+
+    if (!normalizedPath) {
+      throw new Error("Folder path is required");
+    }
+    if (!normalizedName) {
+      throw new Error("Folder name is required");
+    }
+    if (normalizedPath === "General") {
+      throw new Error("General folder cannot be renamed");
+    }
+    if (normalizedName.includes("/")) {
+      throw new Error("Folder name cannot contain '/'");
+    }
+
+    const pathSegments = normalizedPath.split("/").filter(Boolean);
+    const parentPath = pathSegments.slice(0, -1).join("/");
+    const renamedPath = parentPath
+      ? `${parentPath}/${normalizedName}`
+      : normalizedName;
+
+    if (renamedPath === normalizedPath) {
+      return renamedPath;
+    }
+
+    const existingQuery = QuestionFolder.findOne({ name: renamedPath });
+    if (this.session) {
+      existingQuery.session(this.session);
+    }
+    const existingFolder = await existingQuery;
+    if (existingFolder) {
+      throw new Error("Folder already exists");
+    }
+
+    const folderQuery = QuestionFolder.findOne({ name: normalizedPath });
+    if (this.session) {
+      folderQuery.session(this.session);
+    }
+    const folder = await folderQuery;
+    if (!folder) {
+      throw new Error("Folder not found");
+    }
+
+    const escapedPath = normalizedPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const folderRegex = new RegExp(`^${escapedPath}(?:/|$)`);
+
+    const folderDocsQuery = QuestionFolder.find({ name: folderRegex });
+    const questionDocsQuery = Question.find({ folder: folderRegex });
+
+    if (this.session) {
+      folderDocsQuery.session(this.session);
+      questionDocsQuery.session(this.session);
+    }
+
+    const [folderDocs, questionDocs] = await Promise.all([
+      folderDocsQuery,
+      questionDocsQuery,
+    ]);
+
+    await Promise.all(
+      folderDocs.map(async (folderDoc) => {
+        const updatedName =
+          renamedPath + folderDoc.name.slice(normalizedPath.length);
+        folderDoc.name = updatedName;
+        await folderDoc.save(this.session ? { session: this.session } : {});
+      }),
+    );
+
+    await Promise.all(
+      questionDocs.map(async (questionDoc) => {
+        const currentFolder = questionDoc.folder || "General";
+        questionDoc.folder =
+          renamedPath + currentFolder.slice(normalizedPath.length);
+        await questionDoc.save(this.session ? { session: this.session } : {});
+      }),
+    );
+
+    return renamedPath;
+  }
+
+  async deleteFolder(folderPath: string): Promise<string> {
+    const normalizedPath = folderPath.trim();
+
+    if (!normalizedPath) {
+      throw new Error("Folder path is required");
+    }
+    if (normalizedPath === "General") {
+      throw new Error("General folder cannot be deleted");
+    }
+
+    const pathSegments = normalizedPath.split("/").filter(Boolean);
+    const parentPath = pathSegments.slice(0, -1).join("/");
+    const fallbackPath = parentPath || "General";
+    const escapedPath = normalizedPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const folderRegex = new RegExp(`^${escapedPath}(?:/|$)`);
+
+    const folderQuery = QuestionFolder.findOne({ name: normalizedPath });
+    if (this.session) {
+      folderQuery.session(this.session);
+    }
+    const folder = await folderQuery;
+    if (!folder) {
+      throw new Error("Folder not found");
+    }
+
+    const questionDocsQuery = Question.find({ folder: folderRegex });
+    if (this.session) {
+      questionDocsQuery.session(this.session);
+    }
+    const questionDocs = await questionDocsQuery;
+
+    await Promise.all(
+      questionDocs.map(async (questionDoc) => {
+        const currentFolder = questionDoc.folder || "General";
+        const suffix = currentFolder.slice(normalizedPath.length);
+        const normalizedSuffix = suffix.startsWith("/") ? suffix.slice(1) : "";
+        questionDoc.folder = normalizedSuffix
+          ? parentPath
+            ? `${parentPath}/${normalizedSuffix}`
+            : normalizedSuffix
+          : fallbackPath;
+        await questionDoc.save(this.session ? { session: this.session } : {});
+      }),
+    );
+
+    const deleteQuery = QuestionFolder.deleteMany({ name: folderRegex });
+    if (this.session) {
+      deleteQuery.session(this.session);
+    }
+    await deleteQuery;
+
+    return fallbackPath;
   }
 
   // Fetch current question based on session and question index

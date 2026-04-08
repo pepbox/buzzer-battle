@@ -3,9 +3,9 @@ import {
   Paper,
   Box,
   Typography,
-  Button,
   IconButton,
   CircularProgress,
+  Checkbox,
 } from "@mui/material";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -41,15 +41,33 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
   const showEditDelete =
     actionButtons === "edit-delete" || actionButtons === "all";
   const showPreview = actionButtons === "all";
+  const isSelectable = showSelectButton && Boolean(onSelect);
+
+  const handleSelect = () => {
+    if (isSelectable && onSelect) {
+      onSelect(question._id);
+    }
+  };
+
+  const stopEvent = (event: React.MouseEvent) => {
+    event.stopPropagation();
+  };
 
   return (
     <Paper
       variant="outlined"
+      onClick={handleSelect}
       sx={{
-        p: variant === "minimal" ? 1.25 : 1.5,
-        borderColor: isSelected ? "primary.main" : "divider",
-        boxShadow: isSelected ? "0 6px 20px rgba(25, 118, 210, 0.14)" : "none",
+        p: variant === "minimal" ? 1.25 : 2,
+        borderColor: isSelected ? "success.main" : "rgba(15, 23, 42, 0.14)",
+        borderWidth: isSelected ? 2 : 1,
+        borderRadius: 3,
+        backgroundColor: isSelected ? "#f6fff5" : "#ffffff",
+        boxShadow: isSelected
+          ? "0 8px 18px rgba(22, 163, 74, 0.10)"
+          : "none",
         transition: "all 150ms ease",
+        cursor: isSelectable ? "pointer" : "default",
       }}
     >
       <Box
@@ -58,65 +76,89 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
           justifyContent: "space-between",
           alignItems: variant === "minimal" ? "center" : "flex-start",
           gap: 2,
+          flexWrap: "wrap",
         }}
       >
-        <Box sx={{ flex: 1 }}>
-          <Typography
-            fontWeight={600}
-            variant={variant === "minimal" ? "body2" : "body1"}
-          >
-            {question.questionText ||
-              question.questionContent?.text ||
-              "Untitled question"}
-          </Typography>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ display: variant === "minimal" ? "none" : "block" }}
-          >
-            Folder: {question.folder || "General"} | Score:{" "}
-            {question.score ?? 0} | Options: {question.options?.length || 0}
-          </Typography>
-          {variant !== "minimal" &&
-            !!question.questionContent?.media?.length && (
-              <Box
-                sx={{
-                  display: "flex",
-                  gap: 1,
-                  mt: 1,
-                  flexWrap: "wrap",
-                }}
+        <Box sx={{ display: "flex", gap: 1.25, flex: 1, minWidth: 0 }}>
+          {showSelectButton && onSelect && (
+            <Checkbox
+              checked={isSelected}
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelect(question._id);
+              }}
+              disabled={loading}
+              sx={{
+                mt: -0.5,
+                color: isSelected ? "success.main" : "rgba(15, 23, 42, 0.35)",
+                "&:hover": {
+                  backgroundColor: "transparent",
+                },
+                "&.Mui-checked": {
+                  color: "success.main",
+                },
+              }}
+            />
+          )}
+
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography
+              fontWeight={700}
+              variant={variant === "minimal" ? "body2" : "body1"}
+              sx={{
+                color: "text.primary",
+                wordBreak: "break-word",
+              }}
+            >
+              {question.questionText ||
+                question.questionContent?.text ||
+                "Untitled question"}
+            </Typography>
+            {variant !== "minimal" && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mt: 0.75 }}
               >
-                {question.questionContent.media.map((media, idx) =>
-                  renderMediaPreview({ media, idx, showActions: false }),
-                )}
-              </Box>
+                Folder: {question.folder || "General"} | Score:{" "}
+                {question.score ?? 0} | Options: {question.options?.length || 0}{" "}
+                | Hidden: {question.hideFromUsers ? "Yes" : "No"}
+              </Typography>
             )}
+            {variant !== "minimal" &&
+              !!question.questionContent?.media?.length && (
+                <Box
+                  sx={{
+                    display: "flex",
+                    gap: 1,
+                    mt: 1.5,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {question.questionContent.media.map((media, idx) =>
+                    renderMediaPreview({ media, idx, showActions: false }),
+                  )}
+                </Box>
+              )}
+          </Box>
         </Box>
 
         <Box
           sx={{
             display: "flex",
-            gap: variant === "minimal" ? 0.5 : 1,
+            gap: 1,
             flexShrink: 0,
             flexDirection: variant === "minimal" ? "row" : "row",
+            alignItems: "center",
           }}
         >
-          {showSelectButton && onSelect && (
-            <Button
-              size={variant === "minimal" ? "small" : "medium"}
-              variant={isSelected ? "contained" : "outlined"}
-              onClick={() => onSelect(question._id)}
-              disabled={loading}
-            >
-              {isSelected ? "Selected" : "Select"}
-            </Button>
-          )}
-
           {showPreview && onView && (
             <IconButton
               size="small"
-              onClick={() => onView(question)}
+              onClick={(event) => {
+                stopEvent(event);
+                onView(question);
+              }}
               disabled={loading}
               title="View question"
             >
@@ -127,7 +169,10 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
           {showEditDelete && onEdit && (
             <IconButton
               size="small"
-              onClick={() => onEdit(question)}
+              onClick={(event) => {
+                stopEvent(event);
+                onEdit(question);
+              }}
               disabled={loading}
               title="Edit question"
             >
@@ -139,7 +184,10 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
             <IconButton
               size="small"
               color="error"
-              onClick={() => onDelete(question)}
+              onClick={(event) => {
+                stopEvent(event);
+                onDelete(question);
+              }}
               disabled={loading}
               title="Delete question"
             >

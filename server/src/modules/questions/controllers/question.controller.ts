@@ -69,12 +69,14 @@ export const createFolder = async (
 ) => {
   try {
     const { name } = req.body;
+    const parentPath =
+      typeof req.body?.parentPath === "string" ? req.body.parentPath : undefined;
 
     if (!name || typeof name !== "string") {
       return next(new AppError("Folder name is required.", 400));
     }
 
-    const folder = await questionService.createFolder(name);
+    const folder = await questionService.createFolder(name, parentPath);
 
     res.status(201).json({
       message: "Folder created successfully.",
@@ -87,8 +89,86 @@ export const createFolder = async (
     if (error.message === "Folder name is required") {
       return next(new AppError(error.message, 400));
     }
+    if (error.message === "Folder name cannot contain '/'") {
+      return next(new AppError(error.message, 400));
+    }
     console.error("Error creating folder:", error);
     next(new AppError("Failed to create folder.", 500));
+  }
+};
+
+export const renameFolder = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { folderPath } = req.params;
+    const { name } = req.body;
+
+    if (!folderPath || typeof folderPath !== "string") {
+      return next(new AppError("Folder path is required.", 400));
+    }
+    if (!name || typeof name !== "string") {
+      return next(new AppError("Folder name is required.", 400));
+    }
+
+    const folder = await questionService.renameFolder(folderPath, name);
+
+    res.status(200).json({
+      message: "Folder renamed successfully.",
+      data: { folder },
+    });
+  } catch (error: any) {
+    if (
+      error.message === "Folder path is required" ||
+      error.message === "Folder name is required" ||
+      error.message === "Folder name cannot contain '/'" ||
+      error.message === "General folder cannot be renamed"
+    ) {
+      return next(new AppError(error.message, 400));
+    }
+    if (error.message === "Folder already exists") {
+      return next(new AppError(error.message, 409));
+    }
+    if (error.message === "Folder not found") {
+      return next(new AppError(error.message, 404));
+    }
+    console.error("Error renaming folder:", error);
+    next(new AppError("Failed to rename folder.", 500));
+  }
+};
+
+export const deleteFolder = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { folderPath } = req.params;
+
+    if (!folderPath || typeof folderPath !== "string") {
+      return next(new AppError("Folder path is required.", 400));
+    }
+
+    const fallbackFolder = await questionService.deleteFolder(folderPath);
+
+    res.status(200).json({
+      message: "Folder deleted successfully.",
+      data: { fallbackFolder },
+    });
+  } catch (error: any) {
+    if (
+      error.message === "Folder path is required" ||
+      error.message === "General folder cannot be deleted"
+    ) {
+      return next(new AppError(error.message, 400));
+    }
+    if (error.message === "Folder not found") {
+      return next(new AppError(error.message, 404));
+    }
+    console.error("Error deleting folder:", error);
+    next(new AppError("Failed to delete folder.", 500));
   }
 };
 
@@ -107,6 +187,7 @@ export const createQuestion = async (
       score,
       folder,
       keepBuzzer,
+      hideFromUsers,
       questionContent,
       questionAssets,
       answerContent,
@@ -165,6 +246,7 @@ export const createQuestion = async (
       score: Number(score || 0),
       folder,
       keepBuzzer,
+      hideFromUsers,
       questionContent,
       questionAssets,
       answerContent,
@@ -202,6 +284,7 @@ export const updateQuestion = async (
       score,
       folder,
       keepBuzzer,
+      hideFromUsers,
       questionContent,
       questionAssets,
       answerContent,
@@ -260,6 +343,7 @@ export const updateQuestion = async (
       score: Number(score || 0),
       folder,
       keepBuzzer,
+      hideFromUsers,
       questionContent,
       questionAssets,
       answerContent,
@@ -388,23 +472,34 @@ export const fetchCurrentQuestion = async (
       return next(new AppError("Current question not found.", 404));
     }
 
+    const isTeamUser = req.user?.role === "TEAM";
+
     // Determine if we can reveal the answer
     const canRevealAnswer = gameState.gameStatus === GameStatus.IDLE;
+    const shouldHideQuestionForUser =
+      isTeamUser && question.hideFromUsers === true && !canRevealAnswer;
 
-    // Remove correct answer for team
+    const questionContentForResponse = shouldHideQuestionForUser
+      ? undefined
+      : question.questionContent;
+    const questionAssetsForResponse = shouldHideQuestionForUser
+      ? undefined
+      : question.questionAssets;
+
     const questionForTeam: any = {
       _id: question._id,
-      questionText: question.questionText,
-      questionImage: question.questionImage,
-      quetionVideo: question.quetionVideo,
+      questionText: shouldHideQuestionForUser ? "" : question.questionText,
+      questionImage: shouldHideQuestionForUser ? undefined : question.questionImage,
+      quetionVideo: shouldHideQuestionForUser ? undefined : question.quetionVideo,
       options: question.options.map((opt) => ({
         optionId: opt.optionId,
         optionText: opt.optionText,
       })),
-      questionContent: question.questionContent,
+      questionContent: questionContentForResponse,
       score: question.score,
       keepBuzzer: question.keepBuzzer,
-      questionAssets: question.questionAssets,
+      hideFromUsers: question.hideFromUsers,
+      questionAssets: questionAssetsForResponse,
       createdAt: question.createdAt,
       updatedAt: question.updatedAt,
     };

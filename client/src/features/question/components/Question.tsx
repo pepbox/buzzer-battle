@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Box, Typography, Button } from "@mui/material";
+import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import coinImage from "../../../assets/questions/coin.webp";
 import collarImage from "../../../assets/questions/collor.webp";
+import SmartMedia from "../../../components/ui/SmartMedia";
 
 export interface QuestionOption {
   optionId: string;
@@ -13,6 +15,7 @@ export interface QuestionData {
   text?: string;
   image?: string;
   video?: string;
+  isHiddenPlaceholder?: boolean;
   media?: Array<{
     type: "text" | "image" | "video" | "audio" | "gif" | "file";
     url?: string;
@@ -122,37 +125,6 @@ const Question: React.FC<QuestionProps> = ({
     return "#000000"; // Default dark text
   };
 
-  const getMediaType = (url: string): "image" | "video" | "audio" => {
-    const extension = url.split(".").pop()?.toLowerCase();
-    const audioExtensions = ["mp3", "wav", "ogg", "m4a", "aac", "flac"];
-    const videoExtensions = [
-      "mp4",
-      "webm",
-      "ogg",
-      "avi",
-      "mov",
-      "wmv",
-      "flv",
-      "m4v",
-    ];
-
-    if (audioExtensions.includes(extension || "")) {
-      return "audio";
-    }
-
-    if (videoExtensions.includes(extension || "")) {
-      return "video";
-    }
-
-    return "image"; // Default to image (includes gif, jpg, png, webp, etc.)
-  };
-
-  const inlineVideoProps = {
-    controls: true,
-    playsInline: true,
-    preload: "metadata" as const,
-  };
-
   const renderMedia = () => {
     const explicitMedia = questionData.media || [];
     const legacyMedia = [
@@ -191,93 +163,16 @@ const Question: React.FC<QuestionProps> = ({
           </Typography>
         );
       }
-
-      if ((media.type === "image" || media.type === "gif") && media.url) {
-        return (
-          <Box
-            key={`media-image-${index}`}
-            component="img"
-            src={media.url}
-            alt={media.name || `Question media ${index + 1}`}
-            sx={mediaStyles}
-          />
-        );
-      }
-
-      if (media.type === "video" && media.url) {
-        return (
-          <Box
-            key={`media-video-${index}`}
-            component="video"
-            src={media.url}
-            {...inlineVideoProps}
-            sx={mediaStyles}
-          />
-        );
-      }
-
-      if (media.type === "audio" && media.url) {
-        return (
-          <Box
-            key={`media-audio-${index}`}
-            component="audio"
-            src={media.url}
-            controls
-            preload="metadata"
-            sx={{ width: "100%", my: "10px" }}
-          />
-        );
-      }
-
-      if (media.type === "file") {
-        return (
-          <Typography
-            key={`media-file-${index}`}
-            variant="body2"
-            sx={{ textAlign: "center", color: "#1D4ED8", my: "8px" }}
-          >
-            {media.name || "Attached file"}
-          </Typography>
-        );
-      }
-
-      if (media.url) {
-        const derivedType = getMediaType(media.url);
-        if (derivedType === "video") {
-          return (
-            <Box
-              key={`media-video-fallback-${index}`}
-              component="video"
-              src={media.url}
-              {...inlineVideoProps}
-              sx={mediaStyles}
-            />
-          );
-        }
-        if (derivedType === "audio") {
-          return (
-            <Box
-              key={`media-audio-fallback-${index}`}
-              component="audio"
-              src={media.url}
-              controls
-              preload="metadata"
-              sx={{ width: "100%", my: "10px" }}
-            />
-          );
-        }
-        return (
-          <Box
-            key={`media-image-fallback-${index}`}
-            component="img"
-            src={media.url}
-            alt={media.name || `Question media ${index + 1}`}
-            sx={mediaStyles}
-          />
-        );
-      }
-
-      return null;
+      return (
+        <SmartMedia
+          key={`smart-media-${index}`}
+          media={media}
+          alt={media.name || `Question media ${index + 1}`}
+          sx={mediaStyles}
+          audioSx={{ width: "100%", my: "10px" }}
+          iframeSx={{ minHeight: 320, my: "10px" }}
+        />
+      );
     });
   };
 
@@ -392,20 +287,88 @@ const Question: React.FC<QuestionProps> = ({
         )}
 
         {/* Question Text */}
-        {questionData.text && (
-          <Typography
-            variant="h4"
+        {questionData.isHiddenPlaceholder && questionData.text ? (
+          <Box
             sx={{
-              color: "#333",
-              fontWeight: 700,
-              textAlign: "center",
-              lineHeight: 1.5,
-              wordBreak: "break-word",
+              width: "100%",
               mb: "12px",
             }}
           >
-            {questionData.text}
-          </Typography>
+            <Box
+              sx={{
+                width: "100%",
+                backgroundColor: "#DCFCE7",
+                border: "2px solid #22C55E",
+                borderRadius: "14px",
+                px: "16px",
+                py: "12px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 1,
+                mb: 1.5,
+              }}
+            >
+              <WarningAmberRoundedIcon
+                sx={{ color: "#F59E0B", fontSize: 28, flexShrink: 0 }}
+              />
+              <Typography
+                variant="body1"
+                sx={{
+                  color: "#166534",
+                  fontWeight: 700,
+                  textAlign: "center",
+                  lineHeight: 1.5,
+                  wordBreak: "break-word",
+                }}
+              >
+                Question Hidden
+              </Typography>
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 1,
+                mb: 1.5,
+              }}
+            >
+              {/* <WarningAmberRoundedIcon
+                sx={{ color: "#F59E0B", fontSize: 28, flexShrink: 0 }}
+              /> */}
+              <Typography
+                variant="h5"
+                sx={{
+                  color: "#333",
+                  fontWeight: 400,
+                  fontSize: "14px",
+                  textAlign: "center",
+                  lineHeight: 1.4,
+                  wordBreak: "break-word",
+                  fontStyle: "italic",
+                }}
+              >
+                {questionData.text}
+              </Typography>
+            </Box>
+          </Box>
+        ) : (
+          questionData.text && (
+            <Typography
+              variant="h4"
+              sx={{
+                color: "#333",
+                fontWeight: 700,
+                textAlign: "center",
+                lineHeight: 1.5,
+                wordBreak: "break-word",
+                mb: "12px",
+              }}
+            >
+              {questionData.text}
+            </Typography>
+          )
         )}
 
         {/* Media Section - full bleed and anchored to bottom */}
@@ -434,7 +397,6 @@ const Question: React.FC<QuestionProps> = ({
         </Box>
 
         {/* Verbal Answer Hint - Only show when options are hidden */}
-
 
         {/* Options Section - Only show when showOptions is true */}
         {showOptions && (

@@ -85,6 +85,7 @@ export interface QuestionBankItem {
   score: number;
   folder?: string;
   keepBuzzer?: boolean;
+  hideFromUsers?: boolean;
   options: Array<{
     optionId: string;
     optionText: string;
@@ -133,6 +134,7 @@ export interface CreateQuestionPayload {
   score?: number;
   folder?: string;
   keepBuzzer?: boolean;
+  hideFromUsers?: boolean;
   questionContent?: {
     text?: string;
     media?: QuestionMediaItem[];
@@ -331,7 +333,7 @@ export const adminApi = api.injectEndpoints({
 
     createQuestionFolder: builder.mutation<
       { message: string; data: { folder: string } },
-      { name: string }
+      { name: string; parentPath?: string }
     >({
       query: (payload) => ({
         url: "/questions/folders",
@@ -339,6 +341,29 @@ export const adminApi = api.injectEndpoints({
         body: payload,
       }),
       invalidatesTags: ["Folder"],
+    }),
+
+    renameQuestionFolder: builder.mutation<
+      { message: string; data: { folder: string } },
+      { folderPath: string; name: string }
+    >({
+      query: ({ folderPath, name }) => ({
+        url: `/questions/folders/${folderPath}`,
+        method: "PUT",
+        body: { name },
+      }),
+      invalidatesTags: ["Folder", "Question", "Session"],
+    }),
+
+    deleteQuestionFolder: builder.mutation<
+      { message: string; data: { fallbackFolder: string } },
+      { folderPath: string }
+    >({
+      query: ({ folderPath }) => ({
+        url: `/questions/folders/${folderPath}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Folder", "Question", "Session"],
     }),
 
     uploadQuestionMedia: builder.mutation<UploadMediaResponse, FormData>({
@@ -389,11 +414,14 @@ export const {
   useFetchTeamDashboardQuery,
   useLazyFetchTeamDashboardQuery,
   useFetchQuestionBankQuery,
+  useLazyFetchQuestionBankQuery,
   useCreateQuestionMutation,
   useUpdateQuestionMutation,
   useDeleteQuestionMutation,
   useFetchQuestionFoldersQuery,
   useCreateQuestionFolderMutation,
+  useRenameQuestionFolderMutation,
+  useDeleteQuestionFolderMutation,
   useUploadQuestionMediaMutation,
   useUpdateTeamMutation,
   useFetchTeamResponsesQuery,

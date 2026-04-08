@@ -31,6 +31,7 @@ export interface Question {
   questionAssets?: MediaItem[];
   score: number;
   keepBuzzer?: boolean;
+  hideFromUsers?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
