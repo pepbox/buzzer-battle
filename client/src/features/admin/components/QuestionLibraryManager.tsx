@@ -64,6 +64,7 @@ export interface QuestionLibraryManagerProps {
   onBack?: () => void;
   showBackButton?: boolean;
   showCurrentListButton?: boolean;
+  showSaveButton?: boolean;
 }
 
 const uniqueIds = (questionIds: string[]) => Array.from(new Set(questionIds));
@@ -75,6 +76,7 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
   onBack,
   showBackButton = false,
   showCurrentListButton = false,
+  showSaveButton = true,
 }) => {
   const [searchText, setSearchText] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -891,19 +893,19 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
           </Box>
         </Box>
       </Paper>
-
-      <Paper
-        sx={{
-          p: 2,
-          borderRadius: 0,
-          border: "1px solid rgba(15, 23, 42, 0.08)",
-          boxShadow: "0 6px 24px rgba(15, 23, 42, 0.04)",
-          backgroundColor: "#ffffff",
-          position: "sticky",
-          bottom: 0,
-          zIndex: 2,
-        }}
-      >
+      {showSaveButton && (
+        <Paper
+          sx={{
+            p: 2,
+            borderTop: "1px solid",
+            borderColor: "divider",
+            boxShadow: "0 6px 24px rgba(15, 23, 42, 0.04)",
+            backgroundColor: "#ffffff",
+            position: "sticky",
+            bottom: 0,
+            zIndex: 2,
+          }}
+        >
         <Box
           sx={{
             display: "flex",
@@ -952,6 +954,7 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
           </Button>
         </Box>
       </Paper>
+      )}
 
       <QuestionEditorDialog
         open={createModalOpen}

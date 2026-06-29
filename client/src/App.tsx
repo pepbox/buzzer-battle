@@ -3,6 +3,7 @@ import "./App.css";
 import { Routes, Route } from "react-router-dom";
 import GameMain from "./pages/gameMain";
 import AdminMain from "./pages/adminMain";
+import GlobalQuestionLibraryPage from "./features/admin/pages/GlobalQuestionLibraryPage";
 import { initializeWebSocket } from "./services/websocket/websocketConfig";
 import { websocketService } from "./services/websocket/websocketService";
 import { useAdminAuth } from "./features/admin/services/useAdminAuth";
@@ -46,7 +47,7 @@ const App: React.FC = () => {
     const pathname = window.location.pathname;
     const sessionIdFromPath = pathname.split("/")[2] || sessionId || "";
 
-    if (pathname.startsWith("/admin/")) {
+    if (pathname.startsWith("/admin/") && pathname !== "/admin/questions") {
       window.location.replace(`/admin/${sessionIdFromPath}/login`);
       return;
     }
@@ -80,6 +81,7 @@ const App: React.FC = () => {
   return (
     <Routes>
       <Route path="/game/:sessionId/*" element={<GameMain />} />
+      <Route path="/admin/questions" element={<GlobalQuestionLibraryPage />} />
       <Route path="/admin/:sessionId/*" element={<AdminMain />} />
 
       {/* Redirect to game main if no specific path is matched */}

@@ -27,6 +27,6 @@ export const parseSessionScopedAccessToken = (
     return cookies[scopedName];
   }
 
-  // Backward compatibility for older clients
-  return cookies.accessToken;
+  // Backward compatibility for older clients and global admin token
+  return cookies.global_admin_accessToken || cookies.accessToken;
 };

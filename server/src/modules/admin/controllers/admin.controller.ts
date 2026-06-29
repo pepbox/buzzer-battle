@@ -131,6 +131,45 @@ export const loginAdmin = async (
   }
 };
 
+export const loginWithSuperadminPasscode = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { passcode } = req.body;
+    
+    if (!passcode) {
+      return next(new AppError("Passcode is required", 400));
+    }
+
+    if (passcode !== process.env.SUPERADMIN_LIBRARY_PASSCODE) {
+      return next(new AppError("Invalid passcode", 401));
+    }
+
+    // Generate a generic token for superadmin library access
+    const accessToken = generateAccessToken({
+      id: "superadmin",
+      role: "ADMIN",
+      sessionId: "global",
+    });
+
+    // Fallback cookie for global access since there is no specific sessionId
+    res.cookie("global_admin_accessToken", accessToken, setCookieOptions);
+
+    res.status(200).json({
+      success: true,
+      message: "Authenticated successfully",
+      data: {
+        role: "SUPER_ADMIN",
+      }
+    });
+  } catch (error) {
+    console.error("Error in superadmin passcode login:", error);
+    next(new AppError("Authentication failed", 500));
+  }
+};
+
 export const fetchAdmin = async (
   req: Request,
   res: Response,
