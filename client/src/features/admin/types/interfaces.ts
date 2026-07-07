@@ -92,6 +92,12 @@ export interface QuestionBankItem {
     text?: string;
     media?: QuestionMediaItem[];
   };
+  hint?: {
+    text?: string;
+    media?: QuestionMediaItem[];
+  };
+  hintPenalty?: number;
+  createdBy?: string;
   createdAt: string;
   updatedAt: string;
 }

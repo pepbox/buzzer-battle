@@ -29,4 +29,5 @@ export enum Events {
   // Session Events
   SESSION_UPDATE = "session-update", // Session settings changed
   SESSION_ENDED = "session-ended", // Super admin ended the session - log out all users
+  HINT_REVEALED = "hint-revealed",
 }

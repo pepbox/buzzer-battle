@@ -55,6 +55,7 @@ const QuestionRoundPage: React.FC = () => {
     isLoading,
     isFetching,
     error,
+    refetch: refetchCurrentQuestion,
   } = useFetchCurrentQuestionQuery();
 
   const question = questionData?.data?.question;
@@ -211,6 +212,11 @@ const QuestionRoundPage: React.FC = () => {
       }
     };
 
+    const handleHintRevealed = (data: any) => {
+      console.log("💡 Hint revealed by admin:", data);
+      refetchCurrentQuestion();
+    };
+
     websocketService.on(
       Events.ANSWER_MARKED_CORRECT,
       handleAnswerMarkedCorrect,
@@ -219,6 +225,7 @@ const QuestionRoundPage: React.FC = () => {
     websocketService.on(Events.GAME_STATE_CHANGED, handleGameStateChanged);
     websocketService.on(Events.QUESTION_PASSED, handleQuestionPassed);
     websocketService.on(Events.TEAM_SELECTED, handleTeamSelected);
+    websocketService.on(Events.HINT_REVEALED, handleHintRevealed);
 
     return () => {
       websocketService.off(
@@ -229,6 +236,7 @@ const QuestionRoundPage: React.FC = () => {
       websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChanged);
       websocketService.off(Events.QUESTION_PASSED, handleQuestionPassed);
       websocketService.off(Events.TEAM_SELECTED, handleTeamSelected);
+      websocketService.off(Events.HINT_REVEALED, handleHintRevealed);
     };
   }, [team?._id, sessionId, navigate, answerStatus, isAnsweringTeam]);
 
@@ -312,6 +320,7 @@ const QuestionRoundPage: React.FC = () => {
   // For no-buzzer questions, everyone sees the question (continue rendering below)
 
   // Convert question to QuestionData format
+  const isBuzzerPerson = team?.playerRole === "BUZZER_PERSON";
   const questionDataFormatted: QuestionData = {
     id: activeQuestion._id,
     isHiddenPlaceholder: isHiddenQuestion,
@@ -331,6 +340,8 @@ const QuestionRoundPage: React.FC = () => {
       ),
     score: activeQuestion.score,
     options: activeQuestion.options,
+    hint: isBuzzerPerson ? activeQuestion.hint : undefined,
+    hintPenalty: activeQuestion.hintPenalty,
   };
 
   return (
@@ -351,7 +362,7 @@ const QuestionRoundPage: React.FC = () => {
             questionNumber={(currentQuestionIndex || 0) + 1}
             disabled={true} // Always disabled - no MCQ selection
             showOptions={false} // Hide options for verbal answer flow
-            showVerbalHint={isAnsweringTeam}
+            showVerbalHint={isAnsweringTeam && isBuzzerPerson}
           />
 
           {/* Waiting Overlay - Different message for answering team vs others */}

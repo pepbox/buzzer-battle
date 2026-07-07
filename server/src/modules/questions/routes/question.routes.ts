@@ -11,6 +11,8 @@ import {
   sendQuestionResponse,
   updateQuestion,
   uploadQuestionMedia,
+  bulkCopyQuestions,
+  bulkMoveQuestions,
 } from "../controllers/question.controller";
 import {
   authenticateUser,
@@ -43,6 +45,20 @@ router.delete(
   authenticateUser,
   authorizeRoles("ADMIN"),
   deleteFolder,
+);
+
+router.post(
+  "/bulk-copy",
+  authenticateUser,
+  authorizeRoles("ADMIN"),
+  bulkCopyQuestions,
+);
+
+router.post(
+  "/bulk-move",
+  authenticateUser,
+  authorizeRoles("ADMIN"),
+  bulkMoveQuestions,
 );
 
 router.post("/", authenticateUser, authorizeRoles("ADMIN"), createQuestion);

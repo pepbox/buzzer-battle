@@ -10,8 +10,11 @@ import {
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import DriveFileMoveIcon from "@mui/icons-material/DriveFileMove";
 import { QuestionBankItem } from "../types/interfaces";
 import { renderMediaPreview } from "../utils/renderMediaPreview";
+import { useAdminAuth } from "../services/useAdminAuth";
 
 export interface QuestionCardProps {
   question: QuestionBankItem;
@@ -20,6 +23,8 @@ export interface QuestionCardProps {
   onEdit?: (question: QuestionBankItem) => void;
   onDelete?: (question: QuestionBankItem) => void;
   onView?: (question: QuestionBankItem) => void;
+  onCopy?: (question: QuestionBankItem) => void;
+  onMove?: (question: QuestionBankItem) => void;
   actionButtons?: "select" | "edit-delete" | "all"; // different button sets
   variant?: "default" | "minimal"; // for reuse in different contexts
   loading?: boolean;
@@ -32,10 +37,16 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
   onEdit,
   onDelete,
   onView,
+  onCopy,
+  onMove,
   actionButtons = "select",
   variant = "default",
   loading = false,
 }) => {
+  const { admin } = useAdminAuth();
+  const currentAdminId = admin?.id || "";
+  const isOwner = currentAdminId === "superadmin" || question.createdBy === currentAdminId || !question.createdBy;
+
   const showSelectButton =
     actionButtons === "select" || actionButtons === "all";
   const showEditDelete =
@@ -122,7 +133,12 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
               >
                 Folder: {question.folder || "General"} | Score:{" "}
                 {question.score ?? 0} | Options: {question.options?.length || 0}{" "}
-                | Hidden: {question.hideFromUsers ? "Yes" : "No"}
+                | Hidden: {question.hideFromUsers ? "Yes" : "No"} | Owner:{" "}
+                {question.createdBy === "superadmin"
+                  ? "Super Admin"
+                  : question.createdBy === currentAdminId
+                    ? "You"
+                    : "Other Admin"}
               </Typography>
             )}
             {variant !== "minimal" &&
@@ -166,7 +182,7 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
             </IconButton>
           )}
 
-          {showEditDelete && onEdit && (
+          {showEditDelete && isOwner && onEdit && (
             <IconButton
               size="small"
               onClick={(event) => {
@@ -180,7 +196,35 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
             </IconButton>
           )}
 
-          {showEditDelete && onDelete && (
+          {showEditDelete && currentAdminId === "superadmin" && onMove && (
+            <IconButton
+              size="small"
+              onClick={(event) => {
+                stopEvent(event);
+                onMove(question);
+              }}
+              disabled={loading}
+              title="Move question"
+            >
+              <DriveFileMoveIcon fontSize="small" />
+            </IconButton>
+          )}
+
+          {onCopy && (
+            <IconButton
+              size="small"
+              onClick={(event) => {
+                stopEvent(event);
+                onCopy(question);
+              }}
+              disabled={loading}
+              title="Copy question"
+            >
+              <ContentCopyIcon fontSize="small" />
+            </IconButton>
+          )}
+
+          {showEditDelete && isOwner && onDelete && (
             <IconButton
               size="small"
               color="error"

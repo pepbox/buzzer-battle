@@ -29,6 +29,8 @@ export interface Question {
   questionContent?: ContentSection;
   answerContent?: ContentSection;
   questionAssets?: MediaItem[];
+  hint?: ContentSection;
+  hintPenalty?: number;
   score: number;
   keepBuzzer?: boolean;
   hideFromUsers?: boolean;

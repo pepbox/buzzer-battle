@@ -42,11 +42,14 @@ import {
   useFetchQuestionFoldersQuery,
   useRenameQuestionFolderMutation,
   useUpdateSessionQuestionsMutation,
+  useBulkCopyQuestionsMutation,
+  useBulkMoveQuestionsMutation,
 } from "../services/admin.Api";
 import { useFetchSessionQuery } from "../../session/services/session.api";
 import QuestionCard from "./QuestionCard";
 import QuestionEditorDialog from "./QuestionEditorDialog";
 import QuestionPreviewModal from "./QuestionPreviewModal";
+import { useAdminAuth } from "../services/useAdminAuth";
 
 type SortOrder = "newest" | "oldest";
 
@@ -78,6 +81,9 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
   showCurrentListButton = false,
   showSaveButton = true,
 }) => {
+  const { admin } = useAdminAuth();
+  const currentAdminId = admin?.id || "";
+
   const [searchText, setSearchText] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sort, setSort] = useState<SortOrder>("newest");
@@ -153,6 +159,45 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
     useCreateQuestionFolderMutation();
   const [renameQuestionFolder] = useRenameQuestionFolderMutation();
   const [deleteQuestionFolder] = useDeleteQuestionFolderMutation();
+  const [bulkCopyQuestions, { isLoading: isBulkCopyLoading }] =
+    useBulkCopyQuestionsMutation();
+  const [bulkMoveQuestions, { isLoading: isBulkMoveLoading }] =
+    useBulkMoveQuestionsMutation();
+
+  const [folderSelectorDialog, setFolderSelectorDialog] = useState<{
+    open: boolean;
+    action: "copy" | "move" | null;
+    questionIds: string[];
+    targetFolder: string;
+  }>({
+    open: false,
+    action: null,
+    questionIds: [],
+    targetFolder: "General",
+  });
+
+  const handleFolderSelectorSave = async () => {
+    setActionError(null);
+    try {
+      const { action, questionIds, targetFolder } = folderSelectorDialog;
+      if (action === "copy") {
+        await bulkCopyQuestions({ questionIds, targetFolder }).unwrap();
+      } else if (action === "move") {
+        await bulkMoveQuestions({ questionIds, targetFolder }).unwrap();
+      }
+      setFolderSelectorDialog({
+        open: false,
+        action: null,
+        questionIds: [],
+        targetFolder: "General",
+      });
+      setSelectedQuestionIds([]); // Clear selection after bulk operations
+      refetchQuestions();
+      refetchFolders();
+    } catch (error: any) {
+      setActionError(error?.data?.message || `Failed to ${folderSelectorDialog.action} questions`);
+    }
+  };
 
   const folders = useMemo(() => {
     const apiFolders = foldersResponse?.data?.folders || [];
@@ -858,6 +903,86 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
           </Box>
           <Divider />
 
+          {selectedQuestionIds.length > 0 && (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+                p: 1.5,
+                borderRadius: 1,
+                bgcolor: "#fff7ed",
+                border: "1px solid #ffedd5",
+                my: 1,
+              }}
+            >
+              <Typography variant="body2" sx={{ color: "#c2410c", fontWeight: 600 }}>
+                {selectedQuestionIds.length} question(s) selected:
+              </Typography>
+              <Button
+                variant="contained"
+                size="small"
+                onClick={() =>
+                  setFolderSelectorDialog({
+                    open: true,
+                    action: "copy",
+                    questionIds: selectedQuestionIds,
+                    targetFolder: selectedFolder === "all" ? "General" : selectedFolder,
+                  })
+                }
+                sx={{
+                  bgcolor: "#f97316",
+                  color: "#ffffff",
+                  textTransform: "none",
+                  boxShadow: "none",
+                  "&:hover": {
+                    bgcolor: "#ea580c",
+                    boxShadow: "none",
+                  },
+                }}
+              >
+                Copy Selected
+              </Button>
+              {currentAdminId === "superadmin" && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() =>
+                    setFolderSelectorDialog({
+                      open: true,
+                      action: "move",
+                      questionIds: selectedQuestionIds,
+                      targetFolder: selectedFolder === "all" ? "General" : selectedFolder,
+                    })
+                  }
+                  sx={{
+                    color: "#f97316",
+                    borderColor: "#f97316",
+                    textTransform: "none",
+                    "&:hover": {
+                      borderColor: "#ea580c",
+                      bgcolor: "rgba(249, 115, 22, 0.04)",
+                    },
+                  }}
+                >
+                  Move Selected
+                </Button>
+              )}
+              <Button
+                variant="text"
+                size="small"
+                onClick={() => setSelectedQuestionIds([])}
+                sx={{
+                  color: "#64748b",
+                  textTransform: "none",
+                  ml: "auto",
+                }}
+              >
+                Clear Selection
+              </Button>
+            </Box>
+          )}
+
           <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pr: 0.5 }}>
             {isQuestionLoading ? (
               <Box sx={{ py: 5, display: "flex", justifyContent: "center" }}>
@@ -885,6 +1010,22 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
                     onEdit={handleEditQuestion}
                     onDelete={(item) => setQuestionToDelete(item)}
                     onView={(item) => setPreviewQuestion(item)}
+                    onCopy={(item) =>
+                      setFolderSelectorDialog({
+                        open: true,
+                        action: "copy",
+                        questionIds: [item._id],
+                        targetFolder: item.folder || "General",
+                      })
+                    }
+                    onMove={(item) =>
+                      setFolderSelectorDialog({
+                        open: true,
+                        action: "move",
+                        questionIds: [item._id],
+                        targetFolder: item.folder || "General",
+                      })
+                    }
                     actionButtons="all"
                   />
                 ))}
@@ -1127,6 +1268,60 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
               : folderActionDialog.mode === "rename"
                 ? "Rename"
                 : "Delete"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={folderSelectorDialog.open}
+        onClose={() =>
+          setFolderSelectorDialog({ open: false, action: null, questionIds: [], targetFolder: "General" })
+        }
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>
+          {folderSelectorDialog.action === "copy" ? "Copy Questions" : "Move Questions"}
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 2 }} color="text.secondary">
+            Select the target folder where you want to {folderSelectorDialog.action} the selected questions.
+          </Typography>
+          <TextField
+            select
+            fullWidth
+            label="Target Folder"
+            value={folderSelectorDialog.targetFolder}
+            onChange={(e) =>
+              setFolderSelectorDialog((current) => ({
+                ...current,
+                targetFolder: e.target.value,
+              }))
+            }
+          >
+            {folders
+              .filter((f) => f !== "all")
+              .map((folderName) => (
+                <MenuItem key={folderName} value={folderName}>
+                  {folderName}
+                </MenuItem>
+              ))}
+          </TextField>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() =>
+              setFolderSelectorDialog({ open: false, action: null, questionIds: [], targetFolder: "General" })
+            }
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleFolderSelectorSave}
+            disabled={isBulkCopyLoading || isBulkMoveLoading}
+          >
+            {isBulkCopyLoading || isBulkMoveLoading ? "Processing..." : "Confirm"}
           </Button>
         </DialogActions>
       </Dialog>

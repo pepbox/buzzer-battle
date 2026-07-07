@@ -76,13 +76,16 @@ export const createFolder = async (
       return next(new AppError("Folder name is required.", 400));
     }
 
-    const folder = await questionService.createFolder(name, parentPath);
+    const folder = await questionService.createFolder(name, parentPath, req.user?.id);
 
     res.status(201).json({
       message: "Folder created successfully.",
       data: { folder },
     });
   } catch (error: any) {
+    if (error.message && error.message.includes("permission")) {
+      return next(new AppError(error.message, 403));
+    }
     if (error.message === "Folder already exists") {
       return next(new AppError(error.message, 409));
     }
@@ -113,13 +116,16 @@ export const renameFolder = async (
       return next(new AppError("Folder name is required.", 400));
     }
 
-    const folder = await questionService.renameFolder(folderPath, name);
+    const folder = await questionService.renameFolder(folderPath, name, req.user?.id);
 
     res.status(200).json({
       message: "Folder renamed successfully.",
       data: { folder },
     });
   } catch (error: any) {
+    if (error.message && error.message.includes("permission")) {
+      return next(new AppError(error.message, 403));
+    }
     if (
       error.message === "Folder path is required" ||
       error.message === "Folder name is required" ||
@@ -151,13 +157,16 @@ export const deleteFolder = async (
       return next(new AppError("Folder path is required.", 400));
     }
 
-    const fallbackFolder = await questionService.deleteFolder(folderPath);
+    const fallbackFolder = await questionService.deleteFolder(folderPath, req.user?.id);
 
     res.status(200).json({
       message: "Folder deleted successfully.",
       data: { fallbackFolder },
     });
   } catch (error: any) {
+    if (error.message && error.message.includes("permission")) {
+      return next(new AppError(error.message, 403));
+    }
     if (
       error.message === "Folder path is required" ||
       error.message === "General folder cannot be deleted"
@@ -191,6 +200,8 @@ export const createQuestion = async (
       questionContent,
       questionAssets,
       answerContent,
+      hint,
+      hintPenalty,
     } = req.body;
 
     const hasQuestion = Boolean(
@@ -250,6 +261,9 @@ export const createQuestion = async (
       questionContent,
       questionAssets,
       answerContent,
+      hint,
+      hintPenalty: Number.isFinite(Number(hintPenalty)) ? Number(hintPenalty) : 0,
+      createdBy: req.user?.id,
     });
 
     res.status(201).json({
@@ -258,7 +272,10 @@ export const createQuestion = async (
         question,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message && error.message.includes("permission")) {
+      return next(new AppError(error.message, 403));
+    }
     console.error("Error creating question:", error);
     next(new AppError("Failed to create question.", 500));
   }
@@ -288,6 +305,8 @@ export const updateQuestion = async (
       questionContent,
       questionAssets,
       answerContent,
+      hint,
+      hintPenalty,
     } = req.body;
 
     const hasQuestion = Boolean(
@@ -347,6 +366,9 @@ export const updateQuestion = async (
       questionContent,
       questionAssets,
       answerContent,
+      hint,
+      hintPenalty: hintPenalty !== undefined ? Number(hintPenalty) : undefined,
+      userId: req.user?.id,
     });
 
     res.status(200).json({
@@ -356,6 +378,9 @@ export const updateQuestion = async (
       },
     });
   } catch (error: any) {
+    if (error.message && error.message.includes("permission")) {
+      return next(new AppError(error.message, 403));
+    }
     console.error("Error updating question:", error);
     if (error.message === "Question not found") {
       return next(new AppError(error.message, 404));
@@ -375,13 +400,16 @@ export const deleteQuestion = async (
       return next(new AppError("Invalid question ID.", 400));
     }
 
-    await questionService.deleteQuestion(questionId);
+    await questionService.deleteQuestion(questionId, req.user?.id);
 
     res.status(200).json({
       message: "Question deleted successfully.",
       success: true,
     });
   } catch (error: any) {
+    if (error.message && error.message.includes("permission")) {
+      return next(new AppError(error.message, 403));
+    }
     console.error("Error deleting question:", error);
     if (error.message === "Question not found") {
       return next(new AppError(error.message, 404));
@@ -486,6 +514,15 @@ export const fetchCurrentQuestion = async (
       ? undefined
       : question.questionAssets;
 
+    const currentAnsweringTeamId = gameState.currentAnsweringTeam;
+    const answeringTeamIdStr = typeof currentAnsweringTeamId === "string"
+      ? currentAnsweringTeamId
+      : (currentAnsweringTeamId as any)?._id?.toString() || currentAnsweringTeamId?.toString();
+
+    const isAnsweringTeam = answeringTeamIdStr === req.user?.id;
+    const isBuzzerPerson = req.user?.playerRole === "BUZZER_PERSON";
+    const isHintRevealedForTeam = isAnsweringTeam && isBuzzerPerson && gameState.hintRevealed === true;
+
     const questionForTeam: any = {
       _id: question._id,
       questionText: shouldHideQuestionForUser ? "" : question.questionText,
@@ -500,6 +537,8 @@ export const fetchCurrentQuestion = async (
       keepBuzzer: question.keepBuzzer,
       hideFromUsers: question.hideFromUsers,
       questionAssets: questionAssetsForResponse,
+      hint: (!isTeamUser || isHintRevealedForTeam) ? question.hint : undefined,
+      hintPenalty: question.hintPenalty,
       createdAt: question.createdAt,
       updatedAt: question.updatedAt,
     };
@@ -679,5 +718,81 @@ export const sendQuestionResponse = async (
       return next(new AppError(error.message, 404));
     }
     next(new AppError("Failed to submit response.", 500));
+  }
+};
+
+export const bulkCopyQuestions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { questionIds, targetFolder } = req.body;
+    const userId = req.user?.id;
+
+    if (!Array.isArray(questionIds) || questionIds.length === 0) {
+      return next(new AppError("questionIds must be a non-empty array.", 400));
+    }
+    if (!targetFolder || typeof targetFolder !== "string") {
+      return next(new AppError("targetFolder is required.", 400));
+    }
+    if (!userId) {
+      return next(new AppError("User ID not found in token.", 401));
+    }
+
+    const copied = await questionService.copyQuestions(
+      questionIds,
+      targetFolder,
+      userId,
+    );
+
+    res.status(200).json({
+      message: "Questions copied successfully.",
+      data: { questions: copied },
+    });
+  } catch (error: any) {
+    if (error.message && error.message.includes("permission")) {
+      return next(new AppError(error.message, 403));
+    }
+    console.error("Error bulk copying questions:", error);
+    next(new AppError("Failed to copy questions.", 500));
+  }
+};
+
+export const bulkMoveQuestions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { questionIds, targetFolder } = req.body;
+    const userId = req.user?.id;
+
+    if (!Array.isArray(questionIds) || questionIds.length === 0) {
+      return next(new AppError("questionIds must be a non-empty array.", 400));
+    }
+    if (!targetFolder || typeof targetFolder !== "string") {
+      return next(new AppError("targetFolder is required.", 400));
+    }
+    if (!userId) {
+      return next(new AppError("User ID not found in token.", 401));
+    }
+
+    const moved = await questionService.moveQuestions(
+      questionIds,
+      targetFolder,
+      userId,
+    );
+
+    res.status(200).json({
+      message: "Questions moved successfully.",
+      data: { questions: moved },
+    });
+  } catch (error: any) {
+    if (error.message && error.message.includes("permission")) {
+      return next(new AppError(error.message, 403));
+    }
+    console.error("Error bulk moving questions:", error);
+    next(new AppError("Failed to move questions.", 500));
   }
 };

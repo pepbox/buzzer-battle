@@ -24,6 +24,16 @@ export interface QuestionData {
   }>;
   score?: number;
   options: QuestionOption[];
+  hint?: {
+    text?: string;
+    media?: Array<{
+      type: "text" | "image" | "video" | "audio" | "gif" | "file";
+      url?: string;
+      text?: string;
+      name?: string;
+    }>;
+  };
+  hintPenalty?: number;
 }
 
 interface QuestionProps {
@@ -397,6 +407,53 @@ const Question: React.FC<QuestionProps> = ({
         </Box>
 
         {/* Verbal Answer Hint - Only show when options are hidden */}
+
+        {/* Hint Section */}
+        {questionData.hint && (questionData.hint.text || questionData.hint.media?.length) && (
+          <Box
+            sx={{
+              width: "100%",
+              mt: 8,
+              p: 2,
+              borderRadius: "14px",
+              backgroundColor: "#FFF8E1",
+              // border: "0.8px solid #FFB300",
+              boxShadow: "0px 2px 8px rgba(0,0,0,0.05)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              gap: 1,
+            }}
+          >
+            <Typography
+              variant="subtitle2"
+              sx={{ color: "#B78103", fontWeight: 700, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 0.5 }}
+            >
+              💡 Hint Revealed
+            </Typography>
+            {questionData.hint.text && (
+              <Typography variant="body2" sx={{ color: "#5D4037", textAlign: "left", width: "100%" }}>
+                {questionData.hint.text}
+              </Typography>
+            )}
+            {questionData.hint.media && questionData.hint.media.map((media, index) => (
+              <SmartMedia
+                key={`hint-media-${index}`}
+                media={media}
+                alt={media.name || `Hint media ${index + 1}`}
+                sx={{
+                  width: "100%",
+                  maxHeight: "180px",
+                  objectFit: "contain",
+                  borderRadius: "8px",
+                  mt: 1,
+                }}
+                audioSx={{ width: "100%", mt: 1 }}
+                iframeSx={{ minHeight: 180, mt: 1 }}
+              />
+            ))}
+          </Box>
+        )}
 
         {/* Options Section - Only show when showOptions is true */}
         {showOptions && (

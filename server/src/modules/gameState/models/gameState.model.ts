@@ -46,6 +46,10 @@ const gameStateSchema = new Schema<IGameState>(
       type: Boolean,
       default: false,
     },
+    hintRevealed: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

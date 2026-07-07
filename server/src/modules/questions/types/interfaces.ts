@@ -32,6 +32,9 @@ export interface IQuestion extends Document {
   questionContent?: IQuestionContent;
   questionAssets?: IQuestionMedia[];
   answerContent?: IQuestionContent;
+  hint?: IQuestionContent;
+  hintPenalty?: number;
+  createdBy: string;
   createdAt: Date;
   updatedAt: Date;
 }

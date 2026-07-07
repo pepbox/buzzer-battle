@@ -127,6 +127,7 @@ export default class GameStateService {
     gameState.currentAnsweringTeam = undefined;
     gameState.buzzerRoundStartTime = undefined; // Clear timestamps
     gameState.answeringRoundStartTime = undefined;
+    gameState.hintRevealed = false;
 
     const options: any = {};
     if (this.session) {
@@ -353,6 +354,7 @@ export default class GameStateService {
       gameState.answeringRoundStartTime = undefined;
       gameState.teamsWhoAnsweredThisQuestion = []; // Reset for new question
       gameState.isNoBuzzerQuestion = false; // Reset no-buzzer flag
+      gameState.hintRevealed = false;
 
       const options: any = {};
       if (this.session) {

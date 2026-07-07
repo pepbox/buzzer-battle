@@ -34,6 +34,7 @@ import {
   usePassToSecondTeam,
   useAutoSelectFastestTeam,
   useSetAnsweringTeam,
+  useShowHint,
 } from "../services/adminRemoteApi";
 import { useFetchTeamDashboardQuery } from "../services/admin.Api";
 import {
@@ -99,10 +100,12 @@ const RemoteControl: React.FC = () => {
   const { passToSecondTeam, isLoading: passLoading } = usePassToSecondTeam();
   const { autoSelectFastestTeam } = useAutoSelectFastestTeam();
   const { setAnsweringTeam, isLoading: setTeamLoading } = useSetAnsweringTeam();
+  const { showHint, isLoading: showHintLoading } = useShowHint();
   const [markAnswer, { isLoading: markAnswerLoading }] =
     useMarkAnswerMutation();
   const [selectedTeamIdForNoBuzzer, setSelectedTeamIdForNoBuzzer] =
     useState("");
+  const [hintConfirmOpen, setHintConfirmOpen] = useState(false);
 
   const isAnyLoading =
     pauseLoading ||
@@ -111,7 +114,8 @@ const RemoteControl: React.FC = () => {
     showAnswerLoading ||
     passLoading ||
     markAnswerLoading ||
-    setTeamLoading;
+    setTeamLoading ||
+    showHintLoading;
 
   // Extract game state data
   const gameState = gameStateData?.data?.gameState;
@@ -453,6 +457,17 @@ const RemoteControl: React.FC = () => {
     }
   };
 
+  const handleConfirmShowHint = async () => {
+    try {
+      await showHint().unwrap();
+      setHintConfirmOpen(false);
+      showSnackbar("Hint revealed to the active team!", "success");
+    } catch (error: any) {
+      setHintConfirmOpen(false);
+      showSnackbar(error?.data?.message || "Failed to show hint", "error");
+    }
+  };
+
   const showSnackbar = (message: string, severity: "success" | "error") => {
     setSnackbarMessage(message);
     setSnackbarSeverity(severity);
@@ -667,6 +682,12 @@ const RemoteControl: React.FC = () => {
             onAllowTopTeam={handleAllowTopTeam}
             onMarkCorrect={handleMarkCorrect}
             onMarkWrong={handleMarkWrong}
+            onShowHint={() => setHintConfirmOpen(true)}
+            hasHint={
+              !!currentQuestionData?.data?.question?.hint?.text ||
+              !!currentQuestionData?.data?.question?.hint?.media?.length
+            }
+            hintRevealed={!!gameState?.hintRevealed}
             canPassToSecondTeam={canPassToSecondTeam}
             hasFastestTeam={!!buzzerStats?.fastestTeam}
             isAnswerShown={isAnswerShown}
@@ -761,6 +782,39 @@ const RemoteControl: React.FC = () => {
         onClose={() => setQuestionPreviewOpen(false)}
         question={previewQuestion}
       />
+
+      {/* Show Hint Confirmation Dialog */}
+      <Dialog
+        open={hintConfirmOpen}
+        onClose={() => setHintConfirmOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          💡 Reveal Hint?
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1">
+            Are you sure you want to reveal the hint to <strong>{currentAnsweringTeam?.teamName || "the active team"}</strong>?
+          </Typography>
+          <Typography variant="body2" color="error" sx={{ mt: 1, fontWeight: 700 }}>
+            This will deduct {currentQuestionData?.data?.question?.hintPenalty || 0} penalty points from their score immediately.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setHintConfirmOpen(false)} variant="outlined">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmShowHint}
+            color="warning"
+            variant="contained"
+            disabled={isAnyLoading}
+          >
+            Confirm & Deduct
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar
         open={snackbarOpen}

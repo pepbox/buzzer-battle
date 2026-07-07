@@ -9,7 +9,8 @@ export type GameStateAction =
   | "SHOW_LEADERBOARD"
   | "PASS_TO_SECOND_TEAM"
   | "SET_ANSWERING_TEAM"
-  | "AUTO_SELECT_FASTEST_TEAM";
+  | "AUTO_SELECT_FASTEST_TEAM"
+  | "SHOW_HINT";
 
 export interface UpdateGameStateRequest {
   action: GameStateAction;
@@ -115,6 +116,14 @@ export const useAutoSelectFastestTeam = () => {
   return {
     autoSelectFastestTeam: (questionId: string) =>
       update({ action: "AUTO_SELECT_FASTEST_TEAM", payload: { questionId } }),
+    ...result,
+  };
+};
+
+export const useShowHint = () => {
+  const [update, result] = useUpdateGameStateMutation();
+  return {
+    showHint: () => update({ action: "SHOW_HINT" }),
     ...result,
   };
 };

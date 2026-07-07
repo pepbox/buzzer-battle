@@ -20,6 +20,9 @@ interface RemoteActionButtonsProps {
   onAllowTopTeam: () => void;
   onMarkCorrect?: () => void;
   onMarkWrong?: () => void;
+  onShowHint?: () => void;
+  hasHint?: boolean;
+  hintRevealed?: boolean;
   canPassToSecondTeam: boolean;
   hasFastestTeam: boolean;
   isAnswerShown?: boolean;
@@ -39,6 +42,9 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
   onAllowTopTeam,
   onMarkCorrect,
   onMarkWrong,
+  onShowHint,
+  hasHint = false,
+  hintRevealed = false,
   canPassToSecondTeam,
   hasFastestTeam,
   isAnswerShown = false,
@@ -80,45 +86,64 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
     >
       {/* Mark Answer Buttons - Only during answering state (for verbal answer flow) */}
       {gameStatus === "answering" && !lastAnswerWasWrong && (
-        <Box sx={{ display: "flex", gap: "12px" }}>
-          <Button
-            variant="contained"
-            startIcon={
-              isLoading ? <CircularProgress size={20} /> : <CheckCircleIcon />
-            }
-            onClick={onMarkCorrect}
-            disabled={isLoading}
-            sx={{
-              ...buttonBaseStyles,
-              flex: 1,
-              backgroundColor: "#10B981",
-              "&:hover": {
-                backgroundColor: "#059669",
-                ...buttonBaseStyles["&:hover"],
-              },
-            }}
-          >
-            Correct
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={
-              isLoading ? <CircularProgress size={20} /> : <CancelIcon />
-            }
-            onClick={onMarkWrong}
-            disabled={isLoading}
-            sx={{
-              ...buttonBaseStyles,
-              flex: 1,
-              backgroundColor: "#EF4444",
-              "&:hover": {
-                backgroundColor: "#DC2626",
-                ...buttonBaseStyles["&:hover"],
-              },
-            }}
-          >
-            Wrong
-          </Button>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%" }}>
+          <Box sx={{ display: "flex", gap: "12px" }}>
+            <Button
+              variant="contained"
+              startIcon={
+                isLoading ? <CircularProgress size={20} /> : <CheckCircleIcon />
+              }
+              onClick={onMarkCorrect}
+              disabled={isLoading}
+              sx={{
+                ...buttonBaseStyles,
+                flex: 1,
+                backgroundColor: "#10B981",
+                "&:hover": {
+                  backgroundColor: "#059669",
+                  ...buttonBaseStyles["&:hover"],
+                },
+              }}
+            >
+              Correct
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={
+                isLoading ? <CircularProgress size={20} /> : <CancelIcon />
+              }
+              onClick={onMarkWrong}
+              disabled={isLoading}
+              sx={{
+                ...buttonBaseStyles,
+                flex: 1,
+                backgroundColor: "#EF4444",
+                "&:hover": {
+                  backgroundColor: "#DC2626",
+                  ...buttonBaseStyles["&:hover"],
+                },
+              }}
+            >
+              Wrong
+            </Button>
+          </Box>
+          {hasHint && (
+            <Button
+              variant="contained"
+              onClick={onShowHint}
+              disabled={isLoading || hintRevealed}
+              sx={{
+                ...buttonBaseStyles,
+                backgroundColor: hintRevealed ? "#9CA3AF" : "#F59E0B",
+                "&:hover": {
+                  backgroundColor: hintRevealed ? "#9CA3AF" : "#D97706",
+                  ...buttonBaseStyles["&:hover"],
+                },
+              }}
+            >
+              {hintRevealed ? "💡 Hint Already Revealed" : "💡 Show Hint"}
+            </Button>
+          )}
         </Box>
       )}
 

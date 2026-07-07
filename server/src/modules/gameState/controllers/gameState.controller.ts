@@ -405,6 +405,80 @@ export const updateGameStateUnified = async (
         });
         break;
 
+      case "SHOW_HINT":
+        if (existingGameState.gameStatus !== GameStatus.ANSWERING) {
+          return next(
+            new AppError("Can only show hint during answering phase.", 400),
+          );
+        }
+
+        if (!existingGameState.currentAnsweringTeam) {
+          return next(new AppError("No team is currently answering.", 400));
+        }
+
+        if (existingGameState.hintRevealed) {
+          return next(
+            new AppError(
+              "Hint has already been revealed for this question.",
+              400,
+            ),
+          );
+        }
+
+        const questionForHint = await questionService.fetchCurrentQuestion(
+          sessionId,
+          existingGameState.currentQuestionIndex,
+        );
+
+        if (!questionForHint) {
+          return next(new AppError("Current question not found.", 404));
+        }
+
+        const hintPenalty = questionForHint.hintPenalty || 0;
+        const currentAnsweringTeamId = existingGameState.currentAnsweringTeam;
+        if (!currentAnsweringTeamId) {
+          return next(new AppError("No team is currently answering.", 400));
+        }
+
+        const targetTeamId = typeof currentAnsweringTeamId === "string"
+          ? currentAnsweringTeamId
+          : (currentAnsweringTeamId as any)._id?.toString() || currentAnsweringTeamId.toString();
+
+        // Deduct penalty points immediately
+        await teamService.updateTeamScore(targetTeamId, -hintPenalty);
+
+        existingGameState.hintRevealed = true;
+        gameState = await existingGameState.save();
+
+        // Emit GAME_STATE_CHANGED and TEAM_UPDATED socket events
+        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+          gameStatus: gameState.gameStatus,
+          currentQuestionIndex: gameState.currentQuestionIndex,
+          currentAnsweringTeam: gameState.currentAnsweringTeam,
+          hintRevealed: true,
+        });
+
+        SessionEmitters.toSession(sessionId, Events.TEAM_UPDATED, {
+          teamId: targetTeamId,
+        });
+
+        // Emit team-specific direct HINT_REVEALED socket event
+        try {
+          SessionEmitters.toTeam(
+            sessionId,
+            targetTeamId,
+            Events.HINT_REVEALED,
+            {
+              questionId: questionForHint._id,
+              hint: questionForHint.hint,
+              hintPenalty,
+            },
+          );
+        } catch (socketError) {
+          console.error("Error emitting hint-revealed directly to team:", socketError);
+        }
+        break;
+
       default:
         return next(new AppError(`Invalid action: ${action}`, 400));
     }

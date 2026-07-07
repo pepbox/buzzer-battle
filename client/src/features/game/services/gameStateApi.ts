@@ -16,6 +16,7 @@ export interface GameState {
   buzzerRoundStartTime?: number;
   answeringRoundStartTime?: number;
   idleStartTime?: number;
+  hintRevealed?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

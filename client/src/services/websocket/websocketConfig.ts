@@ -170,6 +170,18 @@ export const setupGlobalListeners = () => {
     "redux",
   );
 
+  // Hint Revealed Event
+  websocketService.addGlobalListener(
+    Events.HINT_REVEALED,
+    (data: any) => {
+      console.log("Hint revealed globally:", data);
+      store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
+      store.dispatch(questionApi.util.invalidateTags(["Question"]));
+      store.dispatch(teamApi.util.invalidateTags(["Team", "Leaderboard"]));
+    },
+    "redux",
+  );
+
   // Session Ended Event - force logout all users in this session
   websocketService.addGlobalListener(
     Events.SESSION_ENDED,

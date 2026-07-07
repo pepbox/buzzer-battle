@@ -80,12 +80,24 @@ export default class QuestionService {
     questionContent?: any;
     questionAssets?: any[];
     answerContent?: any;
+    hint?: any;
+    hintPenalty?: number;
+    createdBy?: string;
   }): Promise<IQuestion> {
     const normalizedFolder = (input.folder || "General").trim();
+    const creatorId = input.createdBy || "superadmin";
+
+    // Verify folder write access: other admins cannot add questions to folders they don't own
+    if (creatorId !== "superadmin") {
+      const folderDoc = await QuestionFolder.findOne({ name: normalizedFolder });
+      if (folderDoc && folderDoc.createdBy !== creatorId) {
+        throw new Error("You do not have permission to write to this folder");
+      }
+    }
 
     await QuestionFolder.findOneAndUpdate(
       { name: normalizedFolder },
-      { $setOnInsert: { name: normalizedFolder } },
+      { $setOnInsert: { name: normalizedFolder, createdBy: creatorId } },
       { upsert: true, new: true, session: this.session },
     );
 
@@ -102,6 +114,9 @@ export default class QuestionService {
       questionContent: input.questionContent,
       questionAssets: input.questionAssets || [],
       answerContent: input.answerContent,
+      hint: input.hint,
+      hintPenalty: input.hintPenalty ?? 0,
+      createdBy: creatorId,
     });
 
     const options: any = {};
@@ -128,6 +143,9 @@ export default class QuestionService {
       questionContent?: any;
       questionAssets?: any[];
       answerContent?: any;
+      hint?: any;
+      hintPenalty?: number;
+      userId?: string;
     },
   ): Promise<IQuestion> {
     const query = Question.findById(questionId);
@@ -140,11 +158,27 @@ export default class QuestionService {
       throw new Error("Question not found");
     }
 
+    const requesterId = input.userId || "superadmin";
+
+    // Authorization check: Admins can only edit their own questions (unless superadmin)
+    if (requesterId !== "superadmin" && question.createdBy !== requesterId) {
+      throw new Error("You do not have permission to update this question");
+    }
+
     if (input.folder !== undefined) {
       const normalizedFolder = (input.folder || "General").trim();
+
+      // Verify folder write access: other admins cannot add questions to folders they don't own
+      if (requesterId !== "superadmin") {
+        const folderDoc = await QuestionFolder.findOne({ name: normalizedFolder });
+        if (folderDoc && folderDoc.createdBy !== requesterId) {
+          throw new Error("You do not have permission to write to this folder");
+        }
+      }
+
       await QuestionFolder.findOneAndUpdate(
         { name: normalizedFolder },
-        { $setOnInsert: { name: normalizedFolder } },
+        { $setOnInsert: { name: normalizedFolder, createdBy: requesterId } },
         { upsert: true, new: true, session: this.session },
       );
       question.folder = normalizedFolder;
@@ -166,6 +200,10 @@ export default class QuestionService {
     question.questionContent = input.questionContent;
     question.questionAssets = input.questionAssets || [];
     question.answerContent = input.answerContent;
+    question.hint = input.hint;
+    if (input.hintPenalty !== undefined) {
+      question.hintPenalty = input.hintPenalty;
+    }
 
     const options: any = {};
     if (this.session) {
@@ -176,7 +214,23 @@ export default class QuestionService {
     return question;
   }
 
-  async deleteQuestion(questionId: Types.ObjectId | string): Promise<void> {
+  async deleteQuestion(questionId: Types.ObjectId | string, userId?: string): Promise<void> {
+    const query = Question.findById(questionId);
+    if (this.session) {
+      query.session(this.session);
+    }
+    const question = await query;
+    if (!question) {
+      throw new Error("Question not found");
+    }
+
+    const requesterId = userId || "superadmin";
+
+    // Authorization check: Admins can only delete their own questions (unless superadmin)
+    if (requesterId !== "superadmin" && question.createdBy !== requesterId) {
+      throw new Error("You do not have permission to delete this question");
+    }
+
     const deleteQuery = Question.findByIdAndDelete(questionId);
     if (this.session) {
       deleteQuery.session(this.session);
@@ -224,7 +278,7 @@ export default class QuestionService {
     return names;
   }
 
-  async createFolder(name: string, parentPath?: string): Promise<string> {
+  async createFolder(name: string, parentPath?: string, userId?: string): Promise<string> {
     const normalized = name.trim();
 
     if (!normalized) {
@@ -242,6 +296,16 @@ export default class QuestionService {
       ? `${normalizedParent}/${normalized}`
       : normalized;
 
+    const requesterId = userId || "superadmin";
+
+    // Verify parent folder write access: other admins cannot add questions/subfolders to folders they don't own
+    if (normalizedParent && requesterId !== "superadmin") {
+      const parentFolder = await QuestionFolder.findOne({ name: normalizedParent });
+      if (parentFolder && parentFolder.createdBy !== requesterId) {
+        throw new Error("You do not have permission to create folders inside this folder");
+      }
+    }
+
     const existingQuery = QuestionFolder.findOne({ name: fullPath });
     if (this.session) {
       existingQuery.session(this.session);
@@ -252,7 +316,7 @@ export default class QuestionService {
       throw new Error("Folder already exists");
     }
 
-    const folder = new QuestionFolder({ name: fullPath });
+    const folder = new QuestionFolder({ name: fullPath, createdBy: requesterId });
     const options: any = {};
     if (this.session) {
       options.session = this.session;
@@ -262,7 +326,7 @@ export default class QuestionService {
     return folder.name;
   }
 
-  async renameFolder(folderPath: string, newName: string): Promise<string> {
+  async renameFolder(folderPath: string, newName: string, userId?: string): Promise<string> {
     const normalizedPath = folderPath.trim();
     const normalizedName = newName.trim();
 
@@ -277,6 +341,22 @@ export default class QuestionService {
     }
     if (normalizedName.includes("/")) {
       throw new Error("Folder name cannot contain '/'");
+    }
+
+    const requesterId = userId || "superadmin";
+
+    const folderQuery = QuestionFolder.findOne({ name: normalizedPath });
+    if (this.session) {
+      folderQuery.session(this.session);
+    }
+    const folder = await folderQuery;
+    if (!folder) {
+      throw new Error("Folder not found");
+    }
+
+    // Authorization check: Admins can only rename folders they created
+    if (requesterId !== "superadmin" && folder.createdBy !== requesterId) {
+      throw new Error("You do not have permission to rename this folder");
     }
 
     const pathSegments = normalizedPath.split("/").filter(Boolean);
@@ -296,15 +376,6 @@ export default class QuestionService {
     const existingFolder = await existingQuery;
     if (existingFolder) {
       throw new Error("Folder already exists");
-    }
-
-    const folderQuery = QuestionFolder.findOne({ name: normalizedPath });
-    if (this.session) {
-      folderQuery.session(this.session);
-    }
-    const folder = await folderQuery;
-    if (!folder) {
-      throw new Error("Folder not found");
     }
 
     const escapedPath = normalizedPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -344,7 +415,7 @@ export default class QuestionService {
     return renamedPath;
   }
 
-  async deleteFolder(folderPath: string): Promise<string> {
+  async deleteFolder(folderPath: string, userId?: string): Promise<string> {
     const normalizedPath = folderPath.trim();
 
     if (!normalizedPath) {
@@ -354,11 +425,7 @@ export default class QuestionService {
       throw new Error("General folder cannot be deleted");
     }
 
-    const pathSegments = normalizedPath.split("/").filter(Boolean);
-    const parentPath = pathSegments.slice(0, -1).join("/");
-    const fallbackPath = parentPath || "General";
-    const escapedPath = normalizedPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const folderRegex = new RegExp(`^${escapedPath}(?:/|$)`);
+    const requesterId = userId || "superadmin";
 
     const folderQuery = QuestionFolder.findOne({ name: normalizedPath });
     if (this.session) {
@@ -368,6 +435,17 @@ export default class QuestionService {
     if (!folder) {
       throw new Error("Folder not found");
     }
+
+    // Authorization check: Admins can only delete folders they created
+    if (requesterId !== "superadmin" && folder.createdBy !== requesterId) {
+      throw new Error("You do not have permission to delete this folder");
+    }
+
+    const pathSegments = normalizedPath.split("/").filter(Boolean);
+    const parentPath = pathSegments.slice(0, -1).join("/");
+    const fallbackPath = parentPath || "General";
+    const escapedPath = normalizedPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const folderRegex = new RegExp(`^${escapedPath}(?:/|$)`);
 
     const questionDocsQuery = Question.find({ folder: folderRegex });
     if (this.session) {
@@ -609,5 +687,89 @@ export default class QuestionService {
 
     await questionResponse.save(options);
     return questionResponse;
+  }
+
+  // Bulk copy questions
+  async copyQuestions(
+    questionIds: string[],
+    targetFolder: string,
+    creatorId: string,
+  ): Promise<IQuestion[]> {
+    const normalizedFolder = targetFolder.trim();
+
+    // Verify folder write access: other admins cannot add questions to folders they don't own
+    if (creatorId !== "superadmin") {
+      const folderDoc = await QuestionFolder.findOne({ name: normalizedFolder });
+      if (folderDoc && folderDoc.createdBy !== creatorId) {
+        throw new Error("You do not have permission to write to this folder");
+      }
+    }
+
+    // Ensure folder exists (or create it)
+    await QuestionFolder.findOneAndUpdate(
+      { name: normalizedFolder },
+      { $setOnInsert: { name: normalizedFolder, createdBy: creatorId } },
+      { upsert: true, new: true, session: this.session },
+    );
+
+    // Find original questions
+    const originals = await Question.find({ _id: { $in: questionIds } });
+    
+    const copies = originals.map((orig) => {
+      const origObj: any = orig.toObject();
+      delete origObj._id;
+      delete origObj.createdAt;
+      delete origObj.updatedAt;
+      return new Question({
+        ...origObj,
+        folder: normalizedFolder,
+        createdBy: creatorId,
+      });
+    });
+
+    const options: any = {};
+    if (this.session) {
+      options.session = this.session;
+    }
+
+    await Promise.all(copies.map((copy) => copy.save(options)));
+    return copies;
+  }
+
+  // Bulk move questions
+  async moveQuestions(
+    questionIds: string[],
+    targetFolder: string,
+    userId: string,
+  ): Promise<IQuestion[]> {
+    if (userId !== "superadmin") {
+      throw new Error("Only superadmin has permission to move questions");
+    }
+
+    const normalizedFolder = targetFolder.trim();
+
+    // Ensure folder exists (or create it)
+    await QuestionFolder.findOneAndUpdate(
+      { name: normalizedFolder },
+      { $setOnInsert: { name: normalizedFolder, createdBy: userId } },
+      { upsert: true, new: true, session: this.session },
+    );
+
+    // Find the questions to move
+    const questions = await Question.find({ _id: { $in: questionIds } });
+
+    const options: any = {};
+    if (this.session) {
+      options.session = this.session;
+    }
+
+    await Promise.all(
+      questions.map(async (q) => {
+        q.folder = normalizedFolder;
+        await q.save(options);
+      }),
+    );
+
+    return questions;
   }
 }

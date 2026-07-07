@@ -157,6 +157,52 @@ const questionSchema = new Schema<IQuestion>(
         },
       ],
     },
+    hint: {
+      text: {
+        type: String,
+        required: false,
+        trim: true,
+      },
+      media: [
+        {
+          type: {
+            type: String,
+            enum: ["text", "image", "video", "audio", "gif", "file"],
+            required: true,
+          },
+          url: {
+            type: String,
+            required: false,
+          },
+          text: {
+            type: String,
+            required: false,
+          },
+          mimeType: {
+            type: String,
+            required: false,
+          },
+          fileId: {
+            type: String,
+            required: false,
+          },
+          name: {
+            type: String,
+            required: false,
+          },
+        },
+      ],
+    },
+    hintPenalty: {
+      type: Number,
+      required: false,
+      default: 0,
+    },
+    createdBy: {
+      type: String,
+      required: true,
+      default: "superadmin",
+    },
   },
   {
     timestamps: true,

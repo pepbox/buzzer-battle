@@ -12,6 +12,7 @@ export interface IGameState extends Document {
   idleStartTime?: number;
   teamsWhoAnsweredThisQuestion: Types.ObjectId[];
   isNoBuzzerQuestion: boolean;
+  hintRevealed?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

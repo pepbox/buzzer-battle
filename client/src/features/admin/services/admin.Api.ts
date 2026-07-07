@@ -103,6 +103,12 @@ export interface QuestionBankItem {
     text?: string;
     media?: QuestionMediaItem[];
   };
+  hint?: {
+    text?: string;
+    media?: QuestionMediaItem[];
+  };
+  hintPenalty?: number;
+  createdBy?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -146,6 +152,11 @@ export interface CreateQuestionPayload {
     text?: string;
     media?: QuestionMediaItem[];
   };
+  hint?: {
+    text?: string;
+    media?: QuestionMediaItem[];
+  };
+  hintPenalty?: number;
 }
 
 export interface QuestionBankResponse {
@@ -376,6 +387,30 @@ export const adminApi = api.injectEndpoints({
       }),
     }),
 
+    bulkCopyQuestions: builder.mutation<
+      { message: string; data: { questions: QuestionBankItem[] } },
+      { questionIds: string[]; targetFolder: string }
+    >({
+      query: (body) => ({
+        url: "/questions/bulk-copy",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: ["Question", "Folder"],
+    }),
+
+    bulkMoveQuestions: builder.mutation<
+      { message: string; data: { questions: QuestionBankItem[] } },
+      { questionIds: string[]; targetFolder: string }
+    >({
+      query: (body) => ({
+        url: "/questions/bulk-move",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: ["Question", "Folder", "Session"],
+    }),
+
     // Update team (name or score) - single optimized endpoint
     updateTeam: builder.mutation<
       UpdateTeamResponse,
@@ -425,6 +460,8 @@ export const {
   useRenameQuestionFolderMutation,
   useDeleteQuestionFolderMutation,
   useUploadQuestionMediaMutation,
+  useBulkCopyQuestionsMutation,
+  useBulkMoveQuestionsMutation,
   useUpdateTeamMutation,
   useFetchTeamResponsesQuery,
   useLazyFetchTeamResponsesQuery,

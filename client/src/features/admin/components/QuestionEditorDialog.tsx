@@ -117,13 +117,17 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
   const previousMediaRef = useRef<{
     assets: EditableMediaItem[];
     answer: EditableMediaItem[];
+    hint: EditableMediaItem[];
   }>({
     assets: [],
     answer: [],
+    hint: [],
   });
 
   const [questionText, setQuestionText] = useState("");
   const [answerText, setAnswerText] = useState("");
+  const [hintText, setHintText] = useState("");
+  const [hintPenalty, setHintPenalty] = useState<number>(0);
   const [score, setScore] = useState<number>(0);
   const [keepBuzzer, setKeepBuzzer] = useState(true);
   const [hideFromUsers, setHideFromUsers] = useState(false);
@@ -131,12 +135,14 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
   const [newFolderName, setNewFolderName] = useState("");
   const [questionLinkInput, setQuestionLinkInput] = useState("");
   const [answerLinkInput, setAnswerLinkInput] = useState("");
+  const [hintLinkInput, setHintLinkInput] = useState("");
   const [optionText, setOptionText] = useState("");
   const [options, setOptions] = useState<
     Array<{ optionText: string; optionId?: string }>
   >([]);
   const [questionAssets, setQuestionAssets] = useState<EditableMediaItem[]>([]);
   const [answerMedia, setAnswerMedia] = useState<EditableMediaItem[]>([]);
+  const [hintMedia, setHintMedia] = useState<EditableMediaItem[]>([]);
   const [correctAnswer, setCorrectAnswer] = useState<string>("");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [previewMedia, setPreviewMedia] = useState<QuestionMediaItem | null>(
@@ -145,10 +151,10 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
 
   const isUploadingMedia = useMemo(
     () =>
-      [questionAssets, answerMedia].some((collection) =>
+      [questionAssets, answerMedia, hintMedia].some((collection) =>
         collection.some((media) => media.uploadStatus === "uploading"),
       ),
-    [answerMedia, questionAssets],
+    [answerMedia, questionAssets, hintMedia],
   );
 
   useEffect(() => {
@@ -188,27 +194,37 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
       setAnswerMedia(
         toEditableMediaItems(initialQuestion.answerContent?.media),
       );
+      setHintText(initialQuestion.hint?.text || "");
+      setHintPenalty(initialQuestion.hintPenalty ?? 0);
+      setHintMedia(
+        toEditableMediaItems(initialQuestion.hint?.media),
+      );
       setSubmitError(null);
       setNewFolderName("");
       setQuestionLinkInput("");
       setAnswerLinkInput("");
+      setHintLinkInput("");
       setOptionText("");
       return;
     }
 
     setQuestionText("");
     setAnswerText("");
+    setHintText("");
+    setHintPenalty(0);
     setScore(0);
     setKeepBuzzer(true);
     setHideFromUsers(false);
     setFolder(defaultFolder || "General");
     setQuestionLinkInput("");
     setAnswerLinkInput("");
+    setHintLinkInput("");
     setOptionText("");
     setOptions([]);
     setCorrectAnswer("");
     setQuestionAssets([]);
     setAnswerMedia([]);
+    setHintMedia([]);
     setNewFolderName("");
     setSubmitError(null);
     setPreviewMedia(null);
@@ -217,23 +233,25 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
   useEffect(() => {
     const previousMedia = previousMediaRef.current;
     const currentItems = new Set(
-      [...questionAssets, ...answerMedia].map((media) => media.clientId),
+      [...questionAssets, ...answerMedia, ...hintMedia].map((media) => media.clientId),
     );
 
-    [...previousMedia.assets, ...previousMedia.answer]
+    [...previousMedia.assets, ...previousMedia.answer, ...previousMedia.hint]
       .filter((media) => !currentItems.has(media.clientId))
       .forEach((media) => revokePreviewUrl(media));
 
     previousMediaRef.current = {
       assets: questionAssets,
       answer: answerMedia,
+      hint: hintMedia,
     };
-  }, [answerMedia, questionAssets]);
+  }, [answerMedia, questionAssets, hintMedia]);
 
   useEffect(
     () => () => {
       cleanupMediaItems(previousMediaRef.current.assets);
       cleanupMediaItems(previousMediaRef.current.answer);
+      cleanupMediaItems(previousMediaRef.current.hint);
     },
     [],
   );
@@ -242,18 +260,21 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
   const hasAnswer = answerText.trim() || answerMedia.length > 0;
 
   const updateCollection = (
-    target: "question" | "answer",
+    target: "question" | "answer" | "hint",
     updater: (items: EditableMediaItem[]) => EditableMediaItem[],
   ) => {
     if (target === "question") {
       setQuestionAssets((items) => updater(items));
       return;
     }
-
-    setAnswerMedia((items) => updater(items));
+    if (target === "answer") {
+      setAnswerMedia((items) => updater(items));
+      return;
+    }
+    setHintMedia((items) => updater(items));
   };
 
-  const handleUpload = async (file: File, target: "question" | "answer") => {
+  const handleUpload = async (file: File, target: "question" | "answer" | "hint") => {
     const clientId = toClientId();
     const previewUrl =
       file.type.startsWith("image/") ||
@@ -307,7 +328,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
   };
 
   const handleRemoveMedia = (
-    target: "question" | "answer",
+    target: "question" | "answer" | "hint",
     clientId: string,
   ) => {
     updateCollection(target, (items) => {
@@ -335,9 +356,13 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
     }
   };
 
-  const handleAddLink = (target: "question" | "answer") => {
+  const handleAddLink = (target: "question" | "answer" | "hint") => {
     const rawValue =
-      target === "question" ? questionLinkInput : answerLinkInput;
+      target === "question"
+        ? questionLinkInput
+        : target === "answer"
+          ? answerLinkInput
+          : hintLinkInput;
     const trimmedUrl = rawValue.trim();
 
     if (!trimmedUrl) return;
@@ -367,8 +392,11 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
       setQuestionLinkInput("");
       return;
     }
-
-    setAnswerLinkInput("");
+    if (target === "answer") {
+      setAnswerLinkInput("");
+      return;
+    }
+    setHintLinkInput("");
   };
 
   const handleAddOption = () => {
@@ -406,6 +434,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
 
     const cleanQuestionAssets = sanitizeMediaItems(questionAssets);
     const cleanAnswerMedia = sanitizeMediaItems(answerMedia);
+    const cleanHintMedia = sanitizeMediaItems(hintMedia);
 
     const payload: CreateQuestionPayload = {
       questionText: questionText.trim(),
@@ -422,6 +451,11 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
         text: answerText.trim() || undefined,
         media: cleanAnswerMedia,
       },
+      hint: {
+        text: hintText.trim() || undefined,
+        media: cleanHintMedia,
+      },
+      hintPenalty: Number.isFinite(Number(hintPenalty)) ? Number(hintPenalty) : 0,
     };
 
     const firstQuestionMedia = cleanQuestionAssets[0];
@@ -560,6 +594,59 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
                   sx={{ height: "fit-content", width: "200px" }}
                   variant="outlined"
                   onClick={() => handleAddLink("answer")}
+                >
+                  Add Link
+                </Button>
+              </Box>
+            </Box>
+
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: 1 }}>
+              Hint Settings
+            </Typography>
+            <TextField
+              label="Hint Description (optional)"
+              multiline
+              minRows={2}
+              value={hintText}
+              onChange={(e) => setHintText(e.target.value)}
+            />
+            <TextField
+              label="Hint Penalty Points"
+              type="number"
+              value={hintPenalty}
+              onChange={(e) => setHintPenalty(Number(e.target.value || 0))}
+              helperText="Points deducted from the team's score if this hint is revealed."
+            />
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                gap: 1,
+                maxWidth: "100%",
+                width: "100%",
+              }}
+            >
+              <MediaUploadField
+                label="Upload Hint Media"
+                mediaItems={hintMedia}
+                onUpload={(file) => handleUpload(file, "hint")}
+                onRemove={(clientId) => handleRemoveMedia("hint", clientId)}
+                onPreview={setPreviewMedia}
+                isUploading={isUploadingMedia}
+              />
+
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <TextField
+                  fullWidth
+                  label="Hint Asset Link (optional)"
+                  placeholder="https://..."
+                  value={hintLinkInput}
+                  onChange={(e) => setHintLinkInput(e.target.value)}
+                />
+                <Button
+                  sx={{ height: "fit-content", width: "200px" }}
+                  variant="outlined"
+                  onClick={() => handleAddLink("hint")}
                 >
                   Add Link
                 </Button>
