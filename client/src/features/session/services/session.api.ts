@@ -3,6 +3,8 @@ import { api } from '../../../app/api';
 export interface Session {
     _id: string;
     sessionName: string;
+    companyName?: string;
+    companyLogo?: string;
     questionTimeLimit: number;
     answerTimeLimit: number;
     questions: string[];
@@ -19,6 +21,8 @@ export interface SessionResponse {
 }
 
 export interface UpdateSessionRequest {
+    companyName?: string;
+    companyLogo?: string;
     questionTimeLimit?: number;
     answerTimeLimit?: number;
     questions?: string[];
@@ -57,6 +61,15 @@ export const sessionApi = api.injectEndpoints({
             }),
             invalidatesTags: ['Session'],
         }),
+
+        // Upload session logo
+        uploadSessionLogo: builder.mutation<{ message: string, data: { fileUrl: string }, success: boolean }, FormData>({
+            query: (formData) => ({
+                url: '/session/upload-logo',
+                method: 'POST',
+                body: formData,
+            }),
+        }),
     }),
 });
 
@@ -66,4 +79,5 @@ export const {
     useFetchSessionByIdQuery,
     useLazyFetchSessionByIdQuery,
     useUpdateSessionMutation,
+    useUploadSessionLogoMutation,
 } = sessionApi;

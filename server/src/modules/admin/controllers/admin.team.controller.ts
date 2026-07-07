@@ -58,6 +58,7 @@ export const fetchDashboard = async (
           teamScore: team.teamScore,
           joinedAt: team.joinedAt,
           responsesCount: responses.length,
+          members: team.members,
           // Calculate status based on game state
           status:
             gameState &&

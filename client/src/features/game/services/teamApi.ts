@@ -9,11 +9,14 @@ export interface Team {
   totalBuzzerPressCount?: number;
   joinedAt: Date;
   sessionId: string;
+  playerRole?: "BUZZER_PERSON" | "TEAM_MEMBER";
+  playerName?: string;
 }
 
 export interface CreateTeamRequest {
   teamNumber: number;
-  teamName: string;
+  playerName: string;
+  playerRole: "BUZZER_PERSON" | "TEAM_MEMBER";
   sessionId: string;
 }
 
@@ -40,6 +43,11 @@ export interface LeaderboardResponse {
   data: {
     leaderboard: LeaderboardTeam[];
   };
+}
+
+export interface JoinedTeamDetail {
+  teamNumber: number;
+  hasBuzzerPerson: boolean;
 }
 
 export const teamApi = api.injectEndpoints({
@@ -73,7 +81,7 @@ export const teamApi = api.injectEndpoints({
     }),
 
     fetchTotalTeamsInSession: builder.query<
-      { message: string; data: { totalTeams: number } },
+      { message: string; data: { totalTeams: number; teamMode?: "NUMBER" | "COLOR"; colorTeams?: number[] } },
       { sessionId: string }
     >({
       query: ({ sessionId }) => ({
@@ -83,7 +91,7 @@ export const teamApi = api.injectEndpoints({
     }),
 
     fetchJoinedTeamNumbers: builder.query<
-      { message: string; data: { joinedTeamNumbers: number[] } },
+      { message: string; data: { joinedTeamNumbers: number[]; joinedTeamsDetails?: JoinedTeamDetail[] } },
       { sessionId: string }
     >({
       query: ({ sessionId }) => ({
@@ -103,3 +111,4 @@ export const {
   useFetchTotalTeamsInSessionQuery,
   useFetchJoinedTeamNumbersQuery,
 } = teamApi;
+

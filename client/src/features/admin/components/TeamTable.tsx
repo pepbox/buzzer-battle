@@ -33,6 +33,7 @@ import {
   EmojiEvents as TrophyIcon,
 } from '@mui/icons-material';
 import { Team, TeamTableProps } from '../types/interfaces';
+import TeamMembersModal from './TeamMembersModal';
 
 interface EditTeamData {
   teamName?: string;
@@ -67,6 +68,28 @@ const TeamTable: React.FC<TeamTableProps> = ({
     field: null,
     value: '',
   });
+
+  const [membersModal, setMembersModal] = useState<{
+    open: boolean;
+    team: Team | null;
+  }>({
+    open: false,
+    team: null,
+  });
+
+  const handleTeamNameClick = (team: Team) => {
+    setMembersModal({
+      open: true,
+      team,
+    });
+  };
+
+  const handleCloseMembersModal = () => {
+    setMembersModal({
+      open: false,
+      team: null,
+    });
+  };
 
   const shouldHideRank = teams.length > 0 && teams.every((team) => team.teamScore === 0);
 
@@ -222,7 +245,18 @@ const TeamTable: React.FC<TeamTableProps> = ({
 
                   {/* Team Name */}
                   <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography variant="body1" fontWeight="bold">
+                    <Typography
+                      variant="body1"
+                      fontWeight="bold"
+                      onClick={() => handleTeamNameClick(team)}
+                      sx={{
+                        cursor: "pointer",
+                        "&:hover": {
+                          textDecoration: "underline",
+                          color: theme.palette.primary.main,
+                        },
+                      }}
+                    >
                       {team.teamName}
                     </Typography>
                     <IconButton
@@ -429,7 +463,19 @@ const TeamTable: React.FC<TeamTableProps> = ({
                 </TableCell>
                 <TableCell>
                   <Box display="flex" alignItems="center" gap={1}>
-                    <Typography>{team.teamName}</Typography>
+                    <Typography
+                      onClick={() => handleTeamNameClick(team)}
+                      sx={{
+                        cursor: "pointer",
+                        fontWeight: "medium",
+                        "&:hover": {
+                          textDecoration: "underline",
+                          color: theme.palette.primary.main,
+                        },
+                      }}
+                    >
+                      {team.teamName}
+                    </Typography>
                     <IconButton
                       size="small"
                       onClick={() => handleEditClick(team, 'name')}
@@ -508,6 +554,17 @@ const TeamTable: React.FC<TeamTableProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Team Members Modal */}
+      {membersModal.team && (
+        <TeamMembersModal
+          open={membersModal.open}
+          onClose={handleCloseMembersModal}
+          teamName={membersModal.team.teamName}
+          teamNumber={membersModal.team.teamNumber}
+          members={membersModal.team.members || []}
+        />
+      )}
     </Box>
   );
 };

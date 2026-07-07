@@ -29,7 +29,7 @@ export const authenticateUser = (
     const decoded = jwt.verify(
       token,
       process.env.ACCESS_TOKEN_SECRET as string,
-    ) as { id: string; role: "USER" | "ADMIN" | "TEAM"; sessionId: string };
+    ) as { id: string; role: "USER" | "ADMIN" | "TEAM"; sessionId: string; playerRole?: "BUZZER_PERSON" | "TEAM_MEMBER"; playerName?: string };
     req.user = decoded;
     next();
   } catch (error) {

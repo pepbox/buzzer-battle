@@ -325,7 +325,7 @@ export const fetchBuzzerStats = async (
 
         // Calculate teams pressed and remaining
         const teamsPressed = leaderboard.length;
-        const teamsRemaining = totalTeams - teamsPressed;
+        const teamsRemaining = totalTeams.totalTeams - teamsPressed;
 
         // Get fastest team (first in leaderboard)
         const fastestTeam = leaderboard.length > 0 ? {
@@ -343,7 +343,7 @@ export const fetchBuzzerStats = async (
                 fastestTeam,
                 teamsPressed,
                 teamsRemaining,
-                totalTeams,
+                totalTeams: totalTeams.totalTeams,
             },
         });
     } catch (error: any) {

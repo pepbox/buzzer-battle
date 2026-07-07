@@ -10,41 +10,84 @@ export default class TeamService {
     this.session = session;
   }
 
-  // Create a new team
+  // Create a new team or join an existing team
   async createTeam({
     teamNumber,
-    teamName,
+    playerName,
+    playerRole,
     sessionId,
   }: {
     teamNumber: number;
-    teamName: string;
+    playerName: string;
+    playerRole: "BUZZER_PERSON" | "TEAM_MEMBER";
     sessionId: Types.ObjectId | string;
   }): Promise<ITeam> {
-    // Check if team number already exists in this session
+    // Check if team already exists in this session
     const query = Team.findOne({ teamNumber, session: sessionId });
     if (this.session) {
       query.session(this.session);
     }
 
-    const existingTeam = await query;
-    if (existingTeam) {
-      throw new Error("Team number already exists in this session");
-    }
-
-    const team = new Team({
-      teamNumber,
-      teamName,
-      session: sessionId,
-      teamScore: 0,
+    let team = await query;
+    const newMember = {
+      name: playerName,
+      role: playerRole,
       joinedAt: new Date(),
-    });
+    };
 
     const options: any = {};
     if (this.session) {
       options.session = this.session;
     }
 
-    await team.save(options);
+    if (team) {
+      // Check duplicate name
+      const nameExists = team.members.some(
+        (m) => m.name.toLowerCase() === playerName.toLowerCase()
+      );
+      if (nameExists) {
+        throw new Error("Player name already exists in this team");
+      }
+
+      // Check if buzzer person already exists if joining as buzzer person
+      if (playerRole === "BUZZER_PERSON") {
+        const hasBuzzerPerson = team.members.some(
+          (m) => m.role === "BUZZER_PERSON"
+        );
+        if (hasBuzzerPerson) {
+          throw new Error("Buzzer Person already exists in this team");
+        }
+      }
+
+      team.members.push(newMember);
+      await team.save(options);
+    } else {
+      // Fetch session to determine teamName
+      const sessionDoc = await Session.findById(sessionId).select("teamMode");
+      const teamMode = sessionDoc?.teamMode || "NUMBER";
+      
+      const COLOR_OPTIONS: Record<number, string> = {
+        1: "Red", 2: "Green", 3: "Blue", 4: "Yellow", 5: "Orange",
+        6: "White", 7: "Pink", 8: "Purple", 9: "Maroon", 10: "Light Blue",
+        11: "Silver", 12: "Brown", 13: "Indigo", 14: "Olive Green"
+      };
+      
+      const derivedTeamName = teamMode === "COLOR" 
+        ? `Team ${COLOR_OPTIONS[teamNumber] || teamNumber}`
+        : `Team ${teamNumber}`;
+
+      team = new Team({
+        teamNumber,
+        teamName: derivedTeamName,
+        session: sessionId,
+        teamScore: 0,
+        joinedAt: new Date(),
+        members: [newMember]
+      });
+
+      await team.save(options);
+    }
+
     return team;
   }
 
@@ -184,16 +227,20 @@ export default class TeamService {
     return await query;
   }
 
-  // Fetch total number of teams in a session
+  // Fetch total number of teams and config in a session
   async fetchTotalTeamsInSession(
     sessionId: Types.ObjectId | string,
-  ): Promise<number> {
+  ): Promise<{ totalTeams: number; teamMode: string; colorTeams: number[] }> {
     const sessionDoc =
-      await Session.findById(sessionId).select("numberOfTeams");
+      await Session.findById(sessionId).select("numberOfTeams teamMode colorTeams");
     if (!sessionDoc || typeof sessionDoc.numberOfTeams !== "number") {
       throw new Error("Session not found or numberOfTeams not set");
     }
-    return sessionDoc.numberOfTeams;
+    return {
+      totalTeams: sessionDoc.numberOfTeams,
+      teamMode: sessionDoc.teamMode || 'NUMBER',
+      colorTeams: sessionDoc.colorTeams || []
+    };
   }
 
   // Fetch joined team numbers in a session
@@ -207,6 +254,19 @@ export default class TeamService {
       .map((team: any) => Number(team.teamNumber))
       .filter((teamNumber) => Number.isInteger(teamNumber))
       .sort((a, b) => a - b);
+  }
+
+  // Fetch joined teams details in a session
+  async fetchJoinedTeamsDetails(
+    sessionId: Types.ObjectId | string,
+  ): Promise<{ teamNumber: number; hasBuzzerPerson: boolean }[]> {
+    const teams = await Team.find({ session: sessionId })
+      .select("teamNumber members")
+      .lean();
+    return teams.map((team: any) => ({
+      teamNumber: Number(team.teamNumber),
+      hasBuzzerPerson: team.members?.some((m: any) => m.role === "BUZZER_PERSON") || false
+    }));
   }
 
   // Update team by ID (for admin)

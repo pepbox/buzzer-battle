@@ -8,6 +8,7 @@ import starImage from "../../../assets/questions/star.webp";
 
 const GameHeader: React.FC = () => {
   const team = useAppSelector((state: RootState) => state.team.team);
+  const session = useAppSelector((state: RootState) => state.session.session);
   const { data: leaderboardData, isLoading } = useFetchOverallLeaderboardQuery(
     undefined,
     { skip: !team?._id }
@@ -29,19 +30,50 @@ const GameHeader: React.FC = () => {
     <Box
       sx={{
         display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "16px 20px",
+        flexDirection: "column",
         backgroundColor: "#B7DFFF", // Native participant header color theme
-        color: "white",
         width: "100%",
         maxWidth: "480px",
         margin: "0 auto",
         flexShrink: 0,
         zIndex: 1000,
-        boxShadow: "0px 2px 20px rgba(0,0,0,0.05)"
+        boxShadow: "0px 2px 20px rgba(0,0,0,0.05)",
       }}
     >
+      {/* Session Branding (Top Right) */}
+      {(session?.companyLogo || session?.companyName) && (
+        <Box 
+          sx={{ 
+            display: "flex", 
+            justifyContent: "flex-end", 
+            alignItems: "center", 
+            px: "20px", 
+            pt: "12px",
+            pb: "4px",
+            gap: 1
+          }}
+        >
+          {session?.companyName && (
+            <Typography variant="body2" sx={{ fontWeight: "bold", color: "black", fontSize: "12px" }}>
+              {session.companyName}
+            </Typography>
+          )}
+          {session?.companyLogo && (
+            <Box component="img" src={session.companyLogo} alt="Company Logo" sx={{ height: "24px", objectFit: "contain", borderRadius: "4px" }} />
+          )}
+        </Box>
+      )}
+
+      {/* Main Header Row */}
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: (session?.companyLogo || session?.companyName) ? "4px 20px 16px 20px" : "16px 20px",
+          color: "white",
+        }}
+      >
       {/* Left: Team Info */}
       <Box sx={{ display: "flex", alignItems: "center" }}>
         <Typography 
@@ -95,6 +127,7 @@ const GameHeader: React.FC = () => {
             {rank}
           </Typography>
         </Box>
+      </Box>
       </Box>
     </Box>
   );

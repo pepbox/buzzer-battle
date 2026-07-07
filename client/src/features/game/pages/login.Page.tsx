@@ -24,6 +24,7 @@ import {
 import { setTeam } from "../services/teamSlice";
 import Loader from "../../../components/ui/Loader";
 import ErrorLayout from "../../../components/ui/Error";
+import { useFetchSessionByIdQuery } from "../../session/services/session.api";
 
 const LoginPage: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -35,7 +36,6 @@ const LoginPage: React.FC = () => {
   const { isAuthenticated, team } = useAppSelector(
     (state: RootState) => state.team,
   );
-  // const { gameState } = useAppSelector((state: RootState) => state.gameState);
 
   // All hooks must be called before any conditional returns
   const {
@@ -47,6 +47,12 @@ const LoginPage: React.FC = () => {
     { skip: !sessionId },
   );
 
+  const { data: sessionData } = useFetchSessionByIdQuery(
+    sessionId || "",
+    { skip: !sessionId },
+  );
+  const session = sessionData?.data;
+
   const { data: joinedTeamsData } = useFetchJoinedTeamNumbersQuery(
     { sessionId: sessionId || "" },
     {
@@ -57,7 +63,8 @@ const LoginPage: React.FC = () => {
     },
   );
 
-  const [teamName, setTeamName] = useState<string>("");
+  const [playerName, setPlayerName] = useState<string>("");
+  const [playerRole, setPlayerRole] = useState<"BUZZER_PERSON" | "TEAM_MEMBER">("BUZZER_PERSON");
   const [selectedTeamNumber, setSelectedTeamNumber] = useState<number>(1);
   const [showSnackbar, setShowSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
@@ -65,29 +72,6 @@ const LoginPage: React.FC = () => {
   // RTK Query mutation for creating team
   const [createTeam, { isLoading: isCreating, error: createError }] =
     useCreateTeamMutation();
-
-  // // Redirect authenticated users to appropriate game screen
-  // useEffect(() => {
-  //   console.log({ isAuthenticated, team, gameState });
-  //   if (isAuthenticated && team && gameState) {
-  //     console.log("✅ Already authenticated, redirecting to game...");
-
-  //     // Redirect based on current game state
-  //     const status = gameState.gameStatus;
-  //     const answeringTeamId =
-  //       typeof gameState.currentAnsweringTeam === "string"
-  //         ? gameState.currentAnsweringTeam
-  //         : gameState.currentAnsweringTeam?._id;
-
-  //     if (status === "buzzer_round") {
-  //       navigate(`/game/${sessionId}/buzzer`, { replace: true });
-  //     } else if (status === "answering" && answeringTeamId === team._id) {
-  //       navigate(`/game/${sessionId}/question`, { replace: true });
-  //     } else {
-  //       navigate(`/game/${sessionId}/leaderboard`, { replace: true });
-  //     }
-  //   }
-  // }, [isAuthenticated, team, gameState, navigate, sessionId]);
 
   // Check if sessionId is present
   useEffect(() => {
@@ -102,19 +86,47 @@ const LoginPage: React.FC = () => {
     if (createError) {
       const errorMessage =
         "data" in createError && createError.data
-          ? (createError.data as any).message || "Failed to create team"
-          : "Failed to create team. Please try again.";
+          ? (createError.data as any).message || "Failed to join team"
+          : "Failed to join team. Please try again.";
       setSnackbarMessage(errorMessage);
       setShowSnackbar(true);
     }
   }, [createError]);
 
+  const COLOR_OPTIONS = [
+    { id: 1, label: "Red" },
+    { id: 2, label: "Green" },
+    { id: 3, label: "Blue" },
+    { id: 4, label: "Yellow" },
+    { id: 5, label: "Orange" },
+    { id: 6, label: "White" },
+    { id: 7, label: "Pink" },
+    { id: 8, label: "Purple" },
+    { id: 9, label: "Maroon" },
+    { id: 10, label: "Light Blue" },
+    { id: 11, label: "Silver" },
+    { id: 12, label: "Brown" },
+    { id: 13, label: "Indigo" },
+    { id: 14, label: "Olive Green" }
+  ];
+
   const totalTeamsNumber = totalTeams?.data?.totalTeams || 0;
-  const joinedTeamNumbers = joinedTeamsData?.data?.joinedTeamNumbers || [];
-  const availableTeams = Array.from({ length: totalTeamsNumber }, (_, i) => ({
-    id: i + 1,
-    name: `Team ${i + 1}`,
-  })).filter((team) => !joinedTeamNumbers.includes(team.id));
+  const teamMode = totalTeams?.data?.teamMode || "NUMBER";
+  const colorTeams = totalTeams?.data?.colorTeams || [];
+  const joinedTeamsDetails = joinedTeamsData?.data?.joinedTeamsDetails || [];
+  
+  let availableTeams = [];
+  if (teamMode === "COLOR") {
+    availableTeams = colorTeams.map((colorId) => ({
+      id: colorId,
+      name: `Team ${COLOR_OPTIONS.find((c) => c.id === colorId)?.label || colorId}`,
+    }));
+  } else {
+    availableTeams = Array.from({ length: totalTeamsNumber }, (_, i) => ({
+      id: i + 1,
+      name: `Team ${i + 1}`,
+    }));
+  }
 
   useEffect(() => {
     if (!availableTeams.length) {
@@ -130,6 +142,18 @@ const LoginPage: React.FC = () => {
     }
   }, [availableTeams, selectedTeamNumber]);
 
+  // Check if the currently selected team already has a buzzer person
+  const selectedTeamHasBuzzer = joinedTeamsDetails.some(
+    (t) => Number(t.teamNumber) === Number(selectedTeamNumber) && t.hasBuzzerPerson
+  );
+
+  // Automatically switch role to TEAM_MEMBER if BUZZER_PERSON is already taken
+  useEffect(() => {
+    if (selectedTeamHasBuzzer && playerRole === "BUZZER_PERSON") {
+      setPlayerRole("TEAM_MEMBER");
+    }
+  }, [selectedTeamHasBuzzer, selectedTeamNumber, playerRole]);
+
   // Conditional returns AFTER all hooks
   if (isLoading) {
     return <Loader />;
@@ -143,24 +167,24 @@ const LoginPage: React.FC = () => {
   const MAX_WORDS = 4; // Maximum number of words
   const MAX_TOTAL_LENGTH = 50; // Maximum total length
 
-  // Validation function for team name
-  const validateTeamName = (name: string): string => {
+  // Validation function for player name
+  const validatePlayerName = (name: string): string => {
     const trimmedName = name.trim();
 
     if (!trimmedName) {
-      return "Team name is required";
+      return "Player name is required";
     }
 
     // Check if contains only letters and spaces
     if (!/^[a-zA-Z\s]*$/.test(name)) {
-      return "Team name can only contain letters and spaces";
+      return "Player name can only contain letters and spaces";
     }
 
     // Split into words and check constraints
     const words = trimmedName.split(/\s+/);
 
     if (words.length > MAX_WORDS) {
-      return `Team name can have maximum ${MAX_WORDS} words`;
+      return `Player name can have maximum ${MAX_WORDS} words`;
     }
 
     // Check individual word length
@@ -171,21 +195,21 @@ const LoginPage: React.FC = () => {
     }
 
     if (trimmedName.length > MAX_TOTAL_LENGTH) {
-      return `Team name must be ${MAX_TOTAL_LENGTH} characters or less`;
+      return `Player name must be ${MAX_TOTAL_LENGTH} characters or less`;
     }
 
     return "";
   };
 
-  const handleTeamNameChange = (value: string) => {
+  const handlePlayerNameChange = (value: string) => {
     // Allow only letters and spaces, and respect character limit
     if (/^[a-zA-Z\s]*$/.test(value) && value.length <= MAX_TOTAL_LENGTH) {
-      setTeamName(value);
+      setPlayerName(value);
     }
   };
 
   const handleStart = async () => {
-    const teamNameValidation = validateTeamName(teamName);
+    const playerNameValidation = validatePlayerName(playerName);
 
     if (!sessionId) {
       setSnackbarMessage("Invalid session. Please use a valid game link.");
@@ -193,22 +217,23 @@ const LoginPage: React.FC = () => {
       return;
     }
 
-    if (!teamName.trim()) {
-      setSnackbarMessage("Please enter team name");
+    if (!playerName.trim()) {
+      setSnackbarMessage("Please enter your name");
       setShowSnackbar(true);
       return;
     }
 
-    if (teamNameValidation) {
-      setSnackbarMessage(teamNameValidation);
+    if (playerNameValidation) {
+      setSnackbarMessage(playerNameValidation);
       setShowSnackbar(true);
       return;
     }
 
     try {
-      // Create team via API
+      // Join/Create team via API
       const result = await createTeam({
-        teamName: teamName.trim(),
+        playerName: playerName.trim(),
+        playerRole: playerRole,
         teamNumber: selectedTeamNumber,
         sessionId: sessionId,
       }).unwrap();
@@ -222,6 +247,8 @@ const LoginPage: React.FC = () => {
           teamScore: result.data.team.teamScore,
           joinedAt: result.data.team.joinedAt,
           sessionId: result.data.team.sessionId,
+          playerRole: result.data.team.playerRole,
+          playerName: result.data.team.playerName,
         }),
       );
 
@@ -229,7 +256,7 @@ const LoginPage: React.FC = () => {
       navigate(`/game/${sessionId}/buzzer`);
     } catch (error) {
       // Error is already handled by useEffect
-      console.error("Failed to create team:", error);
+      console.error("Failed to join team:", error);
     }
   };
 
@@ -237,14 +264,15 @@ const LoginPage: React.FC = () => {
     setShowSnackbar(false);
   };
 
-  const getTeamNameError = () => {
-    if (!teamName) return "";
-    return validateTeamName(teamName);
+  const getPlayerNameError = () => {
+    if (!playerName) return "";
+    return validatePlayerName(playerName);
   };
 
   if (isAuthenticated && team) {
     return <Navigate to={`/game/${sessionId}/leaderboard`} />;
   }
+
   return (
     <Box
       sx={{
@@ -261,14 +289,43 @@ const LoginPage: React.FC = () => {
         backgroundRepeat: "no-repeat",
         padding: 2,
         overflowY: "auto",
+        position: "relative",
       }}
     >
+      {/* Session Branding (Top Right) */}
+      {(session?.companyLogo || session?.companyName) && (
+        <Box 
+          sx={{ 
+            position: "absolute",
+            top: 16,
+            right: 16,
+            display: "flex", 
+            alignItems: "center", 
+            backgroundColor: "rgba(255, 255, 255, 0.8)",
+            padding: "8px 12px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            gap: 1,
+            zIndex: 10
+          }}
+        >
+          {session?.companyName && (
+            <Typography variant="body2" sx={{ fontWeight: "bold", color: "black", fontSize: "14px" }}>
+              {session.companyName}
+            </Typography>
+          )}
+          {session?.companyLogo && (
+            <Box component="img" src={session.companyLogo} alt="Company Logo" sx={{ height: "32px", objectFit: "contain", borderRadius: "4px" }} />
+          )}
+        </Box>
+      )}
+
       {/* Main Content */}
       <Box
         sx={{
           backgroundColor: "primary.light",
           borderRadius: "20px",
-          padding: "12px",
+          padding: "16px",
           width: "90%",
           maxWidth: "400px",
           boxShadow: "6.42px 6.42px 1.83px 0px #00000033",
@@ -296,14 +353,14 @@ const LoginPage: React.FC = () => {
             gap: 2.5,
           }}
         >
-          {/* Team Name Input */}
+          {/* Player Name Input */}
           <TextField
-            placeholder="Enter Team Name"
+            placeholder="Enter Player Name"
             variant="outlined"
-            value={teamName}
-            onChange={(e) => handleTeamNameChange(e.target.value)}
-            error={!!getTeamNameError()}
-            helperText={getTeamNameError() || ""}
+            value={playerName}
+            onChange={(e) => handlePlayerNameChange(e.target.value)}
+            error={!!getPlayerNameError()}
+            helperText={getPlayerNameError() || ""}
             sx={{
               "& .MuiInputBase-input": {
                 color: theme.palette.primary.main,
@@ -315,7 +372,28 @@ const LoginPage: React.FC = () => {
             }}
           />
 
-          {/* Team Number Selection */}
+          {/* Role Dropdown */}
+          <FormControl variant="outlined" fullWidth>
+            <Select
+              value={playerRole}
+              onChange={(e) => setPlayerRole(e.target.value as any)}
+              displayEmpty
+              sx={{
+                borderRadius: 1,
+                backgroundColor: "white",
+                "& .MuiInputBase-input": {
+                  color: theme.palette.primary.main,
+                },
+              }}
+            >
+              <MenuItem value="BUZZER_PERSON" disabled={selectedTeamHasBuzzer}>
+                {selectedTeamHasBuzzer ? "Buzzer Person (Already taken)" : "Buzzer Person"}
+              </MenuItem>
+              <MenuItem value="TEAM_MEMBER">Team Member</MenuItem>
+            </Select>
+          </FormControl>
+
+          {/* Team Dropdown Selection */}
           <FormControl variant="outlined" fullWidth>
             <Select
               value={selectedTeamNumber}
@@ -351,7 +429,7 @@ const LoginPage: React.FC = () => {
                   </MenuItem>
                 ))
               ) : (
-                <MenuItem disabled>All teams already joined</MenuItem>
+                <MenuItem disabled>No teams configured</MenuItem>
               )}
             </Select>
           </FormControl>
@@ -362,8 +440,8 @@ const LoginPage: React.FC = () => {
             onClick={handleStart}
             disabled={
               !sessionId ||
-              !teamName.trim() ||
-              !!getTeamNameError() ||
+              !playerName.trim() ||
+              !!getPlayerNameError() ||
               availableTeams.length === 0 ||
               isCreating
             }

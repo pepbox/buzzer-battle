@@ -10,11 +10,12 @@ import { RootState } from "../../../app/store";
 import Loader from "../../../components/ui/Loader";
 import Error from "../../../components/ui/Error";
 import { websocketService } from "../../../services/websocket/websocketService";
-import { Typography, Backdrop, CircularProgress } from "@mui/material";
+import { Typography, Backdrop, CircularProgress, useTheme } from "@mui/material";
 
 // Admin-controlled buzzer round - no timer, admin clicks "Allow Top Team" to proceed
 
 const BuzzerRound: React.FC = () => {
+  const theme = useTheme();
   const [buzzerPressed, setBuzzerPressed] = useState(false);
   const [buzzerError, setBuzzerError] = useState<string | null>(null);
   const [isLocked, setIsLocked] = useState(false);
@@ -94,8 +95,10 @@ const BuzzerRound: React.FC = () => {
     }
   }, [gameState?.buzzerRoundStartTime]);
 
+  const isBuzzerPerson = team?.playerRole !== "TEAM_MEMBER";
+
   const handleBuzzerPress = async () => {
-    if (buzzerPressed || !team || isPressing || isLocked) return;
+    if (buzzerPressed || !team || isPressing || isLocked || !isBuzzerPerson) return;
 
     setBuzzerPressed(true);
     setBuzzerError(null);
@@ -211,14 +214,43 @@ const BuzzerRound: React.FC = () => {
             marginBottom: "16px",
           }}
         >
-          <Buzzer
-            size="large"
-            onPress={handleBuzzerPress}
-            showPressText={true}
-            disabled={
-              buzzerPressed || isPressing || isLocked || isQuestionTransitioning
-            }
-          />
+          {isBuzzerPerson ? (
+            <Buzzer
+              size="large"
+              onPress={handleBuzzerPress}
+              showPressText={true}
+              disabled={
+                buzzerPressed || isPressing || isLocked || isQuestionTransitioning
+              }
+            />
+          ) : (
+            <Box
+              sx={{
+                backgroundColor: "rgba(255, 255, 255, 0.9)",
+                borderRadius: "16px",
+                padding: "20px 24px",
+                textAlign: "center",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                maxWidth: "360px",
+                width: "100%",
+              }}
+            >
+              <Typography
+                variant="h6"
+                sx={{
+                  color: theme.palette.primary.main,
+                  fontWeight: "bold",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 1.5,
+                }}
+              >
+                <span>⏳</span> Waiting for your team's Buzzer Person to buzz...
+              </Typography>
+            </Box>
+          )}
         </Box>
       </Box>
 

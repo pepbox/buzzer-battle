@@ -12,7 +12,11 @@ const sessionSchema = new Schema<ISession>({
         default: SessionStatus.NOT_STARTED
     },
     sessionName: { type: String, required: true },
+    companyName: { type: String, default: "" },
+    companyLogo: { type: String, default: "" },
     numberOfTeams: { type: Number, default: null },
+    teamMode: { type: String, enum: ['NUMBER', 'COLOR'], default: 'NUMBER' },
+    colorTeams: [{ type: Number }],
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
 }, {

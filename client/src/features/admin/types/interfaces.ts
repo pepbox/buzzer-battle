@@ -8,6 +8,12 @@ export interface AdminUser {
   name: string;
 }
 
+export interface TeamMember {
+  name: string;
+  role: "BUZZER_PERSON" | "TEAM_MEMBER";
+  joinedAt: string;
+}
+
 // Team-based Dashboard Types
 export interface Team {
   _id: string;
@@ -18,6 +24,7 @@ export interface Team {
   rank: number;
   status: "idle" | "answering" | "active";
   responsesCount: number;
+  members?: TeamMember[];
 }
 
 export interface TeamTableProps {
@@ -121,6 +128,8 @@ export interface HeaderData {
   sessionName?: string;
   teamsRegistered?: number;
   totalTeams?: number;
+  teamMode?: "NUMBER" | "COLOR";
+  colorTeams?: number[];
   currentQuestion?: number;
   totalQuestions?: number;
 }

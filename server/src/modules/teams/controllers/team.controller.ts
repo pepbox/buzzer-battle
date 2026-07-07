@@ -26,16 +26,20 @@ export const createTeam = async (
   next: NextFunction,
 ) => {
   try {
-    const { teamNumber, teamName, sessionId } = req.body;
+    const { teamNumber, playerName, playerRole, sessionId } = req.body;
 
     // Validation
-    if (!teamNumber || !teamName || !sessionId) {
+    if (!teamNumber || !playerName || !playerRole || !sessionId) {
       return next(
         new AppError(
-          "Team number, team name, and session ID are required.",
+          "Team number, player name, player role, and session ID are required.",
           400,
         ),
       );
+    }
+
+    if (playerRole !== "BUZZER_PERSON" && playerRole !== "TEAM_MEMBER") {
+      return next(new AppError("Invalid player role.", 400));
     }
 
     // Check if session exists and is not ended
@@ -68,15 +72,18 @@ export const createTeam = async (
     // Create team
     const team = await teamService.createTeam({
       teamNumber,
-      teamName,
+      playerName,
+      playerRole,
       sessionId,
     });
 
-    // Generate JWT token
+    // Generate JWT token including player details
     const accessToken = generateAccessToken({
       id: team._id.toString(),
       role: "TEAM",
       sessionId: team.session.toString(),
+      playerRole,
+      playerName,
     });
 
     // Set session-scoped cookie to avoid stale cross-session auto-login
@@ -107,7 +114,7 @@ export const createTeam = async (
     }
 
     res.status(201).json({
-      message: "Team created successfully.",
+      message: "Team joined successfully.",
       data: {
         team: {
           _id: team._id,
@@ -116,16 +123,21 @@ export const createTeam = async (
           teamScore: team.teamScore,
           joinedAt: team.joinedAt,
           sessionId: team.session,
+          playerRole,
+          playerName,
         },
         accessToken,
       },
     });
   } catch (error: any) {
-    console.error("Error creating team:", error);
-    if (error.message === "Team number already exists in this session") {
+    console.error("Error creating/joining team:", error);
+    if (
+      error.message === "Player name already exists in this team" ||
+      error.message === "Buzzer Person already exists in this team"
+    ) {
       return next(new AppError(error.message, 409));
     }
-    next(new AppError("Failed to create team.", 500));
+    next(new AppError("Failed to join team.", 500));
   }
 };
 
@@ -165,6 +177,8 @@ export const fetchTeam = async (
           teamScore: team.teamScore,
           joinedAt: team.joinedAt,
           sessionId: team.session,
+          playerRole: req.user?.playerRole,
+          playerName: req.user?.playerName,
         },
       },
     });
@@ -224,12 +238,14 @@ export const fetchTotalTeamsInSession = async (
       return next(new AppError("Session ID is required.", 400));
     }
 
-    const totalTeams = await teamService.fetchTotalTeamsInSession(sessionId);
+    const result = await teamService.fetchTotalTeamsInSession(sessionId);
 
     res.status(200).json({
       message: "Total number of teams fetched successfully.",
       data: {
-        totalTeams,
+        totalTeams: result.totalTeams,
+        teamMode: result.teamMode,
+        colorTeams: result.colorTeams,
       },
     });
   } catch (error: any) {
@@ -257,13 +273,14 @@ export const fetchJoinedTeamNumbers = async (
       return next(new AppError("Session ID is required.", 400));
     }
 
-    const joinedTeamNumbers =
-      await teamService.fetchJoinedTeamNumbers(sessionId);
+    const joinedTeamsDetails =
+      await teamService.fetchJoinedTeamsDetails(sessionId);
 
     res.status(200).json({
       message: "Joined team numbers fetched successfully.",
       data: {
-        joinedTeamNumbers,
+        joinedTeamNumbers: joinedTeamsDetails.map((t) => t.teamNumber),
+        joinedTeamsDetails,
       },
     });
   } catch (error: any) {

@@ -7,12 +7,14 @@ export interface AccessTokenPayload {
   id: string;
   role: "USER" | "ADMIN" | "TEAM";
   sessionId: string;
+  playerRole?: "BUZZER_PERSON" | "TEAM_MEMBER";
+  playerName?: string;
 }
 
 export const generateAccessToken = (payload: AccessTokenPayload) => {
-  const { id, role, sessionId } = payload;
+  const { id, role, sessionId, playerRole, playerName } = payload;
   return jwt.sign(
-    { id, role, sessionId },
+    { id, role, sessionId, playerRole, playerName },
     process.env.ACCESS_TOKEN_SECRET as string,
     {
       expiresIn: parseInt(process.env.ACCESS_TOKEN_EXPIRY || "900", 10),

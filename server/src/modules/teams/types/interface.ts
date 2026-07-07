@@ -1,5 +1,11 @@
 import mongoose, { Document } from "mongoose";
 
+export interface ITeamMember {
+    name: string;
+    role: "BUZZER_PERSON" | "TEAM_MEMBER";
+    joinedAt: Date;
+}
+
 export interface ITeam extends Document {
     _id: mongoose.Types.ObjectId;
     teamNumber: number;
@@ -9,4 +15,6 @@ export interface ITeam extends Document {
     totalBuzzerPressCount: number;
     joinedAt: Date;
     session: mongoose.Types.ObjectId;
+    members: ITeamMember[];
 }
+

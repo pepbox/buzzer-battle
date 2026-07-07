@@ -130,6 +130,35 @@ const PresenterView: React.FC = () => {
         </Tooltip>
       </Box>
 
+      {/* Session Branding (Top Right, left of mute button) */}
+      {(session?.data?.companyLogo || session?.data?.companyName) && (
+        <Box 
+          sx={{ 
+            position: "absolute",
+            top: 16,
+            right: 70,
+            display: "flex", 
+            alignItems: "center", 
+            backgroundColor: "rgba(0, 0, 0, 0.6)",
+            padding: "8px 12px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+            gap: 1,
+            zIndex: 1000,
+            border: "1px solid #333"
+          }}
+        >
+          {session?.data?.companyName && (
+            <Box sx={{ fontWeight: "bold", color: "#fff", fontSize: "16px" }}>
+              {session.data.companyName}
+            </Box>
+          )}
+          {session?.data?.companyLogo && (
+            <Box component="img" src={session.data.companyLogo} alt="Company Logo" sx={{ height: "32px", objectFit: "contain", borderRadius: "4px" }} />
+          )}
+        </Box>
+      )}
+
       {/* Audio Unlock Prompt */}
       {showAudioPrompt && (
         <Box

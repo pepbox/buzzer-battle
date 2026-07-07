@@ -28,6 +28,7 @@ import QuizIcon from "@mui/icons-material/Quiz";
 import EditIcon from "@mui/icons-material/Edit";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import ListIcon from "@mui/icons-material/List";
+import BrandingWatermarkIcon from "@mui/icons-material/BrandingWatermark";
 import {
   useAdminLogoutMutation,
   useUpdateNumberOfTeamsMutation,
@@ -37,6 +38,7 @@ import { useAppDispatch, useAppSelector } from "../../../app/rootReducer";
 import { RootState } from "../../../app/store";
 import { clearAdmin } from "../services/adminSlice";
 import CurrentQuestionsModal from "./CurrentQuestionsModal";
+import SessionBrandingModal from "./SessionBrandingModal";
 
 // Dashboard Header Component
 const DashboardHeader: React.FC<DashboardHeaderProps> = ({
@@ -64,15 +66,44 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
+  // Color options constant
+  const COLOR_OPTIONS = [
+    { id: 1, label: "Red" },
+    { id: 2, label: "Green" },
+    { id: 3, label: "Blue" },
+    { id: 4, label: "Yellow" },
+    { id: 5, label: "Orange" },
+    { id: 6, label: "White" },
+    { id: 7, label: "Pink" },
+    { id: 8, label: "Purple" },
+    { id: 9, label: "Maroon" },
+    { id: 10, label: "Light Blue" },
+    { id: 11, label: "Silver" },
+    { id: 12, label: "Brown" },
+    { id: 13, label: "Indigo" },
+    { id: 14, label: "Olive Green" }
+  ];
+
   // State for edit teams modal
-  const [editTeamsModal, setEditTeamsModal] = useState({
+  const [editTeamsModal, setEditTeamsModal] = useState<{
+    open: boolean;
+    value: string;
+    mode: "NUMBER" | "COLOR";
+    colors: number[];
+  }>({
     open: false,
     value: "",
+    mode: "NUMBER",
+    colors: [],
   });
 
   // State for current questions modal
   const [currentQuestionsModalOpen, setCurrentQuestionsModalOpen] =
     useState(false);
+
+  // State for session branding modal
+  const [brandingModalOpen, setBrandingModalOpen] = useState(false);
+  const sessionData = useAppSelector((state: RootState) => state.session.session);
 
   const handleLogout = () => {
     AdminLogout({})
@@ -101,6 +132,8 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     setEditTeamsModal({
       open: true,
       value: data?.totalTeams?.toString() || "",
+      mode: data?.teamMode || "NUMBER",
+      colors: data?.colorTeams || [],
     });
   };
 
@@ -108,16 +141,29 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     setEditTeamsModal({
       open: false,
       value: "",
+      mode: "NUMBER",
+      colors: [],
     });
   };
 
   const handleSaveNumberOfTeams = () => {
     const numberOfTeams = parseInt(editTeamsModal.value);
-    if (isNaN(numberOfTeams) || numberOfTeams < 1) {
+    const mode = editTeamsModal.mode;
+    const colors = editTeamsModal.colors;
+
+    if (mode === "NUMBER" && (isNaN(numberOfTeams) || numberOfTeams < 1)) {
+      return;
+    }
+    
+    if (mode === "COLOR" && colors.length === 0) {
       return;
     }
 
-    UpdateNumberOfTeams({ numberOfTeams })
+    UpdateNumberOfTeams({ 
+      numberOfTeams: mode === "COLOR" ? colors.length : numberOfTeams, 
+      teamMode: mode, 
+      colorTeams: colors 
+    } as any)
       .unwrap()
       .then(() => {
         handleCloseTeamsModal();
@@ -207,6 +253,27 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               }}
             >
               Presenter View
+            </Box>
+          </Button>
+
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<BrandingWatermarkIcon />}
+            onClick={() => setBrandingModalOpen(true)}
+            sx={{
+              textTransform: "none",
+              borderRadius: "8px",
+              fontWeight: 500,
+              minWidth: isMobile ? "auto" : "fit-content",
+            }}
+          >
+            <Box
+              sx={{
+                display: { xs: "none", sm: "inline" },
+              }}
+            >
+              Session Branding
             </Box>
           </Button>
 
@@ -461,18 +528,66 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       >
         <DialogTitle>Edit Number of Teams</DialogTitle>
         <DialogContent>
-          <TextField
-            autoFocus
-            fullWidth
-            label="Number of Teams"
-            type="number"
-            value={editTeamsModal.value}
-            onChange={(e) =>
-              setEditTeamsModal({ ...editTeamsModal, value: e.target.value })
-            }
-            sx={{ mt: 2 }}
-            inputProps={{ min: 1 }}
-          />
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Team Mode
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+              <Button
+                variant={editTeamsModal.mode === "NUMBER" ? "contained" : "outlined"}
+                onClick={() => setEditTeamsModal({ ...editTeamsModal, mode: "NUMBER" })}
+              >
+                Number Mode
+              </Button>
+              <Button
+                variant={editTeamsModal.mode === "COLOR" ? "contained" : "outlined"}
+                onClick={() => setEditTeamsModal({ ...editTeamsModal, mode: "COLOR" })}
+              >
+                Color Mode
+              </Button>
+            </Box>
+
+            {editTeamsModal.mode === "NUMBER" ? (
+              <TextField
+                autoFocus
+                fullWidth
+                label="Number of Teams"
+                type="number"
+                value={editTeamsModal.value}
+                onChange={(e) =>
+                  setEditTeamsModal({ ...editTeamsModal, value: e.target.value })
+                }
+                inputProps={{ min: 1 }}
+              />
+            ) : (
+              <Box>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Select colors to create teams for
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  {COLOR_OPTIONS.map((color) => {
+                    const isSelected = editTeamsModal.colors.includes(color.id);
+                    return (
+                      <Button
+                        key={color.id}
+                        variant={isSelected ? "contained" : "outlined"}
+                        color={isSelected ? "primary" : "inherit"}
+                        size="small"
+                        onClick={() => {
+                          const newColors = isSelected
+                            ? editTeamsModal.colors.filter((c) => c !== color.id)
+                            : [...editTeamsModal.colors, color.id];
+                          setEditTeamsModal({ ...editTeamsModal, colors: newColors });
+                        }}
+                      >
+                        {color.label}
+                      </Button>
+                    );
+                  })}
+                </Box>
+              </Box>
+            )}
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseTeamsModal}>Cancel</Button>
@@ -486,7 +601,6 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         </DialogActions>
       </Dialog>
 
-      {/*Current Questions Modal */}
       <CurrentQuestionsModal
         open={currentQuestionsModalOpen}
         onClose={() => setCurrentQuestionsModalOpen(false)}
@@ -494,6 +608,14 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         questionLookup={questionLookup}
         onSave={onSaveQuestions || (async () => {})}
         onEdit={onEditQuestion || (() => {})}
+      />
+
+      {/* Session Branding Modal */}
+      <SessionBrandingModal
+        open={brandingModalOpen}
+        onClose={() => setBrandingModalOpen(false)}
+        initialCompanyName={sessionData?.companyName || ""}
+        initialCompanyLogo={sessionData?.companyLogo || ""}
       />
     </>
   );

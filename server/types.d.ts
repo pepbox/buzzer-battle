@@ -9,6 +9,8 @@ declare global {
         id: string;
         role: 'USER' | 'ADMIN' | 'TEAM';
         sessionId: string;
+        playerRole?: 'BUZZER_PERSON' | 'TEAM_MEMBER';
+        playerName?: string;
       };
     }
     namespace Multer {

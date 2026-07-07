@@ -6,6 +6,7 @@ import SessionService from "../services/session.service";
 import { SessionEmitters } from "../../../services/socket/sessionEmitters";
 import { Events } from "../../../services/socket/enums/Events";
 import AdminServices from "../../admin/services/admin.service";
+import FileService from "../../files/services/fileService";
 import axios from "axios";
 // import PlayerService from "../../players/services/player.service";
 // import { Player } from "../../players/models/player.model";
@@ -181,3 +182,40 @@ export const updateSessionServer = async (
         next(new AppError("Failed to update session server.", 500));
     }
 };
+
+export const uploadSessionLogo = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        if (!req.file) {
+            return next(new AppError("No file uploaded.", 400));
+        }
+
+        const file = req.file as any;
+        const savedFile = await FileService.uploadFile({
+            originalName: file.originalname,
+            fileName: file.key || file.originalname,
+            size: file.size,
+            mimetype: file.mimetype,
+            location: file.location || "",
+            bucket: file.bucket || "",
+            etag: file.etag || "",
+        });
+
+        const fileUrl = savedFile.location || `${process.env.BACKEND_URL}/uploads/session-logos/${savedFile.fileName}`;
+
+        res.status(200).json({
+            message: "Logo uploaded successfully.",
+            data: {
+                fileUrl: fileUrl,
+            },
+            success: true,
+        });
+    } catch (error) {
+        console.error("Error uploading logo:", error);
+        next(new AppError("Failed to upload logo.", 500));
+    }
+};
+

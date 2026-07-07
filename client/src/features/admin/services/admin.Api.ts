@@ -29,6 +29,8 @@ export interface DashboardResponse {
       questionTimeLimit: number;
       answerTimeLimit: number;
       numberOfTeams: number;
+      teamMode?: "NUMBER" | "COLOR";
+      colorTeams?: number[];
       totalQuestions: number;
     };
     gameState: {
