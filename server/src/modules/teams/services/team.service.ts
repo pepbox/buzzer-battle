@@ -288,6 +288,6 @@ export default class TeamService {
       throw new Error("Team not found");
     }
 
-    return team;
+    return team as unknown as ITeam;
   }
 }

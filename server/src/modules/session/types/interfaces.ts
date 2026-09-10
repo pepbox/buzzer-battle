@@ -1,8 +1,8 @@
-import { Document } from "mongoose";
+import mongoose, { Document } from "mongoose";
 import { SessionStatus } from "./enums";
 
 export interface ISession extends Document {
-    _id: string;
+    _id: mongoose.Types.ObjectId;
     sessionName: string;
     companyName?: string;
     companyLogo?: string;
