@@ -19,8 +19,11 @@ import {
   SelectChangeEvent,
   Typography,
   Paper,
+  Switch,
 } from "@mui/material";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
+import LockIcon from "@mui/icons-material/Lock";
 import { useNavigate, useParams } from "react-router-dom";
 import normalBg from "../../../assets/background/normal_bg.webp";
 import RemoteTeamInfo from "../components/RemoteTeamInfo";
@@ -36,7 +39,12 @@ import {
   useSetAnsweringTeam,
   useShowHint,
 } from "../services/adminRemoteApi";
-import { useFetchTeamDashboardQuery } from "../services/admin.Api";
+import {
+  useFetchTeamDashboardQuery,
+  useUpdateSessionQuestionsMutation,
+  useUpdateQuestionMutation,
+} from "../services/admin.Api";
+import { useFetchSessionQuestionsStatusQuery } from "../../session/services/session.api";
 import {
   useFetchGameStateQuery,
   useMarkAnswerMutation,
@@ -75,6 +83,18 @@ const RemoteControl: React.FC = () => {
   const [attemptedTeamIds, setAttemptedTeamIds] = useState<string[]>([]);
   const [questionPreviewOpen, setQuestionPreviewOpen] = useState(false);
 
+  // Question list and drag-drop states
+  const [questionsListOpen, setQuestionsListOpen] = useState(false);
+  const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
+  const [localQuestionsList, setLocalQuestionsList] = useState<any[]>([]);
+
+  // Next question preview modal states
+  const [nextQuestionPreviewOpen, setNextQuestionPreviewOpen] = useState(false);
+  const [nextQuestionToggles, setNextQuestionToggles] = useState<{
+    keepBuzzer: boolean;
+    hideFromUsers: boolean;
+  }>({ keepBuzzer: true, hideFromUsers: false });
+
   // Fetch game state
   const {
     data: gameStateData,
@@ -92,6 +112,16 @@ const RemoteControl: React.FC = () => {
   // Fetch buzzer leaderboard (to check if 2nd team exists)
   const { data: buzzerLeaderboardData } = useFetchBuzzerLeaderboardQuery();
 
+  // Extract game state data
+  const gameState = gameStateData?.data?.gameState;
+  const currentQuestionIndex = gameState?.currentQuestionIndex ?? -1;
+  const totalQuestions = session?.questions?.length || 0;
+  const gameStatus = gameState?.gameStatus || "paused";
+  const displayGameStatus =
+    gameStatus === "buzzer_round" ? "Playing" : gameStatus;
+  const displayQuestionNumber =
+    totalQuestions > 0 ? Math.max(0, currentQuestionIndex + 1) : 0;
+
   // Action hooks
   const { pauseGame, isLoading: pauseLoading } = usePauseGame();
   const { resumeGame, isLoading: resumeLoading } = useResumeGame();
@@ -103,9 +133,72 @@ const RemoteControl: React.FC = () => {
   const { showHint, isLoading: showHintLoading } = useShowHint();
   const [markAnswer, { isLoading: markAnswerLoading }] =
     useMarkAnswerMutation();
+  const [updateSessionQuestions] = useUpdateSessionQuestionsMutation();
+  const [updateQuestion, { isLoading: isUpdatingQuestion }] = useUpdateQuestionMutation();
+
   const [selectedTeamIdForNoBuzzer, setSelectedTeamIdForNoBuzzer] =
     useState("");
   const [hintConfirmOpen, setHintConfirmOpen] = useState(false);
+
+  // Fetch session questions status list
+  const { data: questionsStatusData } = useFetchSessionQuestionsStatusQuery(undefined, {
+    skip: !sessionId,
+  });
+
+  useEffect(() => {
+    if (questionsStatusData?.data) {
+      setLocalQuestionsList(questionsStatusData.data);
+    }
+  }, [questionsStatusData]);
+
+  // Next question preview calculation
+  const nextQuestionItem = useMemo(() => {
+    if (currentQuestionIndex + 1 >= 0 && currentQuestionIndex + 1 < localQuestionsList.length) {
+      return localQuestionsList[currentQuestionIndex + 1];
+    }
+    return null;
+  }, [currentQuestionIndex, localQuestionsList]);
+
+  // Drag and drop handlers for manual reordering of pending questions
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    const item = localQuestionsList[index];
+    if (item.status !== "Pending") {
+      e.preventDefault();
+      return;
+    }
+    setDraggedItemIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedItemIndex === null || draggedItemIndex === targetIndex) return;
+
+    const targetItem = localQuestionsList[targetIndex];
+    if (targetItem.status !== "Pending") return;
+
+    const newList = [...localQuestionsList];
+    const [draggedItem] = newList.splice(draggedItemIndex, 1);
+    newList.splice(targetIndex, 0, draggedItem);
+
+    setLocalQuestionsList(newList);
+    setDraggedItemIndex(null);
+
+    try {
+      const questionIds = newList.map((q) => q._id);
+      await updateSessionQuestions({ questions: questionIds }).unwrap();
+      showSnackbar("Questions reordered successfully", "success");
+    } catch (err: any) {
+      showSnackbar(err?.data?.message || "Failed to reorder questions", "error");
+      if (questionsStatusData?.data) {
+        setLocalQuestionsList(questionsStatusData.data);
+      }
+    }
+  };
 
   const isAnyLoading =
     pauseLoading ||
@@ -117,15 +210,6 @@ const RemoteControl: React.FC = () => {
     setTeamLoading ||
     showHintLoading;
 
-  // Extract game state data
-  const gameState = gameStateData?.data?.gameState;
-  const currentQuestionIndex = gameState?.currentQuestionIndex ?? -1;
-  const totalQuestions = session?.questions?.length || 0;
-  const gameStatus = gameState?.gameStatus || "paused";
-  const displayGameStatus =
-    gameStatus === "buzzer_round" ? "Playing" : gameStatus;
-  const displayQuestionNumber =
-    totalQuestions > 0 ? Math.max(0, currentQuestionIndex + 1) : 0;
   const currentAnsweringTeamRaw = gameState?.currentAnsweringTeam;
 
   // Get actual question ID from the current question
@@ -375,13 +459,54 @@ const RemoteControl: React.FC = () => {
   };
 
   const handleNextQuestion = async () => {
+    // If no next question exists, or we have already ended the game, call nextQuestion() directly
+    if (currentQuestionIndex + 1 >= totalQuestions) {
+      try {
+        const result = await nextQuestion().unwrap();
+        if (result.data.gameEnded) {
+          showSnackbar("Game completed! All questions done.", "success");
+        }
+      } catch (error: any) {
+        showSnackbar(
+          error?.data?.message || "Failed to move to next question",
+          "error",
+        );
+      }
+      return;
+    }
+
+    // Set initial toggles of next question
+    if (nextQuestionItem) {
+      setNextQuestionToggles({
+        keepBuzzer: nextQuestionItem.keepBuzzer !== false,
+        hideFromUsers: nextQuestionItem.hideFromUsers === true,
+      });
+      setNextQuestionPreviewOpen(true);
+    }
+  };
+
+  const handleConfirmNextQuestion = async () => {
+    if (!nextQuestionItem) return;
+
     try {
+      // Step 1: Save the updated toggles to the question template
+      const { index, status, _id, ...cleanQuestionData } = nextQuestionItem;
+      await updateQuestion({
+        questionId: nextQuestionItem._id,
+        payload: {
+          ...cleanQuestionData,
+          keepBuzzer: nextQuestionToggles.keepBuzzer,
+          hideFromUsers: nextQuestionToggles.hideFromUsers,
+        },
+      }).unwrap();
+
+      // Step 2: Call the next question state transition
       const result = await nextQuestion().unwrap();
+      setNextQuestionPreviewOpen(false);
 
       if (result.data.gameEnded) {
         showSnackbar("Game completed! All questions done.", "success");
       } else {
-        // Check if this was the first question (game start)
         if (currentQuestionIndex === -1) {
           showSnackbar("Game started! Buzzer round active.", "success");
         } else {
@@ -391,7 +516,7 @@ const RemoteControl: React.FC = () => {
       }
     } catch (error: any) {
       showSnackbar(
-        error?.data?.message || "Failed to move to next question",
+        error?.data?.message || "Failed to update question or move to next question",
         "error",
       );
     }
@@ -589,6 +714,8 @@ const RemoteControl: React.FC = () => {
               <Chip
                 label={`Question: ${displayQuestionNumber}/${totalQuestions}`}
                 variant="outlined"
+                clickable
+                onClick={() => setQuestionsListOpen(true)}
               />
               <Chip
                 label={`Buzzer: ${currentQuestionKeepBuzzer === false ? "Off" : "On"}`}
@@ -812,6 +939,224 @@ const RemoteControl: React.FC = () => {
             disabled={isAnyLoading}
           >
             Confirm & Deduct
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Questions Index List & Drag-and-Drop Reordering Dialog */}
+      <Dialog
+        open={questionsListOpen}
+        onClose={() => setQuestionsListOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
+          Questions Index List
+        </DialogTitle>
+        <DialogContent sx={{ p: 2 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Drag and drop upcoming questions (Pending status) to reorder them manually. Completed or Skipped questions cannot be reordered.
+          </Typography>
+          <List sx={{ display: "flex", flexDirection: "column", gap: 1, p: 0 }}>
+            {localQuestionsList.map((item, idx) => {
+              const isDraggable = item.status === "Pending";
+              const isCurrent = item.index === currentQuestionIndex;
+
+              return (
+                <ListItem
+                  key={item._id}
+                  draggable={isDraggable}
+                  onDragStart={(e) => handleDragStart(e, idx)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, idx)}
+                  onDragEnd={() => setDraggedItemIndex(null)}
+                  sx={{
+                    border: "1px solid",
+                    borderColor: isCurrent
+                      ? "primary.main"
+                      : draggedItemIndex === idx
+                      ? "action.selected"
+                      : "divider",
+                    borderRadius: "8px",
+                    backgroundColor: isCurrent
+                      ? "rgba(59, 130, 246, 0.04)"
+                      : isDraggable
+                      ? "background.paper"
+                      : "action.hover",
+                    opacity: isDraggable ? 1 : 0.8,
+                    cursor: isDraggable ? "grab" : "not-allowed",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    py: 1,
+                    px: 1.5,
+                    userSelect: "none",
+                    transition: "all 0.2s ease",
+                    "&:hover": isDraggable ? {
+                      borderColor: "primary.light",
+                      backgroundColor: "rgba(59, 130, 246, 0.02)",
+                    } : {},
+                  }}
+                >
+                  {isDraggable ? (
+                    <DragIndicatorIcon color="action" sx={{ cursor: "grab" }} />
+                  ) : (
+                    <LockIcon color="disabled" fontSize="small" />
+                  )}
+                  
+                  <Typography variant="body2" fontWeight={700} sx={{ minWidth: 20 }}>
+                    {idx + 1}.
+                  </Typography>
+
+                  <ListItemText
+                    primary={
+                      <Typography
+                        variant="body2"
+                        fontWeight={isCurrent ? 700 : 500}
+                        sx={{
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          maxWidth: "180px",
+                        }}
+                      >
+                        {item.questionText || item.questionContent?.text || "No question text"}
+                      </Typography>
+                    }
+                    secondary={`Score: ${item.score || 0} pts | Buzzer: ${item.keepBuzzer !== false ? "On" : "Off"}`}
+                  />
+                  
+                  <Box>
+                    <Chip
+                      size="small"
+                      label={item.status}
+                      color={
+                        item.status === "Completed"
+                          ? "success"
+                          : item.status === "Skipped"
+                          ? "error"
+                          : "default"
+                      }
+                      variant={isCurrent ? "filled" : "outlined"}
+                    />
+                  </Box>
+                </ListItem>
+              );
+            })}
+          </List>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setQuestionsListOpen(false)} variant="contained">
+            Done
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Next Question Preview & Toggles Dialog */}
+      <Dialog
+        open={nextQuestionPreviewOpen}
+        onClose={() => setNextQuestionPreviewOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          Next Question Preview
+        </DialogTitle>
+        <DialogContent>
+          {nextQuestionItem && (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5, mt: 1 }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                  QUESTION TEXT
+                </Typography>
+                <Typography variant="body1" sx={{ mt: 0.5, fontWeight: 500 }}>
+                  {nextQuestionItem.questionText ||
+                    nextQuestionItem.questionContent?.text ||
+                    "No question text"}
+                </Typography>
+              </Box>
+
+              {nextQuestionItem.options && nextQuestionItem.options.length > 0 && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                    OPTIONS
+                  </Typography>
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, mt: 0.5 }}>
+                    {nextQuestionItem.options.map((opt: any, idx: number) => (
+                      <Typography key={opt.optionId} variant="body2">
+                        {String.fromCharCode(97 + idx)}) {opt.optionText}
+                      </Typography>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
+              <Box sx={{ borderTop: "1px solid", borderColor: "divider", pt: 2 }}>
+                <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                  CONTROLS
+                </Typography>
+                
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Box sx={{ maxWidth: "80%" }}>
+                      <Typography variant="body2" fontWeight={600}>
+                        Keep Buzzer
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Teams must buzz to answer. If disabled, admin selects team.
+                      </Typography>
+                    </Box>
+                    <Switch
+                      checked={nextQuestionToggles.keepBuzzer}
+                      onChange={(e) =>
+                        setNextQuestionToggles((prev) => ({
+                          ...prev,
+                          keepBuzzer: e.target.checked,
+                        }))
+                      }
+                      color="primary"
+                    />
+                  </Box>
+
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Box sx={{ maxWidth: "80%" }}>
+                      <Typography variant="body2" fontWeight={600}>
+                        Hide Question From Users
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Question text/media will only show on the Presenter screen.
+                      </Typography>
+                    </Box>
+                    <Switch
+                      checked={nextQuestionToggles.hideFromUsers}
+                      onChange={(e) =>
+                        setNextQuestionToggles((prev) => ({
+                          ...prev,
+                          hideFromUsers: e.target.checked,
+                        }))
+                      }
+                      color="primary"
+                    />
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setNextQuestionPreviewOpen(false)} color="inherit">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmNextQuestion}
+            variant="contained"
+            disabled={isAnyLoading || isUpdatingQuestion}
+            sx={{
+              backgroundColor: "#3B82F6",
+              "&:hover": { backgroundColor: "#2563EB" },
+            }}
+          >
+            {isUpdatingQuestion ? "Saving..." : "Confirm & Move"}
           </Button>
         </DialogActions>
       </Dialog>

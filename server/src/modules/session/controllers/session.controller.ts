@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import AppError from "../../../utils/appError"; // Adjust path as needed
-import { ISession } from "../types/interfaces";
+import { ISession, Session } from "../models/session.model";
 import { SessionStatus } from "../types/enums";
 import SessionService from "../services/session.service";
 import { SessionEmitters } from "../../../services/socket/sessionEmitters";
@@ -10,6 +10,9 @@ import FileService from "../../files/services/fileService";
 import axios from "axios";
 // import PlayerService from "../../players/services/player.service";
 // import { Player } from "../../players/models/player.model";
+import { GameState } from "../../gameState/models/gameState.model";
+import { QuestionResponse } from "../../questions/models/question.response.model";
+import { Team } from "../../teams/models/team.model";
 
 
 const sessionService = new SessionService();
@@ -218,4 +221,70 @@ export const uploadSessionLogo = async (
         next(new AppError("Failed to upload logo.", 500));
     }
 };
+
+export const getSessionQuestionsStatus = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const sessionId = req.user?.sessionId;
+        if (!sessionId) {
+            return next(new AppError("Session ID is required.", 400));
+        }
+
+        const session = await Session.findById(sessionId).populate("questions");
+        if (!session) {
+            return next(new AppError("Session not found.", 404));
+        }
+
+        const gameState = await GameState.findOne({ sessionId });
+        const currentQuestionIndex = gameState ? gameState.currentQuestionIndex : -1;
+
+        const teams = await Team.find({ sessionId });
+        const teamIds = teams.map((t) => t._id);
+
+        const questionIds = session.questions.map((q: any) => q._id);
+        const correctResponses = await QuestionResponse.find({
+            questionId: { $in: questionIds },
+            team: { $in: teamIds },
+            isCorrect: true,
+        });
+
+        const completedQuestionIds = new Set(
+            correctResponses.map((r) => r.questionId.toString())
+        );
+
+        const questionsWithStatus = session.questions.map((q: any, index: number) => {
+            let status: "Completed" | "Skipped" | "Pending" = "Pending";
+            const qIdStr = q._id.toString();
+
+            if (currentQuestionIndex === -1) {
+                status = "Pending";
+            } else if (index < currentQuestionIndex) {
+                status = completedQuestionIds.has(qIdStr) ? "Completed" : "Skipped";
+            } else if (index === currentQuestionIndex) {
+                status = completedQuestionIds.has(qIdStr) ? "Completed" : "Pending";
+            } else {
+                status = "Pending";
+            }
+
+            return {
+                ...q.toObject(),
+                index,
+                status,
+            };
+        });
+
+        res.status(200).json({
+            message: "Session questions status fetched successfully.",
+            data: questionsWithStatus,
+            success: true,
+        });
+    } catch (error) {
+        console.error("Error fetching session questions status:", error);
+        next(new AppError("Failed to fetch session questions status.", 500));
+    }
+};
+
 

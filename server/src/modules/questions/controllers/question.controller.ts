@@ -369,6 +369,8 @@ export const updateQuestion = async (
       hint,
       hintPenalty: hintPenalty !== undefined ? Number(hintPenalty) : undefined,
       userId: req.user?.id,
+      userRole: req.user?.role,
+      sessionId: req.user?.sessionId,
     });
 
     res.status(200).json({

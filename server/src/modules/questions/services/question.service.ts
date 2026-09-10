@@ -146,6 +146,8 @@ export default class QuestionService {
       hint?: any;
       hintPenalty?: number;
       userId?: string;
+      userRole?: string;
+      sessionId?: string;
     },
   ): Promise<IQuestion> {
     const query = Question.findById(questionId);
@@ -159,9 +161,31 @@ export default class QuestionService {
     }
 
     const requesterId = input.userId || "superadmin";
+    const requesterRole = input.userRole;
 
-    // Authorization check: Admins can only edit their own questions (unless superadmin)
-    if (requesterId !== "superadmin" && question.createdBy !== requesterId) {
+    console.log("=== DEBUG PERMISSIONS ===");
+    console.log("requesterId:", requesterId);
+    console.log("requesterRole:", requesterRole);
+    console.log("question.createdBy:", question.createdBy);
+    console.log("==========================");
+
+    // Authorization check: 
+    // 1. Superadmin has full access.
+    // 2. The creator of the question has full access.
+    // 3. An ADMIN user can update the question if it is part of their active session.
+    let isAuthorized = requesterId === "superadmin" || question.createdBy === requesterId;
+
+    if (!isAuthorized && requesterRole === "ADMIN" && input.sessionId) {
+      const sessionDoc = await Session.findById(input.sessionId);
+      if (
+        sessionDoc &&
+        sessionDoc.questions.some((qId) => qId.toString() === questionId.toString())
+      ) {
+        isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
       throw new Error("You do not have permission to update this question");
     }
 
@@ -169,11 +193,24 @@ export default class QuestionService {
       const normalizedFolder = (input.folder || "General").trim();
 
       // Verify folder write access: other admins cannot add questions to folders they don't own
-      if (requesterId !== "superadmin") {
+      let hasFolderAccess = requesterId === "superadmin";
+      if (!hasFolderAccess) {
         const folderDoc = await QuestionFolder.findOne({ name: normalizedFolder });
-        if (folderDoc && folderDoc.createdBy !== requesterId) {
-          throw new Error("You do not have permission to write to this folder");
+        if (!folderDoc || folderDoc.createdBy === requesterId) {
+          hasFolderAccess = true;
+        } else if (requesterRole === "ADMIN" && input.sessionId) {
+          const sessionDoc = await Session.findById(input.sessionId);
+          if (
+            sessionDoc &&
+            sessionDoc.questions.some((qId) => qId.toString() === questionId.toString())
+          ) {
+            hasFolderAccess = true;
+          }
         }
+      }
+
+      if (!hasFolderAccess) {
+        throw new Error("You do not have permission to write to this folder");
       }
 
       await QuestionFolder.findOneAndUpdate(
@@ -495,7 +532,11 @@ export default class QuestionService {
       return null;
     }
 
-    const questionId = sessionData.questions[questionIndex];
+    const questionDoc = sessionData.questions[questionIndex];
+    if (!questionDoc) {
+      return null;
+    }
+    const questionId = (questionDoc as any)._id || questionDoc;
     const questionQuery = Question.findById(questionId);
     if (this.session) {
       questionQuery.session(this.session);

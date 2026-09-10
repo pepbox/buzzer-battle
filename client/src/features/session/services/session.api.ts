@@ -41,6 +41,15 @@ export const sessionApi = api.injectEndpoints({
             providesTags: ['Session'],
         }),
 
+        // Fetch populated session questions with status
+        fetchSessionQuestionsStatus: builder.query<any, void>({
+            query: () => ({
+                url: '/session/questions-status',
+                method: 'GET',
+            }),
+            providesTags: ['Session', 'GameState'],
+        }),
+
         // Fetch session by ID (public - no auth required)
         fetchSessionById: builder.query<SessionResponse, string>({
             query: (sessionId) => ({
@@ -80,4 +89,6 @@ export const {
     useLazyFetchSessionByIdQuery,
     useUpdateSessionMutation,
     useUploadSessionLogoMutation,
+    useFetchSessionQuestionsStatusQuery,
+    useLazyFetchSessionQuestionsStatusQuery,
 } = sessionApi;

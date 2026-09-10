@@ -8,6 +8,7 @@ const router = express.Router();
 
 router.put('/update', authenticateUser, asyncHandeler(sessionControllers.updateSession));
 router.get('/getSession', authenticateUser, asyncHandeler(sessionControllers.getSession));
+router.get('/questions-status', authenticateUser, asyncHandeler(sessionControllers.getSessionQuestionsStatus));
 router.post('/upload-logo', authenticateUser, uploadMiddleware.single('logo', {
   maxFileSize: 5 * 1024 * 1024, // 5MB
   allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
