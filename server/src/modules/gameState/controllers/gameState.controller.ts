@@ -9,6 +9,7 @@ import { SessionEmitters } from "../../../services/socket/sessionEmitters";
 import { Events } from "../../../services/socket/enums/Events";
 import { timerManager } from "../../../services/timerManager";
 import { Session } from "../../session/models/session.model";
+import { gamistanLiveState } from "../services/gamistanLiveState";
 
 const gameStateService = new GameStateService();
 const questionService = new QuestionService();
@@ -38,10 +39,16 @@ export const fetchGameState = async (
       gameState = await gameStateService.createGameState(sessionId);
     }
 
+    const liveState = await gamistanLiveState.getState(sessionId);
+    const mergedState = {
+      ...gameState.toObject(),
+      ...liveState,
+    };
+
     res.status(200).json({
       message: "Game state fetched successfully.",
       data: {
-        gameState,
+        gameState: mergedState,
       },
     });
   } catch (error) {
@@ -479,14 +486,129 @@ export const updateGameStateUnified = async (
         }
         break;
 
+      case "TOGGLE_LEADERBOARD":
+      case "SHOW_LEADERBOARD":
+        const isVisible = typeof payload?.isVisible === "boolean"
+          ? payload.isVisible
+          : !existingGameState.isLeaderboardVisible;
+
+        existingGameState.isLeaderboardVisible = isVisible;
+        gameState = await existingGameState.save();
+
+        SessionEmitters.toSession(sessionId, Events.SHOW_LEADERBOARD, {
+          isLeaderboardVisible: gameState.isLeaderboardVisible,
+        });
+
+        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+          gameStatus: gameState.gameStatus,
+          currentQuestionIndex: gameState.currentQuestionIndex,
+          currentAnsweringTeam: gameState.currentAnsweringTeam,
+          isLeaderboardVisible: gameState.isLeaderboardVisible,
+        });
+        break;
+
+      case "TOGGLE_SPIN_WHEEL": {
+        const curLive = await gamistanLiveState.getState(sessionId);
+        const isSpinEnabled = typeof payload?.isEnabled === "boolean"
+          ? payload.isEnabled
+          : !curLive.isSpinWheelEnabled;
+
+        const live = await gamistanLiveState.updateState(sessionId, {
+          isSpinWheelEnabled: isSpinEnabled,
+        });
+
+        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+          isSpinWheelEnabled: live.isSpinWheelEnabled,
+        });
+        break;
+      }
+
+      case "SET_AVAILABLE_CATEGORIES": {
+        if (Array.isArray(payload?.categories)) {
+          const live = await gamistanLiveState.updateState(sessionId, {
+            availableCategories: payload.categories,
+          });
+
+          SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+            availableCategories: live.availableCategories,
+          });
+        }
+        break;
+      }
+
+      case "GRANT_SPIN_PERMISSION": {
+        const live = await gamistanLiveState.updateState(sessionId, {
+          spinPermissionGranted: true,
+          canSpinTeam: payload?.teamName || payload?.teamId || "",
+        });
+
+        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+          spinPermissionGranted: true,
+          canSpinTeam: live.canSpinTeam,
+        });
+        break;
+      }
+
+      case "SPIN_WHEEL_REQUEST": {
+        const curLive = await gamistanLiveState.getState(sessionId);
+        if (!curLive.isSpinWheelEnabled) {
+          return next(new AppError("Spin Wheel is not currently enabled for this session.", 400));
+        }
+
+        const categoriesList = curLive.availableCategories && curLive.availableCategories.length > 0
+          ? curLive.availableCategories
+          : ["Bollywood", "Sports", "Finance", "History", "GK", "Entertainment", "Technology", "Science"];
+
+        const spinIndex = Math.floor(Math.random() * categoriesList.length);
+        const winCategory = categoriesList[spinIndex];
+
+        const live = await gamistanLiveState.updateState(sessionId, {
+          selectedCategory: winCategory,
+          spinPermissionGranted: false,
+        });
+
+        additionalData.category = winCategory;
+
+        SessionEmitters.toSession(sessionId, Events.SPIN_WHEEL_RESULT, {
+          category: winCategory,
+          timestamp: Date.now(),
+        });
+
+        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+          selectedCategory: winCategory,
+          spinPermissionGranted: false,
+        });
+        break;
+      }
+
+      case "SHOW_QUESTION_TO_PARTICIPANTS": {
+        let live = await gamistanLiveState.updateState(sessionId, { isQuestionVisible: true });
+        if (payload?.questionId) {
+          live = await gamistanLiveState.addUsedQuestionId(sessionId, payload.questionId.toString());
+        }
+
+        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+          isQuestionVisible: true,
+          usedQuestionIds: live.usedQuestionIds,
+        });
+        break;
+      }
+
       default:
         return next(new AppError(`Invalid action: ${action}`, 400));
     }
 
+    const currentDoc = gameState || existingGameState;
+    const finalLiveState = await gamistanLiveState.getState(sessionId);
+    const responseGameState = {
+      ...currentDoc.toObject(),
+      ...finalLiveState,
+    };
+
     res.status(200).json({
       message: `Action ${action} completed successfully.`,
       data: {
-        gameState,
+        gameState: responseGameState,
         ...additionalData,
       },
     });
@@ -853,13 +975,22 @@ export const markAnswer = async (
         },
       });
     } else {
+      const wrongPenalty = req.body.penalty !== undefined
+        ? Math.abs(Number(req.body.penalty))
+        : (req.body.negativePoints !== undefined
+          ? Math.abs(Number(req.body.negativePoints))
+          : (req.body.scorePenalty !== undefined ? Math.abs(Number(req.body.scorePenalty)) : 0));
+
+      if (wrongPenalty > 0) {
+        pointsAwarded = -wrongPenalty;
+        await teamService.updateTeamScore(teamId, pointsAwarded);
+      }
+
       // Emit ANSWER_MARKED_WRONG to the session
-      // For no-buzzer questions, return to IDLE so admin can manually select next team.
-      // For buzzer questions, stay in ANSWERING so admin can pass to second team.
       SessionEmitters.toSession(sessionId, Events.ANSWER_MARKED_WRONG, {
         teamId,
         isCorrect: false,
-        pointsAwarded: 0,
+        pointsAwarded,
         timestamp: Date.now(),
       });
 
@@ -882,7 +1013,7 @@ export const markAnswer = async (
           data: {
             gameState: updatedState,
             isCorrect: false,
-            pointsAwarded: 0,
+            pointsAwarded,
             teamId,
           },
         });
@@ -895,7 +1026,7 @@ export const markAnswer = async (
         data: {
           gameState,
           isCorrect: false,
-          pointsAwarded: 0,
+          pointsAwarded,
           teamId,
         },
       });
@@ -911,3 +1042,98 @@ export const markAnswer = async (
     next(new AppError("Failed to mark answer.", 500));
   }
 };
+
+/**
+ * Perform spin wheel request (Participant Buzzer Person or Admin)
+ * POST /api/v1/game-state/spin-wheel
+ * Server validates permissions, selects winning category, updates game state and broadcasts result.
+ */
+export const spinWheelParticipant = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const sessionId = req.user?.sessionId;
+    const user = req.user;
+
+    if (!sessionId) {
+      return next(new AppError("Session ID not found in token.", 401));
+    }
+
+    const liveState = await gamistanLiveState.getState(sessionId);
+    if (!liveState.isSpinWheelEnabled) {
+      return next(new AppError("Spin Wheel is not currently enabled.", 400));
+    }
+
+    const isAdmin = (user as any)?.role === "ADMIN";
+
+    // Spin permission check for non-admin
+    if (!isAdmin && !liveState.spinPermissionGranted) {
+      return next(new AppError("Spin permission has not been granted by the operator.", 403));
+    }
+
+    // Role validation: Only BUZZER_PERSON or ADMIN can spin
+    const isBuzzerPerson =
+      (user as any)?.role === "BUZZER_PERSON" ||
+      (user as any)?.memberRole === "BUZZER_PERSON" ||
+      (user as any)?.playerRole === "BUZZER_PERSON";
+    if (!isAdmin && !isBuzzerPerson) {
+      return next(
+        new AppError(
+          "Only the team's designated Buzzer Person is permitted to spin the wheel.",
+          403,
+        ),
+      );
+    }
+
+    // Team turn validation if canSpinTeam is specified for non-admin
+    if (!isAdmin && liveState.canSpinTeam) {
+      const userTeamId = user?.id || (user as any)?.teamId;
+      const userTeamName = (user as any)?.teamName;
+      if (
+        (!userTeamId || liveState.canSpinTeam.toString() !== userTeamId.toString()) &&
+        (!userTeamName || liveState.canSpinTeam.toString() !== userTeamName.toString())
+      ) {
+        return next(new AppError("It is not your team's turn to spin the wheel.", 403));
+      }
+    }
+
+    const categoriesList = liveState.availableCategories && liveState.availableCategories.length > 0
+      ? liveState.availableCategories
+      : ["Bollywood", "Sports", "Finance", "History", "GK", "Entertainment", "Technology", "Science"];
+
+    const randomIndex = Math.floor(Math.random() * categoriesList.length);
+    const winningCategory = categoriesList[randomIndex];
+
+    const updatedLive = await gamistanLiveState.updateState(sessionId, {
+      selectedCategory: winningCategory,
+      spinPermissionGranted: false,
+    });
+
+    const gameStateDoc = await gameStateService.fetchGameStateBySessionId(sessionId);
+    const mergedState = {
+      ...(gameStateDoc ? gameStateDoc.toObject() : {}),
+      ...updatedLive,
+    };
+
+    SessionEmitters.toSession(sessionId, Events.SPIN_WHEEL_RESULT, {
+      category: winningCategory,
+      timestamp: Date.now(),
+    });
+
+    SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, mergedState);
+
+    res.status(200).json({
+      message: "Spin completed successfully.",
+      data: {
+        category: winningCategory,
+        gameState: mergedState,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error executing spin wheel:", error);
+    next(new AppError("Failed to execute spin wheel.", 500));
+  }
+};
+

@@ -29,11 +29,15 @@ import normalBg from "../../../assets/background/normal_bg.webp";
 import RemoteTeamInfo from "../components/RemoteTeamInfo";
 import RemoteActionButtons from "../components/RemoteActionButtons";
 import RemoteBuzzerStats from "../components/RemoteBuzzerStats";
+import CategorySpinWheelModal from "../components/CategorySpinWheelModal";
 import {
   usePauseGame,
   useResumeGame,
   useNextQuestion,
   useShowAnswer,
+  useToggleLeaderboard,
+  useToggleSpinWheel,
+  useGrantSpinPermission,
   usePassToSecondTeam,
   useAutoSelectFastestTeam,
   useSetAnsweringTeam,
@@ -139,6 +143,47 @@ const RemoteControl: React.FC = () => {
   const [selectedTeamIdForNoBuzzer, setSelectedTeamIdForNoBuzzer] =
     useState("");
   const [hintConfirmOpen, setHintConfirmOpen] = useState(false);
+  const [spinWheelOpen, setSpinWheelOpen] = useState(false);
+
+  const { toggleLeaderboard, isLoading: toggleLeaderboardLoading } = useToggleLeaderboard();
+  const { toggleSpinWheel, isLoading: toggleSpinWheelLoading } = useToggleSpinWheel();
+  const { grantSpinPermission, isLoading: grantSpinLoading } = useGrantSpinPermission();
+
+  const handleToggleLeaderboard = async () => {
+    try {
+      const nextVisibleState = !gameState?.isLeaderboardVisible;
+      await toggleLeaderboard(nextVisibleState).unwrap();
+      showSnackbar(
+        `Leaderboard is now ${nextVisibleState ? "visible to" : "hidden from"} participants.`,
+        "success"
+      );
+    } catch (err: any) {
+      showSnackbar(err?.data?.message || "Failed to toggle leaderboard visibility", "error");
+    }
+  };
+
+  const handleToggleSpinWheelMode = async () => {
+    try {
+      const nextEnabledState = !gameState?.isSpinWheelEnabled;
+      await toggleSpinWheel(nextEnabledState).unwrap();
+      showSnackbar(
+        `Spin Wheel mode is now ${nextEnabledState ? "ENABLED" : "DISABLED"}`,
+        "success"
+      );
+    } catch (err: any) {
+      showSnackbar(err?.data?.message || "Failed to toggle spin wheel mode", "error");
+    }
+  };
+
+  const handleGrantSpinPermission = async () => {
+    try {
+      const targetTeamId = currentAnsweringTeam?._id || (gameState as any)?.currentTurnTeam;
+      await grantSpinPermission(targetTeamId ? targetTeamId.toString() : undefined).unwrap();
+      showSnackbar("Granted Spin Wheel permission to team's Buzzer Person", "success");
+    } catch (err: any) {
+      showSnackbar(err?.data?.message || "Failed to grant spin permission", "error");
+    }
+  };
 
   // Fetch session questions status list
   const { data: questionsStatusData } = useFetchSessionQuestionsStatusQuery(undefined, {
@@ -810,6 +855,13 @@ const RemoteControl: React.FC = () => {
             onMarkCorrect={handleMarkCorrect}
             onMarkWrong={handleMarkWrong}
             onShowHint={() => setHintConfirmOpen(true)}
+            onToggleLeaderboard={handleToggleLeaderboard}
+            isLeaderboardVisible={!!gameState?.isLeaderboardVisible}
+            onOpenSpinWheel={() => setSpinWheelOpen(true)}
+            onToggleSpinWheelMode={handleToggleSpinWheelMode}
+            isSpinWheelEnabled={!!gameState?.isSpinWheelEnabled}
+            onGrantSpinPermission={handleGrantSpinPermission}
+            spinPermissionGranted={!!gameState?.spinPermissionGranted}
             hasHint={
               !!currentQuestionData?.data?.question?.hint?.text ||
               !!currentQuestionData?.data?.question?.hint?.media?.length
@@ -818,7 +870,7 @@ const RemoteControl: React.FC = () => {
             canPassToSecondTeam={canPassToSecondTeam}
             hasFastestTeam={!!buzzerStats?.fastestTeam}
             isAnswerShown={isAnswerShown}
-            isLoading={isAnyLoading}
+            isLoading={isAnyLoading || toggleLeaderboardLoading || toggleSpinWheelLoading || grantSpinLoading}
             lastAnswerWasWrong={lastAnswerWasWrong}
           />
         </Box>
@@ -959,7 +1011,8 @@ const RemoteControl: React.FC = () => {
           </Typography>
           <List sx={{ display: "flex", flexDirection: "column", gap: 1, p: 0 }}>
             {localQuestionsList.map((item, idx) => {
-              const isDraggable = item.status === "Pending";
+              const isUsed = (gameState?.usedQuestionIds || []).includes(item._id);
+              const isDraggable = item.status === "Pending" && !isUsed;
               const isCurrent = item.index === currentQuestionIndex;
 
               return (
@@ -1029,9 +1082,9 @@ const RemoteControl: React.FC = () => {
                   <Box>
                     <Chip
                       size="small"
-                      label={item.status}
+                      label={isUsed ? "Used" : item.status}
                       color={
-                        item.status === "Completed"
+                        isUsed || item.status === "Completed"
                           ? "success"
                           : item.status === "Skipped"
                           ? "error"
@@ -1160,6 +1213,11 @@ const RemoteControl: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <CategorySpinWheelModal
+        open={spinWheelOpen}
+        onClose={() => setSpinWheelOpen(false)}
+      />
 
       <Snackbar
         open={snackbarOpen}

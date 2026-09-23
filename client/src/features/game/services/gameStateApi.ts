@@ -17,6 +17,14 @@ export interface GameState {
   answeringRoundStartTime?: number;
   idleStartTime?: number;
   hintRevealed?: boolean;
+  isLeaderboardVisible?: boolean;
+  isSpinWheelEnabled?: boolean;
+  availableCategories?: string[];
+  canSpinTeam?: string;
+  spinPermissionGranted?: boolean;
+  selectedCategory?: string;
+  usedQuestionIds?: string[];
+  isQuestionVisible?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,6 +38,8 @@ export interface GameStateResponse {
 
 export interface MarkAnswerRequest {
   isCorrect: boolean;
+  penalty?: number;
+  scorePenalty?: number;
 }
 
 export interface MarkAnswerResponse {
@@ -39,6 +49,14 @@ export interface MarkAnswerResponse {
     isCorrect: boolean;
     pointsAwarded: number;
     teamId: string;
+  };
+}
+
+export interface SpinWheelResponse {
+  message: string;
+  data: {
+    category: string;
+    gameState: GameState;
   };
 }
 
@@ -60,6 +78,14 @@ export const gameStateApi = api.injectEndpoints({
       }),
       invalidatesTags: ['GameState'],
     }),
+
+    spinWheel: builder.mutation<SpinWheelResponse, void>({
+      query: () => ({
+        url: '/game-state/spin-wheel',
+        method: 'POST',
+      }),
+      invalidatesTags: ['GameState'],
+    }),
   }),
 });
 
@@ -67,5 +93,6 @@ export const {
   useFetchGameStateQuery,
   useLazyFetchGameStateQuery,
   useMarkAnswerMutation,
+  useSpinWheelMutation,
 } = gameStateApi;
 

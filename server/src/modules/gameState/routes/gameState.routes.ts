@@ -2,10 +2,10 @@ import express from 'express';
 import {
     fetchGameState,
     updateGameStateUnified,
-    // updateGameStatus, 
     moveToNextQuestion,
     validateTimerExpiration,
-    markAnswer
+    markAnswer,
+    spinWheelParticipant
 } from '../controllers/gameState.controller';
 import { authenticateUser, authorizeRoles } from '../../../middlewares/authMiddleware';
 
@@ -17,7 +17,10 @@ router.get('/current', authenticateUser, fetchGameState);
 // Validate timer expiration (Team and Admin can check)
 router.get('/validate-timer', authenticateUser, validateTimerExpiration);
 
-// UNIFIED ENDPOINT - Admin only (NEW - RECOMMENDED)
+// Spin wheel request (Participant Buzzer Person or Admin)
+router.post('/spin-wheel', authenticateUser, spinWheelParticipant);
+
+// UNIFIED ENDPOINT - Admin only
 router.patch('/', authenticateUser, authorizeRoles('ADMIN'), updateGameStateUnified);
 
 // Mark answer as correct/wrong - Admin only (for verbal answer flow)

@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { Box, Alert } from "@mui/material";
+import { Box, Alert, Button, Chip, Typography, Backdrop, CircularProgress, useTheme } from "@mui/material";
 import Question, { QuestionData } from "../../question/components/Question";
 import Buzzer from "../../../components/ui/Buzzer";
 import normalBg from "../../../assets/background/question_bg.webp";
 import { useFetchCurrentQuestionQuery } from "../../question/services/questions.api";
 import { usePressBuzzerMutation } from "../services/buzzerApi";
+import { useSpinWheelMutation } from "../services/gameStateApi";
 import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
 import Loader from "../../../components/ui/Loader";
 import Error from "../../../components/ui/Error";
 import { websocketService } from "../../../services/websocket/websocketService";
-import { Typography, Backdrop, CircularProgress, useTheme } from "@mui/material";
 
 // Admin-controlled buzzer round - no timer, admin clicks "Allow Top Team" to proceed
 
@@ -19,12 +19,16 @@ const BuzzerRound: React.FC = () => {
   const [buzzerPressed, setBuzzerPressed] = useState(false);
   const [buzzerError, setBuzzerError] = useState<string | null>(null);
   const [isLocked, setIsLocked] = useState(false);
+  const [spinWheel, { isLoading: isSpinning }] = useSpinWheelMutation();
 
   // Get current team and game state from Redux
   const team = useAppSelector((state: RootState) => state.team.team);
   const gameState = useAppSelector(
     (state: RootState) => state.gameState.gameState,
   );
+
+  // Press buzzer mutation
+  const [pressBuzzer, { isLoading: isPressing }] = usePressBuzzerMutation();
 
   // Fetch current question
   const {
@@ -34,8 +38,13 @@ const BuzzerRound: React.FC = () => {
     error,
   } = useFetchCurrentQuestionQuery();
 
-  // Press buzzer mutation
-  const [pressBuzzer, { isLoading: isPressing }] = usePressBuzzerMutation();
+  const handleSpinWheel = async () => {
+    try {
+      await spinWheel().unwrap();
+    } catch (err: any) {
+      setBuzzerError(err?.data?.message || "Failed to spin wheel.");
+    }
+  };
 
   const question = questionData?.data?.question;
   const currentQuestionIndex = questionData?.data?.currentQuestionIndex;
@@ -45,7 +54,9 @@ const BuzzerRound: React.FC = () => {
     expectedQuestionIndex >= 0 &&
     currentQuestionIndex !== expectedQuestionIndex;
   const activeQuestion = isQuestionTransitioning ? undefined : question;
-  const isHiddenQuestion = activeQuestion?.hideFromUsers === true;
+  const isHiddenQuestion =
+    activeQuestion?.hideFromUsers === true ||
+    gameState?.isQuestionVisible === false;
 
   const questionDataFormatted: QuestionData = {
     id: activeQuestion?._id || "",
@@ -181,6 +192,65 @@ const BuzzerRound: React.FC = () => {
           position: "relative",
         }}
       >
+        {/* Spin Wheel Section if enabled */}
+        {gameState?.isSpinWheelEnabled && (
+          <Box
+            sx={{
+              width: "100%",
+              maxWidth: "600px",
+              mb: 3,
+              p: 2.5,
+              borderRadius: "16px",
+              backgroundColor: "rgba(255, 255, 255, 0.92)",
+              backdropFilter: "blur(10px)",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 1.5,
+            }}
+          >
+            <Chip
+              label="🎰 SPIN WHEEL MODE ACTIVE"
+              color="secondary"
+              sx={{ fontWeight: "bold", fontSize: "0.85rem" }}
+            />
+            {gameState?.selectedCategory && (
+              <Typography variant="h6" fontWeight="bold" color="primary.main">
+                Selected Category: 🎯 {gameState.selectedCategory}
+              </Typography>
+            )}
+            {gameState?.spinPermissionGranted && (
+              <Box mt={1}>
+                {isBuzzerPerson ? (
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    size="large"
+                    disabled={isSpinning}
+                    onClick={handleSpinWheel}
+                    sx={{
+                      fontWeight: "bold",
+                      px: 4,
+                      py: 1.2,
+                      borderRadius: "12px",
+                      fontSize: "1.1rem",
+                      boxShadow: "0 4px 14px rgba(156, 39, 176, 0.4)",
+                    }}
+                  >
+                    {isSpinning ? "Spinning Category..." : "🎡 SPIN THE CATEGORY WHEEL"}
+                  </Button>
+                ) : (
+                  <Typography variant="body1" fontWeight="medium" color="text.secondary">
+                    ⏳ Waiting for your team's Buzzer Person to spin the wheel...
+                  </Typography>
+                )}
+              </Box>
+            )}
+          </Box>
+        )}
+
         {/* Question Section */}
         <Box
           sx={{

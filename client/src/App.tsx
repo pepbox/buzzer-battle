@@ -72,10 +72,9 @@ const App: React.FC = () => {
 
     if (isAdminAuthenticated || isUserAuthenticated) {
       initWS();
-    }
-    return () => {
+    } else {
       websocketService.disconnect();
-    };
+    }
   }, [isAdminAuthenticated, isUserAuthenticated, sessionId]);
 
   return (

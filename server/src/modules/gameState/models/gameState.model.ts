@@ -50,6 +50,10 @@ const gameStateSchema = new Schema<IGameState>(
       type: Boolean,
       default: false,
     },
+    isLeaderboardVisible: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

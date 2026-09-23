@@ -13,6 +13,17 @@ export interface IGameState extends Document {
   teamsWhoAnsweredThisQuestion: Types.ObjectId[];
   isNoBuzzerQuestion: boolean;
   hintRevealed?: boolean;
+  isLeaderboardVisible?: boolean;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface IGamistanLiveState {
+  isSpinWheelEnabled: boolean;
+  availableCategories: string[];
+  canSpinTeam?: string;
+  spinPermissionGranted: boolean;
+  selectedCategory?: string;
+  usedQuestionIds: string[];
+  isQuestionVisible: boolean;
 }

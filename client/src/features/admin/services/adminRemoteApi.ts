@@ -7,6 +7,12 @@ export type GameStateAction =
   | "NEXT_QUESTION"
   | "SHOW_ANSWER"
   | "SHOW_LEADERBOARD"
+  | "TOGGLE_LEADERBOARD"
+  | "TOGGLE_SPIN_WHEEL"
+  | "SET_AVAILABLE_CATEGORIES"
+  | "GRANT_SPIN_PERMISSION"
+  | "SPIN_WHEEL_REQUEST"
+  | "SHOW_QUESTION_TO_PARTICIPANTS"
   | "PASS_TO_SECOND_TEAM"
   | "SET_ANSWERING_TEAM"
   | "AUTO_SELECT_FASTEST_TEAM"
@@ -17,6 +23,9 @@ export interface UpdateGameStateRequest {
   payload?: {
     questionId?: string;
     teamId?: string;
+    isVisible?: boolean;
+    isEnabled?: boolean;
+    categories?: string[];
   };
 }
 
@@ -28,6 +37,7 @@ export interface UpdateGameStateResponse {
       sessionId: string;
       currentQuestionIndex: number;
       gameStatus: "paused" | "buzzer_round" | "answering";
+      isLeaderboardVisible?: boolean;
       currentAnsweringTeam?: {
         _id: string;
         teamNumber: number;
@@ -93,6 +103,15 @@ export const useShowAnswer = () => {
   };
 };
 
+export const useToggleLeaderboard = () => {
+  const [update, result] = useUpdateGameStateMutation();
+  return {
+    toggleLeaderboard: (isVisible?: boolean) =>
+      update({ action: "TOGGLE_LEADERBOARD", payload: { isVisible } }),
+    ...result,
+  };
+};
+
 export const usePassToSecondTeam = () => {
   const [update, result] = useUpdateGameStateMutation();
   return {
@@ -124,6 +143,50 @@ export const useShowHint = () => {
   const [update, result] = useUpdateGameStateMutation();
   return {
     showHint: () => update({ action: "SHOW_HINT" }),
+    ...result,
+  };
+};
+
+export const useToggleSpinWheel = () => {
+  const [update, result] = useUpdateGameStateMutation();
+  return {
+    toggleSpinWheel: (isEnabled?: boolean) =>
+      update({ action: "TOGGLE_SPIN_WHEEL", payload: { isEnabled } }),
+    ...result,
+  };
+};
+
+export const useSetAvailableCategories = () => {
+  const [update, result] = useUpdateGameStateMutation();
+  return {
+    setAvailableCategories: (categories: string[]) =>
+      update({ action: "SET_AVAILABLE_CATEGORIES", payload: { categories } }),
+    ...result,
+  };
+};
+
+export const useGrantSpinPermission = () => {
+  const [update, result] = useUpdateGameStateMutation();
+  return {
+    grantSpinPermission: (teamId?: string) =>
+      update({ action: "GRANT_SPIN_PERMISSION", payload: { teamId } }),
+    ...result,
+  };
+};
+
+export const useSpinWheelRequest = () => {
+  const [update, result] = useUpdateGameStateMutation();
+  return {
+    spinWheelRequest: () => update({ action: "SPIN_WHEEL_REQUEST" }),
+    ...result,
+  };
+};
+
+export const useShowQuestionToParticipants = () => {
+  const [update, result] = useUpdateGameStateMutation();
+  return {
+    showQuestionToParticipants: (questionId?: string) =>
+      update({ action: "SHOW_QUESTION_TO_PARTICIPANTS", payload: { questionId } }),
     ...result,
   };
 };

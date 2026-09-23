@@ -7,6 +7,8 @@ import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import BoltIcon from "@mui/icons-material/Bolt";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
+import LeaderboardIcon from "@mui/icons-material/Leaderboard";
+import CasinoIcon from "@mui/icons-material/Casino";
 
 interface RemoteActionButtonsProps {
   gameStatus: "paused" | "buzzer_round" | "answering" | "idle";
@@ -21,6 +23,13 @@ interface RemoteActionButtonsProps {
   onMarkCorrect?: () => void;
   onMarkWrong?: () => void;
   onShowHint?: () => void;
+  onToggleLeaderboard?: () => void;
+  onOpenSpinWheel?: () => void;
+  onToggleSpinWheelMode?: () => void;
+  onGrantSpinPermission?: () => void;
+  isSpinWheelEnabled?: boolean;
+  spinPermissionGranted?: boolean;
+  isLeaderboardVisible?: boolean;
   hasHint?: boolean;
   hintRevealed?: boolean;
   canPassToSecondTeam: boolean;
@@ -43,6 +52,13 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
   onMarkCorrect,
   onMarkWrong,
   onShowHint,
+  onToggleLeaderboard,
+  onOpenSpinWheel,
+  onToggleSpinWheelMode,
+  onGrantSpinPermission,
+  isSpinWheelEnabled = false,
+  spinPermissionGranted = false,
+  isLeaderboardVisible = false,
   hasHint = false,
   hintRevealed = false,
   canPassToSecondTeam,
@@ -193,6 +209,91 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
       >
          Show Answer
       </Button>
+
+      {/* Leaderboard Toggle & Spin Category Wheel Buttons */}
+      <Box sx={{ display: "flex", gap: "12px", width: "100%" }}>
+        {onToggleLeaderboard && (
+          <Button
+            variant="contained"
+            startIcon={<LeaderboardIcon />}
+            onClick={onToggleLeaderboard}
+            disabled={isLoading}
+            sx={{
+              ...buttonBaseStyles,
+              flex: 1,
+              backgroundColor: isLeaderboardVisible ? "#8B5CF6" : "#6B7280",
+              "&:hover": {
+                backgroundColor: isLeaderboardVisible ? "#7C3AED" : "#4B5563",
+                ...buttonBaseStyles["&:hover"],
+              },
+            }}
+          >
+            {isLeaderboardVisible ? "Hide Leaderboard" : "Show Leaderboard"}
+          </Button>
+        )}
+
+        {onOpenSpinWheel && (
+          <Button
+            variant="contained"
+            startIcon={<CasinoIcon />}
+            onClick={onOpenSpinWheel}
+            disabled={isLoading}
+            sx={{
+              ...buttonBaseStyles,
+              flex: 1,
+              backgroundColor: "#EC4899",
+              "&:hover": {
+                backgroundColor: "#DB2777",
+                ...buttonBaseStyles["&:hover"],
+              },
+            }}
+          >
+            Spin Wheel
+          </Button>
+        )}
+      </Box>
+
+      {/* Spin Wheel Mode Control Strip */}
+      <Box sx={{ display: "flex", gap: "12px", width: "100%" }}>
+        {onToggleSpinWheelMode && (
+          <Button
+            variant="contained"
+            startIcon={<CasinoIcon />}
+            onClick={onToggleSpinWheelMode}
+            disabled={isLoading}
+            sx={{
+              ...buttonBaseStyles,
+              flex: 1,
+              backgroundColor: isSpinWheelEnabled ? "#10B981" : "#64748B",
+              "&:hover": {
+                backgroundColor: isSpinWheelEnabled ? "#059669" : "#475569",
+                ...buttonBaseStyles["&:hover"],
+              },
+            }}
+          >
+            {isSpinWheelEnabled ? "Spin Mode: ENABLED" : "Enable Spin Mode"}
+          </Button>
+        )}
+
+        {isSpinWheelEnabled && onGrantSpinPermission && (
+          <Button
+            variant="contained"
+            onClick={onGrantSpinPermission}
+            disabled={isLoading || spinPermissionGranted}
+            sx={{
+              ...buttonBaseStyles,
+              flex: 1,
+              backgroundColor: spinPermissionGranted ? "#9CA3AF" : "#F59E0B",
+              "&:hover": {
+                backgroundColor: spinPermissionGranted ? "#9CA3AF" : "#D97706",
+                ...buttonBaseStyles["&:hover"],
+              },
+            }}
+          >
+            {spinPermissionGranted ? "Spin Permission Granted" : "Allow Team Spin"}
+          </Button>
+        )}
+      </Box>
 
       {!hasQuestions && (
         <Box

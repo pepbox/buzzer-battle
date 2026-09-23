@@ -182,6 +182,16 @@ export const setupGlobalListeners = () => {
     "redux",
   );
 
+  // Spin Wheel Result Event
+  websocketService.addGlobalListener(
+    Events.SPIN_WHEEL_RESULT,
+    (data: any) => {
+      console.log("Spin wheel result:", data);
+      store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
+    },
+    "redux",
+  );
+
   // Session Ended Event - force logout all users in this session
   websocketService.addGlobalListener(
     Events.SESSION_ENDED,

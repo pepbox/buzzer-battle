@@ -343,7 +343,7 @@ const LoginPage: React.FC = () => {
         >
           Welcome to the
           <br />
-          Buzzer Battle!
+          Gamistan!
         </Typography>
 
         <Box
