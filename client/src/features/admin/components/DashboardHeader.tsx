@@ -29,10 +29,14 @@ import EditIcon from "@mui/icons-material/Edit";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import ListIcon from "@mui/icons-material/List";
 import BrandingWatermarkIcon from "@mui/icons-material/BrandingWatermark";
+import BoltIcon from "@mui/icons-material/Bolt";
+import CasinoIcon from "@mui/icons-material/Casino";
 import {
   useAdminLogoutMutation,
   useUpdateNumberOfTeamsMutation,
 } from "../services/admin.Api";
+import { useToggleSpinWheel } from "../services/adminRemoteApi";
+import { useFetchGameStateQuery } from "../../game/services/gameStateApi";
 import GlobalButton from "../../../components/ui/button";
 import { useAppDispatch, useAppSelector } from "../../../app/rootReducer";
 import { RootState } from "../../../app/store";
@@ -104,6 +108,27 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   // State for session branding modal
   const [brandingModalOpen, setBrandingModalOpen] = useState(false);
   const sessionData = useAppSelector((state: RootState) => state.session.session);
+
+  const { data: gameStateData } = useFetchGameStateQuery();
+  const gameState = gameStateData?.data?.gameState;
+  const { toggleSpinWheel } = useToggleSpinWheel();
+
+  const activeModeFromLive =
+    gameState?.roundType ||
+    (gameState?.isSpinWheelEnabled ? "SPIN_WHEEL" : "BUZZER");
+
+  const [selectedMode, setSelectedMode] = useState<"BUZZER" | "SPIN_WHEEL" | null>(
+    activeModeFromLive || "BUZZER"
+  );
+
+  const handleSelectMode = async (mode: "BUZZER" | "SPIN_WHEEL") => {
+    setSelectedMode(mode);
+    try {
+      await toggleSpinWheel(mode === "SPIN_WHEEL").unwrap();
+    } catch (err) {
+      console.error("Failed to select game mode:", err);
+    }
+  };
 
   const handleLogout = () => {
     AdminLogout({})
@@ -197,7 +222,6 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             color="secondary"
             startIcon={<ListIcon />}
             onClick={() => setCurrentQuestionsModalOpen(true)}
-            disabled={(selectedQuestionIds?.length || 0) === 0}
             sx={{
               textTransform: "none",
               borderRadius: "8px",
@@ -469,53 +493,191 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           </>
         )}
 
-        {/* Action Buttons */}
+       
+
+        {/* Controls Container - Mode Selector & Action Buttons in One Row */}
         <Box
           sx={{
             display: "flex",
-            gap: isMobile ? 1 : 2,
+            flexDirection: isMobile ? "column" : "row",
             alignItems: "center",
+            justifyContent: "space-between",
+            gap: 3,
+            mt: 1,
             flexWrap: "wrap",
-            justifyContent: isMobile ? "center" : "flex-start",
           }}
         >
+          {/* Admin Game Mode Selector */}
           {isGameNotStarted && (
-            <Box>
-              <GlobalButton
-                fullWidth={isMobile}
-                disabled={!hasQuestions}
-                onClick={() => {
-                  if (onGameStatusChange) onGameStatusChange();
+            <Box
+              sx={{
+                p: 2,
+                backgroundColor: "rgba(255, 255, 255, 0.9)",
+                borderRadius: "16px",
+                border: "1px solid rgba(0, 0, 0, 0.08)",
+                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.05)",
+                minWidth: isMobile ? "100%" : 380,
+                maxWidth: 500,
+              }}
+            >
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  fontWeight: 800,
+                  mb: 1,
+                  color: "#1E293B",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
                 }}
               >
-                Start Game
-              </GlobalButton>
-              {!hasQuestions && (
-                <Typography variant="body2" color="error" sx={{ mt: 1 }}>
-                  Add questions to this session before starting the game.
-                </Typography>
-              )}
+                Select Game Mode
+              </Typography>
+
+              <Box sx={{ display: "flex", gap: 1.5, mb: 1 }}>
+                <Button
+                  variant={selectedMode === "BUZZER" ? "contained" : "outlined"}
+                  startIcon={<BoltIcon />}
+                  onClick={() => handleSelectMode("BUZZER")}
+                  sx={{
+                    flex: 1,
+                    py: 1,
+                    fontWeight: 700,
+                    fontSize: "14px",
+                    borderRadius: "10px",
+                    textTransform: "none",
+                    backgroundColor:
+                      selectedMode === "BUZZER"
+                        ? theme.palette.primary.main
+                        : "white",
+                    color:
+                      selectedMode === "BUZZER"
+                        ? "white"
+                        : theme.palette.primary.main,
+                    borderColor: theme.palette.primary.main,
+                    boxShadow:
+                      selectedMode === "BUZZER"
+                        ? "0 4px 14px rgba(25, 118, 210, 0.35)"
+                        : "none",
+                    "&:hover": {
+                      backgroundColor:
+                        selectedMode === "BUZZER"
+                          ? theme.palette.primary.dark
+                          : "rgba(25, 118, 210, 0.06)",
+                      borderColor: theme.palette.primary.main,
+                    },
+                  }}
+                >
+                  Buzzer Battle
+                </Button>
+
+                <Button
+                  variant={selectedMode === "SPIN_WHEEL" ? "contained" : "outlined"}
+                  startIcon={<CasinoIcon />}
+                  onClick={() => handleSelectMode("SPIN_WHEEL")}
+                  sx={{
+                    flex: 1,
+                    py: 1,
+                    fontWeight: 700,
+                    fontSize: "14px",
+                    borderRadius: "10px",
+                    textTransform: "none",
+                    backgroundColor:
+                      selectedMode === "SPIN_WHEEL" ? "#10B981" : "white",
+                    color: selectedMode === "SPIN_WHEEL" ? "white" : "#10B981",
+                    borderColor: "#10B981",
+                    boxShadow:
+                      selectedMode === "SPIN_WHEEL"
+                        ? "0 4px 14px rgba(16, 185, 129, 0.35)"
+                        : "none",
+                    "&:hover": {
+                      backgroundColor:
+                        selectedMode === "SPIN_WHEEL" ? "#059669" : "rgba(16, 185, 129, 0.06)",
+                      borderColor: "#10B981",
+                    },
+                  }}
+                >
+                  Spin Wheel
+                </Button>
+              </Box>
+
+              <Typography
+                variant="caption"
+                sx={{ fontWeight: 600, color: "text.secondary" }}
+              >
+                Selected:{" "}
+                {selectedMode ? (
+                  <span
+                    style={{
+                      color:
+                        selectedMode === "SPIN_WHEEL"
+                          ? "#10B981"
+                          : theme.palette.primary.main,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {selectedMode === "SPIN_WHEEL"
+                      ? "Spin Wheel Mode"
+                      : "Buzzer Battle Mode"}
+                  </span>
+                ) : (
+                  <span style={{ color: "#EF4444", fontWeight: 700 }}>
+                    None (Selection Required)
+                  </span>
+                )}
+              </Typography>
             </Box>
           )}
 
-          <FormControlLabel
-            control={
-              <Switch
-                checked={transaction}
-                onChange={(e) => onTransactionsChange?.(e.target.checked)}
-                color="primary"
-              />
-            }
-            label={
-              <Typography variant="body2" color="text.secondary">
-                Enable Transactions
-              </Typography>
-            }
+          {/* Action Buttons (Start Game & Enable Transactions) */}
+          <Box
             sx={{
-              ml: isMobile ? 0 : 1,
-              mt: isMobile ? 1 : 0,
+              display: "flex",
+              gap: isMobile ? 1 : 2,
+              alignItems: "center",
+              flexWrap: "wrap",
             }}
-          />
+          >
+            {isGameNotStarted && (
+              <Box>
+                <GlobalButton
+                  fullWidth={isMobile}
+                  disabled={!selectedMode || !hasQuestions}
+                  onClick={() => {
+                    if (onGameStatusChange) onGameStatusChange();
+                  }}
+                >
+                  Start Game
+                </GlobalButton>
+                {!selectedMode && (
+                  <Typography variant="caption" color="error" sx={{ mt: 0.5, display: "block" }}>
+                    Please select a game mode before starting.
+                  </Typography>
+                )}
+                {!hasQuestions && (
+                  <Typography variant="caption" color="error" sx={{ mt: 0.5, display: "block" }}>
+                    Add questions to this session before starting the game.
+                  </Typography>
+                )}
+              </Box>
+            )}
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={transaction}
+                  onChange={(e) => onTransactionsChange?.(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label={
+                <Typography variant="body2" color="text.secondary">
+                  Enable Transactions
+                </Typography>
+              }
+              sx={{ ml: isMobile ? 0 : 1 }}
+            />
+          </Box>
         </Box>
       </Paper>
 

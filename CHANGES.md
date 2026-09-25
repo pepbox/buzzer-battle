@@ -320,5 +320,94 @@ Testing:
 - Server TypeScript (`./node_modules/.bin/tsc --noEmit`): Pass (0 errors).
 - Client TypeScript (`./node_modules/.bin/tsc --noEmit`): Pass (0 errors).
 
+---
+
+## 2026-09-24 11:30 IST
+
+### 7. Mandatory Category Validation & Gamistan Final Audit Verification
+
+Branch:
+buzzer-changes
+
+Area:
+Gamistan / Questions / Admin UI / Routing
+
+Type:
+FEATURE ENHANCEMENT & STABILITY VERIFICATION
+
+Files:
+- `server/src/modules/questions/controllers/question.controller.ts`
+- `client/src/features/admin/components/QuestionEditorDialog.tsx`
+- `client/src/features/admin/pages/AdminLogin.tsx`
+- `client/src/pages/adminMain.tsx`
+- `server/src/modules/gameState/controllers/gameState.controller.ts`
+- `server/src/modules/gameState/services/gamistanLiveState.ts`
+- `client/src/features/admin/components/CategorySpinWheelModal.tsx`
+
+Function / Component:
+- `createQuestion` controller
+- `QuestionEditorDialog` client component
+- `AdminLogin` remote control / presenter navigation
+- `adminMain` router configuration
+- `gamistanLiveState` default category list
+
+Details:
+1. Enforced mandatory Category validation in `createQuestion` (server controller) returning 400 `AppError("Category is a mandatory field.", 400)` if category/folder is missing.
+2. Added client-side Category validation check in `QuestionEditorDialog` preventing submission with empty category.
+3. Updated default category lists in server and client to include `"Who Am I?"`, `"English"`, `"Song"`, `"Jumble"`, `"Prop Round"`, `"Bollywood"`, `"Sports"`, `"GK"`.
+4. Fixed Remote Control and Presenter View 404 routing from Admin Login by updating routes to `/admin/:sessionId/remote-control` and `/admin/:sessionId/presenter`.
+5. Enforced server authority on spin permissions, question visibility, and session used-question state without modifying MongoDB schema.
+
+Database Impact:
+DATABASE CHANGES: NONE
+DATABASE SCHEMA CHANGES: NONE
+MIGRATIONS: NONE
+NEW COLLECTIONS: NONE
+MASTER QUESTION LIBRARY MODIFICATIONS: NONE
+
+Testing:
+- Server TypeScript (`npx tsc --noEmit`): Pass (0 errors).
+- Client TypeScript (`npx tsc --noEmit`): Pass (0 errors).
+- Client Production Build (`npm run build`): Pass (0 errors, dist build generated).
+
+---
+
+## 2026-09-24 11:55 IST
+
+### 8. Gamistan Live State roundType Sync & Spin Wheel Zero Penalty Verification
+
+Branch:
+buzzer-changes
+
+Area:
+Gamistan / GameState / Live State
+
+Type:
+LIVE STATE SYNC & FINAL COMPLIANCE VERIFICATION
+
+Files:
+- `server/src/modules/gameState/types/interfaces.ts`
+- `server/src/modules/gameState/services/gamistanLiveState.ts`
+- `server/src/modules/gameState/controllers/gameState.controller.ts`
+
+Details:
+1. Added explicit `roundType: 'BUZZER' | 'SPIN_WHEEL'` property to `IGamistanLiveState` interface and live state service (`gamistanLiveState.ts`). `roundType` dynamically syncs with `isSpinWheelEnabled` (`'SPIN_WHEEL'` when enabled, `'BUZZER'` when disabled).
+2. Verified Spin Wheel wrong answer scoring: default wrong answer penalty is 0, ensuring Spin Wheel wrong answers deduct no negative score.
+3. Verified `BUZZER_PERSON` role checks for Buzzer Round and Spin Wheel Round server-side, blocking `TEAM_MEMBER` role requests with 403.
+
+Database Impact:
+DATABASE CHANGES: NONE
+DATABASE SCHEMA CHANGES: NONE
+MIGRATIONS: NONE
+NEW COLLECTIONS: NONE
+MASTER QUESTION LIBRARY MODIFICATIONS: NONE
+
+Testing:
+- Server TypeScript (`npx tsc --noEmit`): Pass (0 errors).
+- Client TypeScript (`npx tsc --noEmit`): Pass (0 errors).
+- Client Production Build (`npx --node-options="--max-old-space-size=4096" vite build`): Pass (0 errors, dist bundle built in 1m 15s).
+
+
+
 
 

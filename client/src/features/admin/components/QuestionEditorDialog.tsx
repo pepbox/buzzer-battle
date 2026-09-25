@@ -127,11 +127,17 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
   const [questionText, setQuestionText] = useState("");
   const [answerText, setAnswerText] = useState("");
   const [hintText, setHintText] = useState("");
+  const initialFolder = useMemo(() => {
+    if (defaultFolder && defaultFolder.toLowerCase() !== "all") return defaultFolder;
+    const firstValid = (folders || []).find((f) => f && f.toLowerCase() !== "all");
+    return firstValid || "General";
+  }, [defaultFolder, folders]);
+
   const [hintPenalty, setHintPenalty] = useState<number>(0);
   const [score, setScore] = useState<number>(0);
   const [keepBuzzer, setKeepBuzzer] = useState(true);
   const [hideFromUsers, setHideFromUsers] = useState(false);
-  const [folder, setFolder] = useState(defaultFolder || "General");
+  const [folder, setFolder] = useState(initialFolder);
   const [newFolderName, setNewFolderName] = useState("");
   const [questionLinkInput, setQuestionLinkInput] = useState("");
   const [answerLinkInput, setAnswerLinkInput] = useState("");
@@ -148,6 +154,18 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
   const [previewMedia, setPreviewMedia] = useState<QuestionMediaItem | null>(
     null,
   );
+
+  const selectableFolders = useMemo(() => {
+    const list = (folders || []).filter((f) => f && f.toLowerCase() !== "all");
+    const currentClean = folder && folder.toLowerCase() !== "all" ? folder : "";
+    if (currentClean && !list.includes(currentClean)) {
+      list.unshift(currentClean);
+    }
+    if (!list.length) {
+      list.push("General");
+    }
+    return list;
+  }, [folders, folder]);
 
   const isUploadingMedia = useMemo(
     () =>
@@ -172,7 +190,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
       setScore(initialQuestion.score ?? 0);
       setKeepBuzzer(initialQuestion.keepBuzzer ?? true);
       setHideFromUsers(initialQuestion.hideFromUsers ?? false);
-      setFolder(initialQuestion.folder || defaultFolder || "General");
+      setFolder(initialQuestion.folder || initialFolder);
       setOptions(
         (initialQuestion.options || []).map((opt) => ({
           optionText: opt.optionText,
@@ -215,7 +233,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
     setScore(0);
     setKeepBuzzer(true);
     setHideFromUsers(false);
-    setFolder(defaultFolder || "General");
+    setFolder(initialFolder);
     setQuestionLinkInput("");
     setAnswerLinkInput("");
     setHintLinkInput("");
@@ -427,6 +445,11 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
       return;
     }
 
+    if (!folder || !folder.trim()) {
+      setSubmitError("Category is a mandatory field.");
+      return;
+    }
+
     if (isUploadingMedia) {
       setSubmitError("Please wait for all uploads to finish.");
       return;
@@ -511,6 +534,56 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
         <DialogContent>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
             {submitError && <Alert severity="error">{submitError}</Alert>}
+
+            {/* Category / Folder Selection (Required) */}
+            <Box
+              sx={{
+                p: 2,
+                backgroundColor: "rgba(25, 118, 210, 0.04)",
+                borderRadius: 2,
+                border: "1px solid rgba(25, 118, 210, 0.15)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 1.5,
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
+                Question Category / Folder (Required)
+              </Typography>
+              <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start", flexWrap: "wrap" }}>
+                <TextField
+                  select
+                  sx={{ flex: 1, minWidth: 220 }}
+                  label="Category / Folder"
+                  value={folder && folder.toLowerCase() !== "all" ? folder : "General"}
+                  onChange={(e) => setFolder(e.target.value)}
+                >
+                  {selectableFolders.map((folderName) => (
+                    <MenuItem key={folderName} value={folderName}>
+                      {formatFolderLabel(folderName)}
+                    </MenuItem>
+                  ))}
+                </TextField>
+
+                <Box sx={{ display: "flex", gap: 1, flex: 1, minWidth: 260 }}>
+                  <TextField
+                    fullWidth
+                    label="Create New Category"
+                    placeholder="e.g. Bollywood, Sports, GK..."
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                  />
+                  <Button
+                    variant="outlined"
+                    onClick={handleAddFolder}
+                    disabled={isCreatingFolder || !newFolderName.trim()}
+                    sx={{ height: 56, minWidth: 90 }}
+                  >
+                    Create
+                  </Button>
+                </Box>
+              </Box>
+            </Box>
 
             <TextField
               label="Question (required)"
@@ -712,35 +785,6 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
                 Tap an option chip to mark it as the correct answer.
               </Typography>
             )}
-
-            <TextField
-              select
-              label="Folder"
-              value={folder}
-              onChange={(e) => setFolder(e.target.value)}
-            >
-              {folders.map((folderName) => (
-                <MenuItem key={folderName} value={folderName}>
-                  {formatFolderLabel(folderName)}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <Box sx={{ display: "flex", gap: 1 }}>
-              <TextField
-                fullWidth
-                label="Create New Folder"
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-              />
-              <Button
-                variant="outlined"
-                onClick={handleAddFolder}
-                disabled={isCreatingFolder}
-              >
-                Create
-              </Button>
-            </Box>
           </Box>
         </DialogContent>
         <DialogActions>

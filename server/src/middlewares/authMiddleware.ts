@@ -30,7 +30,17 @@ export const authenticateUser = (
       token,
       process.env.ACCESS_TOKEN_SECRET as string,
     ) as { id: string; role: "USER" | "ADMIN" | "TEAM"; sessionId: string; playerRole?: "BUZZER_PERSON" | "TEAM_MEMBER"; playerName?: string };
-    req.user = decoded;
+
+    const extractedSessionId =
+      decoded.sessionId ||
+      (req.headers["x-session-id"] as string) ||
+      (req.query?.sessionId as string) ||
+      (req.body?.sessionId as string);
+
+    req.user = {
+      ...decoded,
+      sessionId: extractedSessionId,
+    };
     next();
   } catch (error) {
     console.log(error);

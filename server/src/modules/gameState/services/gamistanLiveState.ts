@@ -4,16 +4,17 @@ import { IGamistanLiveState } from "../types/interfaces";
 const memoryStore = new Map<string, IGamistanLiveState>();
 
 const getDefaultState = (): IGamistanLiveState => ({
+  roundType: "BUZZER",
   isSpinWheelEnabled: false,
   availableCategories: [
+    "Who Am I?",
+    "English",
+    "Song",
+    "Jumble",
+    "Prop Round",
     "Bollywood",
     "Sports",
-    "Finance",
-    "History",
     "GK",
-    "Entertainment",
-    "Technology",
-    "Science",
   ],
   spinPermissionGranted: false,
   selectedCategory: "",
@@ -49,9 +50,16 @@ export class GamistanLiveStateService {
     patch: Partial<IGamistanLiveState>,
   ): Promise<IGamistanLiveState> {
     const current = await this.getState(sessionId);
+    const isSpin = typeof patch.isSpinWheelEnabled === "boolean"
+      ? patch.isSpinWheelEnabled
+      : typeof current.isSpinWheelEnabled === "boolean"
+      ? current.isSpinWheelEnabled
+      : false;
+
     const updated: IGamistanLiveState = {
       ...current,
       ...patch,
+      roundType: patch.roundType || (isSpin ? "SPIN_WHEEL" : "BUZZER"),
     };
 
     memoryStore.set(sessionId, updated);

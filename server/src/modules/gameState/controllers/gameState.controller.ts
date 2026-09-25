@@ -26,10 +26,13 @@ export const fetchGameState = async (
   next: NextFunction,
 ) => {
   try {
-    const sessionId = req.user?.sessionId;
+    const sessionId =
+      req.user?.sessionId ||
+      (req.headers["x-session-id"] as string) ||
+      (req.query?.sessionId as string);
 
     if (!sessionId) {
-      return next(new AppError("Session ID not found in token.", 401));
+      return next(new AppError("Session ID is required.", 401));
     }
 
     let gameState = await gameStateService.fetchGameStateBySessionId(sessionId);
@@ -557,7 +560,7 @@ export const updateGameStateUnified = async (
 
         const categoriesList = curLive.availableCategories && curLive.availableCategories.length > 0
           ? curLive.availableCategories
-          : ["Bollywood", "Sports", "Finance", "History", "GK", "Entertainment", "Technology", "Science"];
+          : ["Who Am I?", "English", "Song", "Jumble", "Prop Round", "Bollywood", "Sports", "GK"];
 
         const spinIndex = Math.floor(Math.random() * categoriesList.length);
         const winCategory = categoriesList[spinIndex];
@@ -975,11 +978,17 @@ export const markAnswer = async (
         },
       });
     } else {
-      const wrongPenalty = req.body.penalty !== undefined
-        ? Math.abs(Number(req.body.penalty))
-        : (req.body.negativePoints !== undefined
-          ? Math.abs(Number(req.body.negativePoints))
-          : (req.body.scorePenalty !== undefined ? Math.abs(Number(req.body.scorePenalty)) : 0));
+      const liveState = await gamistanLiveState.getState(sessionId);
+      const isSpinMode = liveState.roundType === "SPIN_WHEEL" || liveState.isSpinWheelEnabled;
+
+      let wrongPenalty = 0;
+      if (!isSpinMode) {
+        wrongPenalty = req.body.penalty !== undefined
+          ? Math.abs(Number(req.body.penalty))
+          : (req.body.negativePoints !== undefined
+            ? Math.abs(Number(req.body.negativePoints))
+            : (req.body.scorePenalty !== undefined ? Math.abs(Number(req.body.scorePenalty)) : 0));
+      }
 
       if (wrongPenalty > 0) {
         pointsAwarded = -wrongPenalty;
@@ -1062,7 +1071,7 @@ export const spinWheelParticipant = async (
     }
 
     const liveState = await gamistanLiveState.getState(sessionId);
-    if (!liveState.isSpinWheelEnabled) {
+    if (!liveState.isSpinWheelEnabled && liveState.roundType !== "SPIN_WHEEL") {
       return next(new AppError("Spin Wheel is not currently enabled.", 400));
     }
 
@@ -1101,7 +1110,7 @@ export const spinWheelParticipant = async (
 
     const categoriesList = liveState.availableCategories && liveState.availableCategories.length > 0
       ? liveState.availableCategories
-      : ["Bollywood", "Sports", "Finance", "History", "GK", "Entertainment", "Technology", "Science"];
+      : ["Who Am I?", "English", "Song", "Jumble", "Prop Round", "Bollywood", "Sports", "GK"];
 
     const randomIndex = Math.floor(Math.random() * categoriesList.length);
     const winningCategory = categoriesList[randomIndex];

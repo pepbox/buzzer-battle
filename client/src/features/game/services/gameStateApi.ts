@@ -18,6 +18,7 @@ export interface GameState {
   idleStartTime?: number;
   hintRevealed?: boolean;
   isLeaderboardVisible?: boolean;
+  roundType?: "BUZZER" | "SPIN_WHEEL";
   isSpinWheelEnabled?: boolean;
   availableCategories?: string[];
   canSpinTeam?: string;

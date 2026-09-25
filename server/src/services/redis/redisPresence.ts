@@ -31,6 +31,7 @@ class RedisPresence {
      * Uses a pipeline for atomic multi-step write.
      */
     async addSocket(socketId: string, user: AccessTokenPayload): Promise<void> {
+        if (redis.status !== "ready") return;
         const pipeline = redis.pipeline();
         pipeline.sadd(this.userSocketKey(user.id), socketId);
         pipeline.set(this.socketUserKey(socketId), user.id);
@@ -45,6 +46,7 @@ class RedisPresence {
      * If this was the user's last socket, mark them as offline.
      */
     async removeSocket(socketId: string): Promise<void> {
+        if (redis.status !== "ready") return;
         const userId = await redis.get(this.socketUserKey(socketId));
         if (!userId) return;
 

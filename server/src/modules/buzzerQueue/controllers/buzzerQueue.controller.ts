@@ -33,6 +33,11 @@ export const pressBuzzer = async (
             return next(new AppError("Team ID or Session ID not found in token.", 401));
         }
 
+        const playerRole = (req.user as any)?.playerRole || (req.user as any)?.memberRole || (req.user as any)?.role;
+        if (playerRole === "TEAM_MEMBER") {
+            return next(new AppError("Only the Team Captain is permitted to press the buzzer.", 403));
+        }
+
         if (!timestamp) {
             return next(new AppError("Timestamp is required.", 400));
         }

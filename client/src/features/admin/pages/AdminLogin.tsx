@@ -141,8 +141,7 @@ const AdminLogin: React.FC = () => {
       setLocalError("Session ID is required to access Remote Control");
       return;
     }
-    // Navigate to remote control without authentication
-    navigate(`/admin/remote-control/${sessionId}`);
+    navigate(`/admin/${sessionId}/remote-control`);
   };
 
   const handlePresenterMode = () => {
@@ -150,7 +149,6 @@ const AdminLogin: React.FC = () => {
       setLocalError("Session ID is required to access Presenter Mode");
       return;
     }
-    // Navigate to presenter view - requires admin authentication
     navigate(`/admin/${sessionId}/presenter`);
   };
 

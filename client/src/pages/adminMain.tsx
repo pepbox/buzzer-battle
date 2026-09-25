@@ -89,10 +89,12 @@ const AdminMain = () => {
   return (
     <Box sx={{ maxWidth: "100%", minHeight: "100vh" }}>
       <Routes>
-        {/* Public Routes */}
+        {/* Public Admin Session Routes */}
         <Route path="/login" element={<AdminLogin />} />
+        <Route path="/remote-control" element={<RemoteControl />} />
+        <Route path="/presenter" element={<PresenterView />} />
 
-        {/* Protected Admin Routes */}
+        {/* Protected Admin Dashboard Routes */}
         <Route
           path="/"
           element={
@@ -102,13 +104,11 @@ const AdminMain = () => {
             />
           }
         >
-          <Route path="/remote-control" element={<RemoteControl />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route
             path="/leaderboard"
             element={<LeaderBoardPage navigationBase="admin" />}
           />
-          <Route path="/presenter" element={<PresenterView />} />
           <Route path="/questions" element={<QuestionLibraryPage />} />
         </Route>
         <Route

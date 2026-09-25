@@ -19,6 +19,7 @@ export interface IGameState extends Document {
 }
 
 export interface IGamistanLiveState {
+  roundType: "BUZZER" | "SPIN_WHEEL";
   isSpinWheelEnabled: boolean;
   availableCategories: string[];
   canSpinTeam?: string;

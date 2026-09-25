@@ -192,23 +192,23 @@ const BuzzerRound: React.FC = () => {
           position: "relative",
         }}
       >
-        {/* Spin Wheel Section if enabled */}
-        {gameState?.isSpinWheelEnabled && (
+        {/* Spin Wheel Header Banner */}
+        {(gameState?.roundType === "SPIN_WHEEL" || gameState?.isSpinWheelEnabled) && (
           <Box
             sx={{
               width: "100%",
               maxWidth: "600px",
               mb: 3,
-              p: 2.5,
+              p: 2,
               borderRadius: "16px",
               backgroundColor: "rgba(255, 255, 255, 0.92)",
               backdropFilter: "blur(10px)",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
               textAlign: "center",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              gap: 1.5,
+              gap: 1,
             }}
           >
             <Chip
@@ -220,33 +220,6 @@ const BuzzerRound: React.FC = () => {
               <Typography variant="h6" fontWeight="bold" color="primary.main">
                 Selected Category: 🎯 {gameState.selectedCategory}
               </Typography>
-            )}
-            {gameState?.spinPermissionGranted && (
-              <Box mt={1}>
-                {isBuzzerPerson ? (
-                  <Button
-                    variant="contained"
-                    color="secondary"
-                    size="large"
-                    disabled={isSpinning}
-                    onClick={handleSpinWheel}
-                    sx={{
-                      fontWeight: "bold",
-                      px: 4,
-                      py: 1.2,
-                      borderRadius: "12px",
-                      fontSize: "1.1rem",
-                      boxShadow: "0 4px 14px rgba(156, 39, 176, 0.4)",
-                    }}
-                  >
-                    {isSpinning ? "Spinning Category..." : "🎡 SPIN THE CATEGORY WHEEL"}
-                  </Button>
-                ) : (
-                  <Typography variant="body1" fontWeight="medium" color="text.secondary">
-                    ⏳ Waiting for your team's Buzzer Person to spin the wheel...
-                  </Typography>
-                )}
-              </Box>
             )}
           </Box>
         )}
@@ -272,7 +245,7 @@ const BuzzerRound: React.FC = () => {
           )}
         </Box>
 
-        {/* Buzzer Section */}
+        {/* Action Section: Buzzer or Spin Wheel according to active round mode */}
         <Box
           bottom={10}
           sx={{
@@ -284,42 +257,116 @@ const BuzzerRound: React.FC = () => {
             marginBottom: "16px",
           }}
         >
-          {isBuzzerPerson ? (
-            <Buzzer
-              size="large"
-              onPress={handleBuzzerPress}
-              showPressText={true}
-              disabled={
-                buzzerPressed || isPressing || isLocked || isQuestionTransitioning
-              }
-            />
-          ) : (
-            <Box
-              sx={{
-                backgroundColor: "rgba(255, 255, 255, 0.9)",
-                borderRadius: "16px",
-                padding: "20px 24px",
-                textAlign: "center",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
-                border: "1px solid rgba(255, 255, 255, 0.2)",
-                maxWidth: "360px",
-                width: "100%",
-              }}
-            >
-              <Typography
-                variant="h6"
+          {gameState?.roundType === "SPIN_WHEEL" || gameState?.isSpinWheelEnabled ? (
+            /* SPIN WHEEL ROUND ACTION */
+            isBuzzerPerson ? (
+              gameState?.spinPermissionGranted ? (
+                <Button
+                  variant="contained"
+                  onClick={handleSpinWheel}
+                  disabled={isSpinning}
+                  sx={{
+                    px: 4,
+                    py: 2,
+                    fontSize: "20px",
+                    fontWeight: 800,
+                    borderRadius: "16px",
+                    backgroundColor: "#10B981",
+                    color: "white",
+                    boxShadow: "0 8px 25px rgba(16, 185, 129, 0.4)",
+                    "&:hover": {
+                      backgroundColor: "#059669",
+                      transform: "scale(1.03)",
+                    },
+                  }}
+                >
+                  {isSpinning ? "Spinning..." : "SPIN WHEEL 🎡"}
+                </Button>
+              ) : (
+                <Box
+                  sx={{
+                    backgroundColor: "rgba(255, 255, 255, 0.95)",
+                    borderRadius: "16px",
+                    padding: "20px 24px",
+                    textAlign: "center",
+                    boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
+                    maxWidth: "380px",
+                    width: "100%",
+                  }}
+                >
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      color: "#F59E0B",
+                      fontWeight: 800,
+                    }}
+                  >
+                    ⏳ Waiting for Operator to grant Spin access...
+                  </Typography>
+                </Box>
+              )
+            ) : (
+              <Box
                 sx={{
-                  color: theme.palette.primary.main,
-                  fontWeight: "bold",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 1.5,
+                  backgroundColor: "rgba(255, 255, 255, 0.95)",
+                  borderRadius: "16px",
+                  padding: "20px 24px",
+                  textAlign: "center",
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
+                  maxWidth: "380px",
+                  width: "100%",
                 }}
               >
-                <span>⏳</span> Waiting for your team's Buzzer Person to buzz...
-              </Typography>
-            </Box>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    color: theme.palette.primary.main,
+                    fontWeight: "bold",
+                  }}
+                >
+                  ⏳ Waiting for Team Captain to spin...
+                </Typography>
+              </Box>
+            )
+          ) : (
+            /* BUZZER ROUND ACTION */
+            isBuzzerPerson ? (
+              <Buzzer
+                size="large"
+                onPress={handleBuzzerPress}
+                showPressText={true}
+                disabled={
+                  buzzerPressed || isPressing || isLocked || isQuestionTransitioning
+                }
+              />
+            ) : (
+              <Box
+                sx={{
+                  backgroundColor: "rgba(255, 255, 255, 0.9)",
+                  borderRadius: "16px",
+                  padding: "20px 24px",
+                  textAlign: "center",
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
+                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                  maxWidth: "360px",
+                  width: "100%",
+                }}
+              >
+                <Typography
+                  variant="h6"
+                  sx={{
+                    color: theme.palette.primary.main,
+                    fontWeight: "bold",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 1.5,
+                  }}
+                >
+                  <span>⏳</span> Waiting for Team Captain to buzz...
+                </Typography>
+              </Box>
+            )
           )}
         </Box>
       </Box>

@@ -21,14 +21,14 @@ interface CategorySpinWheelModalProps {
 }
 
 const DEFAULT_CATEGORIES = [
+  "Who Am I?",
+  "English",
+  "Song",
+  "Jumble",
+  "Prop Round",
   "Bollywood",
   "Sports",
-  "Finance",
-  "History",
   "GK",
-  "Entertainment",
-  "Technology",
-  "Science",
 ];
 
 const WHEEL_COLORS = [

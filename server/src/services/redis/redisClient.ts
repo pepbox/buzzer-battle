@@ -13,11 +13,11 @@ export const GAME_PREFIX = process.env.REDIS_KEY_PREFIX || "buzzer-battle";
 export const redis = new Redis(REDIS_URL, {
     lazyConnect: true,
     retryStrategy: (times) => {
-        if (times > 5) {
-            console.error("❌ Redis max connection attempts reached");
+        if (times > 3) {
+            console.log("ℹ️ Redis offline — using local in-memory state");
             return null;
         }
-        return Math.min(times * 200, 2000);
+        return Math.min(times * 100, 500);
     },
 });
 
@@ -25,8 +25,8 @@ export const redis = new Redis(REDIS_URL, {
 export const pubClient = new Redis(REDIS_URL, {
     lazyConnect: true,
     retryStrategy: (times) => {
-        if (times > 5) return null;
-        return Math.min(times * 200, 2000);
+        if (times > 3) return null;
+        return Math.min(times * 100, 500);
     },
 });
 
@@ -34,23 +34,33 @@ export const pubClient = new Redis(REDIS_URL, {
 export const subClient = new Redis(REDIS_URL, {
     lazyConnect: true,
     retryStrategy: (times) => {
-        if (times > 5) return null;
-        return Math.min(times * 200, 2000);
+        if (times > 3) return null;
+        return Math.min(times * 100, 500);
     },
 });
 
-redis.on("error", (err) => console.error("Redis (main) error:", err));
-pubClient.on("error", (err) => console.error("Redis (pubClient) error:", err));
-subClient.on("error", (err) => console.error("Redis (subClient) error:", err));
+redis.on("error", (err) => {
+  // Silent fallback handling when Redis server is unavailable locally
+});
+pubClient.on("error", (err) => {
+  // Silent fallback handling
+});
+subClient.on("error", (err) => {
+  // Silent fallback handling
+});
 
 /**
  * Connect all three Redis clients before the server starts accepting connections.
- * Call this once inside initializeSocket() before creating the Socket.IO server.
+ * Fallback to in-memory mode gracefully if Redis is unavailable.
  */
 export async function connectRedis(): Promise<void> {
+  try {
     await Promise.all([
-        redis.connect().then(() => console.log("✅ Redis connected (main)")),
-        pubClient.connect().then(() => console.log("✅ Redis connected (pubClient)")),
-        subClient.connect().then(() => console.log("✅ Redis connected (subClient)")),
+      redis.connect().then(() => console.log("✅ Redis connected (main)")).catch(() => {}),
+      pubClient.connect().then(() => console.log("✅ Redis connected (pubClient)")).catch(() => {}),
+      subClient.connect().then(() => console.log("✅ Redis connected (subClient)")).catch(() => {}),
     ]);
+  } catch (err) {
+    console.warn("⚠️ Redis local server not available (127.0.0.1:6379) — using in-memory mode.");
+  }
 }

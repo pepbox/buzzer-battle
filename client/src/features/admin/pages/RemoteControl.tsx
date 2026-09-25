@@ -61,15 +61,23 @@ import { useFetchCurrentQuestionQuery } from "../../question/services/questions.
 import { websocketService } from "../../../services/websocket/websocketService";
 import { Events } from "../../../services/websocket/enums/Events";
 import Loader from "../../../components/ui/Loader";
-import { useAppSelector } from "../../../app/hooks";
+import { useAppDispatch, useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
+import { setSessionId } from "../../session/services/sessionSlice";
 import QuestionPreviewModal from "../components/QuestionPreviewModal";
 import { QuestionBankItem } from "../types/interfaces";
 
 const RemoteControl: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const { session } = useAppSelector((state: RootState) => state.session);
+
+  useEffect(() => {
+    if (sessionId) {
+      dispatch(setSessionId(sessionId));
+    }
+  }, [dispatch, sessionId]);
 
   // State
   const [lastAnswerWasWrong, setLastAnswerWasWrong] = useState(false);
@@ -104,6 +112,7 @@ const RemoteControl: React.FC = () => {
     data: gameStateData,
     isLoading: gameStateLoading,
     error: gameStateError,
+    refetch: refetchGameState,
   } = useFetchGameStateQuery();
   const { data: teamDashboardData } = useFetchTeamDashboardQuery();
 
@@ -118,6 +127,7 @@ const RemoteControl: React.FC = () => {
 
   // Extract game state data
   const gameState = gameStateData?.data?.gameState;
+  const isSpinWheelMode = gameState?.roundType === "SPIN_WHEEL" || gameState?.isSpinWheelEnabled;
   const currentQuestionIndex = gameState?.currentQuestionIndex ?? -1;
   const totalQuestions = session?.questions?.length || 0;
   const gameStatus = gameState?.gameStatus || "paused";
@@ -272,7 +282,7 @@ const RemoteControl: React.FC = () => {
       ? teams.find((team) => team._id === currentAnsweringTeamRaw) || null
       : currentAnsweringTeamRaw || null;
   const isNoBuzzerMode =
-    currentQuestionKeepBuzzer === false && !currentAnsweringTeamId;
+    (isSpinWheelMode || currentQuestionKeepBuzzer === false) && !currentAnsweringTeamId;
 
   // Filter out already selected team from dropdown options
   const availableTeams = useMemo(
@@ -392,6 +402,7 @@ const RemoteControl: React.FC = () => {
     };
 
     const handleGameStateChanged = (data: any) => {
+      refetchGameState();
       if (data.gameStatus === "buzzer_round") {
         setLastAnswerWasWrong(false); // Reset on new question
         setIsAnswerShown(false);
@@ -681,6 +692,14 @@ const RemoteControl: React.FC = () => {
 
   // Error state
   if (gameStateError) {
+    const errorMessage =
+      (gameStateError as any)?.data?.message ||
+      ((gameStateError as any)?.status
+        ? `HTTP status ${(gameStateError as any).status}`
+        : "Failed to load game state. Please try again.");
+
+    console.error("RemoteControl: Failed to fetch game state:", gameStateError);
+
     return (
       <Box
         sx={{
@@ -692,7 +711,7 @@ const RemoteControl: React.FC = () => {
         }}
       >
         <Alert severity="error">
-          Failed to load game state. Please try again.
+          Failed to load game state ({errorMessage}). Please try again.
         </Alert>
       </Box>
     );
@@ -763,9 +782,19 @@ const RemoteControl: React.FC = () => {
                 onClick={() => setQuestionsListOpen(true)}
               />
               <Chip
-                label={`Buzzer: ${currentQuestionKeepBuzzer === false ? "Off" : "On"}`}
+                label={
+                  isSpinWheelMode
+                    ? "Mode: Spin Wheel 🎰"
+                    : `Buzzer: ${currentQuestionKeepBuzzer === false ? "Off" : "On"}`
+                }
                 variant="outlined"
-                color={currentQuestionKeepBuzzer === false ? "warning" : "success"}
+                color={
+                  isSpinWheelMode
+                    ? "secondary"
+                    : currentQuestionKeepBuzzer === false
+                    ? "warning"
+                    : "success"
+                }
               />
               <Chip
                 label="Question Preview"
@@ -777,7 +806,44 @@ const RemoteControl: React.FC = () => {
             </Box>
           </Box>
 
-          {/* No-Buzzer Team Selection or Current Team Info */}
+          {/* Spin Wheel Category Result Display for Admin */}
+          {isSpinWheelMode && (
+            <Paper
+              elevation={0}
+              sx={{
+                mx: 2,
+                mt: 2,
+                p: 2,
+                borderRadius: 2,
+                background: "linear-gradient(135deg, #EC4899 0%, #8B5CF6 100%)",
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                boxShadow: "0 4px 12px rgba(236, 72, 153, 0.25)",
+              }}
+            >
+              <Box>
+                <Typography variant="caption" sx={{ textTransform: "uppercase", letterSpacing: 1, opacity: 0.9, fontWeight: 700 }}>
+                  User Spin Category Result
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.5 }}>
+                  {gameState?.selectedCategory || "Waiting for Captain to Spin..."}
+                </Typography>
+              </Box>
+              <Chip
+                label={gameState?.selectedCategory ? "Category Selected" : "Pending Spin"}
+                sx={{
+                  backgroundColor: "rgba(255, 255, 255, 0.2)",
+                  color: "#fff",
+                  fontWeight: 700,
+                  backdropFilter: "blur(4px)",
+                }}
+              />
+            </Paper>
+          )}
+
+          {/* Team Selection or Current Team Info */}
           {isNoBuzzerMode ? (
             <Paper
               variant="outlined"
@@ -793,7 +859,7 @@ const RemoteControl: React.FC = () => {
                 variant="subtitle2"
                 sx={{ mb: 1.5, fontWeight: 700, color: "#333" }}
               >
-                No-Buzzer Question: Select Team
+                {isSpinWheelMode ? "Spin Wheel Mode: Select Answering Team" : "No-Buzzer Question: Select Team"}
               </Typography>
               <FormControl fullWidth size="small">
                 <InputLabel id="no-buzzer-team-label">Team</InputLabel>
@@ -828,8 +894,8 @@ const RemoteControl: React.FC = () => {
               buzzerRoundStartTime={gameState?.buzzerRoundStartTime}
             />
           )}
-          {/* Buzzer Stats - Only show during buzzer round */}
-          {gameStatus === "buzzer_round" && buzzerStats && (
+          {/* Buzzer Stats - Only show during buzzer round and NOT in spin wheel mode */}
+          {!isSpinWheelMode && gameStatus === "buzzer_round" && buzzerStats && (
             <RemoteBuzzerStats
               fastestTeam={buzzerStats.fastestTeam}
               teamsPressed={buzzerStats.teamsPressed}
@@ -1150,26 +1216,28 @@ const RemoteControl: React.FC = () => {
                 </Typography>
                 
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
-                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <Box sx={{ maxWidth: "80%" }}>
-                      <Typography variant="body2" fontWeight={600}>
-                        Keep Buzzer
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Teams must buzz to answer. If disabled, admin selects team.
-                      </Typography>
+                  {!isSpinWheelMode && (
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <Box sx={{ maxWidth: "80%" }}>
+                        <Typography variant="body2" fontWeight={600}>
+                          Keep Buzzer
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Teams must buzz to answer. If disabled, admin selects team.
+                        </Typography>
+                      </Box>
+                      <Switch
+                        checked={nextQuestionToggles.keepBuzzer}
+                        onChange={(e) =>
+                          setNextQuestionToggles((prev) => ({
+                            ...prev,
+                            keepBuzzer: e.target.checked,
+                          }))
+                        }
+                        color="primary"
+                      />
                     </Box>
-                    <Switch
-                      checked={nextQuestionToggles.keepBuzzer}
-                      onChange={(e) =>
-                        setNextQuestionToggles((prev) => ({
-                          ...prev,
-                          keepBuzzer: e.target.checked,
-                        }))
-                      }
-                      color="primary"
-                    />
-                  </Box>
+                  )}
 
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <Box sx={{ maxWidth: "80%" }}>

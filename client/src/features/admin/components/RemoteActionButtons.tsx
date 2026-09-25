@@ -8,7 +8,6 @@ import BoltIcon from "@mui/icons-material/Bolt";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import LeaderboardIcon from "@mui/icons-material/Leaderboard";
-import CasinoIcon from "@mui/icons-material/Casino";
 
 interface RemoteActionButtonsProps {
   gameStatus: "paused" | "buzzer_round" | "answering" | "idle";
@@ -53,8 +52,6 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
   onMarkWrong,
   onShowHint,
   onToggleLeaderboard,
-  onOpenSpinWheel,
-  onToggleSpinWheelMode,
   onGrantSpinPermission,
   isSpinWheelEnabled = false,
   spinPermissionGranted = false,
@@ -210,7 +207,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
          Show Answer
       </Button>
 
-      {/* Leaderboard Toggle & Spin Category Wheel Buttons */}
+      {/* Leaderboard Toggle */}
       <Box sx={{ display: "flex", gap: "12px", width: "100%" }}>
         {onToggleLeaderboard && (
           <Button
@@ -231,69 +228,31 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
             {isLeaderboardVisible ? "Hide Leaderboard" : "Show Leaderboard"}
           </Button>
         )}
-
-        {onOpenSpinWheel && (
-          <Button
-            variant="contained"
-            startIcon={<CasinoIcon />}
-            onClick={onOpenSpinWheel}
-            disabled={isLoading}
-            sx={{
-              ...buttonBaseStyles,
-              flex: 1,
-              backgroundColor: "#EC4899",
-              "&:hover": {
-                backgroundColor: "#DB2777",
-                ...buttonBaseStyles["&:hover"],
-              },
-            }}
-          >
-            Spin Wheel
-          </Button>
-        )}
       </Box>
 
-      {/* Spin Wheel Mode Control Strip */}
-      <Box sx={{ display: "flex", gap: "12px", width: "100%" }}>
-        {onToggleSpinWheelMode && (
-          <Button
-            variant="contained"
-            startIcon={<CasinoIcon />}
-            onClick={onToggleSpinWheelMode}
-            disabled={isLoading}
-            sx={{
-              ...buttonBaseStyles,
-              flex: 1,
-              backgroundColor: isSpinWheelEnabled ? "#10B981" : "#64748B",
-              "&:hover": {
-                backgroundColor: isSpinWheelEnabled ? "#059669" : "#475569",
-                ...buttonBaseStyles["&:hover"],
-              },
-            }}
-          >
-            {isSpinWheelEnabled ? "Spin Mode: ENABLED" : "Enable Spin Mode"}
-          </Button>
-        )}
-
-        {isSpinWheelEnabled && onGrantSpinPermission && (
-          <Button
-            variant="contained"
-            onClick={onGrantSpinPermission}
-            disabled={isLoading || spinPermissionGranted}
-            sx={{
-              ...buttonBaseStyles,
-              flex: 1,
-              backgroundColor: spinPermissionGranted ? "#9CA3AF" : "#F59E0B",
-              "&:hover": {
-                backgroundColor: spinPermissionGranted ? "#9CA3AF" : "#D97706",
-                ...buttonBaseStyles["&:hover"],
-              },
-            }}
-          >
-            {spinPermissionGranted ? "Spin Permission Granted" : "Allow Team Spin"}
-          </Button>
-        )}
-      </Box>
+      {/* Spin Wheel Controls (Only in Spin Wheel Mode) */}
+      {isSpinWheelEnabled && (
+        <Box sx={{ display: "flex", gap: "12px", width: "100%" }}>
+          {onGrantSpinPermission && (
+            <Button
+              variant="contained"
+              onClick={onGrantSpinPermission}
+              disabled={isLoading || spinPermissionGranted}
+              sx={{
+                ...buttonBaseStyles,
+                flex: 1,
+                backgroundColor: spinPermissionGranted ? "#9CA3AF" : "#F59E0B",
+                "&:hover": {
+                  backgroundColor: spinPermissionGranted ? "#9CA3AF" : "#D97706",
+                  ...buttonBaseStyles["&:hover"],
+                },
+              }}
+            >
+              {spinPermissionGranted ? "Spin Permission Granted" : "Allow Team Spin"}
+            </Button>
+          )}
+        </Box>
+      )}
 
       {!hasQuestions && (
         <Box
@@ -310,8 +269,8 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
         </Box>
       )}
 
-      {/* Allow Top Team Button - Only in BUZZER_ROUND */}
-      {gameStatus === "buzzer_round" && (
+      {/* Allow Top Team Button - Only in BUZZER_ROUND and when NOT in Spin Wheel mode */}
+      {!isSpinWheelEnabled && gameStatus === "buzzer_round" && (
         <Button
           variant="contained"
           startIcon={isLoading ? <CircularProgress size={20} /> : <BoltIcon />}

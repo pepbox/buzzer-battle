@@ -12,15 +12,23 @@ const baseQuery = fetchBaseQuery({
   credentials: "include", // Include credentials for cross-origin requests
   prepareHeaders: (headers, { getState }) => {
     const state = getState() as any;
-    const sessionId = state?.session?.sessionId;
-    const isAuthenticated = Boolean(
-      state?.admin?.isAuthenticated || state?.team?.isAuthenticated,
-    );
+    const urlSessionIdMatch =
+      typeof window !== "undefined"
+        ? window.location.pathname.match(/\/admin\/([a-f0-9]{24})\//i)?.[1]
+        : undefined;
 
-    // Send session header only for authenticated API calls.
-    // This avoids CORS preflight noise on public polling/login endpoints.
-    if (sessionId && isAuthenticated) {
+    const sessionId =
+      state?.session?.sessionId ||
+      localStorage.getItem("sessionId") ||
+      urlSessionIdMatch;
+
+    if (sessionId) {
       headers.set("x-session-id", sessionId);
+    }
+
+    const adminToken = state?.admin?.token || localStorage.getItem("adminToken");
+    if (adminToken) {
+      headers.set("authorization", `Bearer ${adminToken}`);
     }
 
     return headers;

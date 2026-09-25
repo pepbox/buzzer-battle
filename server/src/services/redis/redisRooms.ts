@@ -47,6 +47,7 @@ class RedisRooms {
         socketId: string,
         user: AccessTokenPayload
     ): Promise<void> {
+        if (redis.status !== "ready") return;
         const { sessionId, role, id: userId } = user;
         const teamId = (user as any).teamId as string | undefined;
 
@@ -83,6 +84,7 @@ class RedisRooms {
      * Uses reverse-lookup keys to find the session without needing the user payload.
      */
     async removeSocketFromSession(socketId: string): Promise<void> {
+        if (redis.status !== "ready") return;
         const sessionId = await redis.get(this.socketSessionKey(socketId));
         if (!sessionId) return;
 

@@ -234,6 +234,11 @@ export const createQuestion = async (
       );
     }
 
+    const categoryName = (req.body.category || folder || "").trim();
+    if (!categoryName) {
+      return next(new AppError("Category is a mandatory field.", 400));
+    }
+
     const normalizedOptions = Array.isArray(options)
       ? options
           .filter((opt: any) => opt?.optionText)

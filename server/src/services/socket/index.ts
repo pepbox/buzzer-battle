@@ -23,9 +23,13 @@ export async function initializeSocket(server: HTTPServer): Promise<Server> {
     },
   });
 
-  // Attach Redis adapter for cross-instance broadcasting
-  io.adapter(createAdapter(pubClient, subClient));
-  console.log("✅ Socket.IO Redis adapter attached");
+  // Attach Redis adapter for cross-instance broadcasting if available
+  if (pubClient.status === "ready" && subClient.status === "ready") {
+    io.adapter(createAdapter(pubClient, subClient));
+    console.log("✅ Socket.IO Redis adapter attached");
+  } else {
+    console.log("ℹ️ Socket.IO initialized with default in-memory adapter (Redis offline)");
+  }
 
   io.use(socketAuthMiddleware);
 
