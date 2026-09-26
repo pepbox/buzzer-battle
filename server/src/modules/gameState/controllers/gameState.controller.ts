@@ -9,11 +9,122 @@ import { SessionEmitters } from "../../../services/socket/sessionEmitters";
 import { Events } from "../../../services/socket/enums/Events";
 import { timerManager } from "../../../services/timerManager";
 import { Session } from "../../session/models/session.model";
+import { Question } from "../../questions/models/question.model";
 import { gamistanLiveState } from "../services/gamistanLiveState";
 
 const gameStateService = new GameStateService();
 const questionService = new QuestionService();
 const teamService = new TeamService();
+
+export const ALLOWED_SPIN_WHEEL_CATEGORIES = [
+  "Who Am I?",
+  "English Vinglish",
+  "Guess The Song",
+  "Rumble Jumble : Guess The Movie and the song",
+  "Prop Round : Guess The Movie",
+];
+
+const getCategoryKeywords = (cat: string): string[] => {
+  const norm = (cat || "").toLowerCase();
+  if (norm.includes("who am i")) return ["who am i", "whoami", "who_am_i"];
+  if (norm.includes("song")) return ["song", "guess the song", "guessthesong"];
+  if (norm.includes("rumble") || norm.includes("jumble"))
+    return ["rumble", "jumble", "rumble jumble", "rumblejumble"];
+  if (norm.includes("prop")) return ["prop", "prop round", "propround"];
+  if (norm.includes("english") || norm.includes("vinglish"))
+    return ["english", "vinglish", "english vinglish"];
+  return [norm.replace(/[^a-z0-9]/g, "")];
+};
+
+const isQuestionMatchingCategory = (q: any, targetCat: string): boolean => {
+  if (!q) return false;
+  const keywords = getCategoryKeywords(targetCat);
+
+  const fieldsToSearch = [
+    q.folder || "",
+    q.category || "",
+    q.questionText || "",
+    q.questionContent?.text || "",
+    q.questionImage || "",
+    q.quetionVideo || "",
+    JSON.stringify(q.questionAssets || []),
+  ].map((s) => (s || "").toLowerCase());
+
+  const combinedText = fieldsToSearch.join(" ");
+  return keywords.some((kw) => kw && combinedText.includes(kw));
+};
+
+const selectUnusedQuestionForCategory = async (
+  sessionId: string,
+  winningCategory: string,
+  usedQuestionIds: string[],
+) => {
+  const sessionData = await Session.findById(sessionId).populate("questions");
+  if (!sessionData) return null;
+
+  const sessionQuestions = (sessionData.questions || []) as any[];
+
+  // 1. Search matching unused questions in session questions
+  const matchingSessionQuestions = sessionQuestions.filter((q: any) => {
+    if (!q || !q._id) return false;
+    const matches = isQuestionMatchingCategory(q, winningCategory);
+    const isUnused = !usedQuestionIds.includes(q._id.toString());
+    return matches && isUnused;
+  });
+
+  if (matchingSessionQuestions.length > 0) {
+    const selectedQuestion = matchingSessionQuestions[0];
+    const qIndex = sessionQuestions.findIndex(
+      (q: any) => q._id.toString() === selectedQuestion._id.toString(),
+    );
+    return {
+      question: selectedQuestion,
+      questionIndex: qIndex >= 0 ? qIndex : 0,
+      questionId: selectedQuestion._id.toString(),
+    };
+  }
+
+  // 2. Fallback: search global Question collection if not currently attached to session
+  const globalMatchingQuestions = await Question.find({
+    _id: { $nin: usedQuestionIds },
+  });
+
+  const matchingGlobal = globalMatchingQuestions.filter((q: any) =>
+    isQuestionMatchingCategory(q, winningCategory),
+  );
+
+  if (matchingGlobal.length > 0) {
+    const selectedQuestion = matchingGlobal[0];
+    sessionData.questions.push(selectedQuestion._id as any);
+    await sessionData.save();
+
+    const qIndex = sessionData.questions.length - 1;
+    return {
+      question: selectedQuestion,
+      questionIndex: qIndex,
+      questionId: selectedQuestion._id.toString(),
+    };
+  }
+
+  // 3. Fallback: if no question matched by keyword, pick any unused question from session so game can proceed
+  const unusedSessionQuestions = sessionQuestions.filter(
+    (q: any) => q && q._id && !usedQuestionIds.includes(q._id.toString()),
+  );
+
+  if (unusedSessionQuestions.length > 0) {
+    const selectedQuestion = unusedSessionQuestions[0];
+    const qIndex = sessionQuestions.findIndex(
+      (q: any) => q._id.toString() === selectedQuestion._id.toString(),
+    );
+    return {
+      question: selectedQuestion,
+      questionIndex: qIndex >= 0 ? qIndex : 0,
+      questionId: selectedQuestion._id.toString(),
+    };
+  }
+
+  return null;
+};
 
 /**
  * Fetch current game state for the session
@@ -138,6 +249,34 @@ export const updateGameStateUnified = async (
             session.numberOfTeams = joinedTeamCount;
             await session.save();
           }
+        }
+
+        const curLive = await gamistanLiveState.getState(sessionId);
+        const isSpinMode = curLive.roundType === "SPIN_WHEEL" || curLive.isSpinWheelEnabled;
+
+        if (isSpinMode) {
+          await gamistanLiveState.updateState(sessionId, {
+            selectedCategory: "",
+            spinPermissionGranted: false,
+            canSpinTeam: "",
+          });
+
+          gameState = await gameStateService.updateGameState(sessionId, {
+            gameStatus: GameStatus.IDLE,
+            currentAnsweringTeam: null,
+          });
+
+          SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+            gameStatus: GameStatus.IDLE,
+            currentQuestionIndex: gameState.currentQuestionIndex,
+            currentAnsweringTeam: null,
+            selectedCategory: "",
+            spinPermissionGranted: false,
+            isSpinWheelEnabled: true,
+            roundType: "SPIN_WHEEL",
+          });
+
+          break;
         }
 
         const result =
@@ -543,11 +682,13 @@ export const updateGameStateUnified = async (
         const live = await gamistanLiveState.updateState(sessionId, {
           spinPermissionGranted: true,
           canSpinTeam: payload?.teamName || payload?.teamId || "",
+          selectedCategory: "",
         });
 
         SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
           spinPermissionGranted: true,
           canSpinTeam: live.canSpinTeam,
+          selectedCategory: "",
         });
         break;
       }
@@ -558,28 +699,57 @@ export const updateGameStateUnified = async (
           return next(new AppError("Spin Wheel is not currently enabled for this session.", 400));
         }
 
-        const categoriesList = curLive.availableCategories && curLive.availableCategories.length > 0
-          ? curLive.availableCategories
-          : ["Who Am I?", "English", "Song", "Jumble", "Prop Round", "Bollywood", "Sports", "GK"];
+        const validCategories = (curLive.availableCategories || []).filter((c: string) =>
+          ALLOWED_SPIN_WHEEL_CATEGORIES.includes(c)
+        );
+        const categoriesList = validCategories.length > 0
+          ? validCategories
+          : ALLOWED_SPIN_WHEEL_CATEGORIES;
 
         const spinIndex = Math.floor(Math.random() * categoriesList.length);
         const winCategory = categoriesList[spinIndex];
 
+        const questionResult = await selectUnusedQuestionForCategory(
+          sessionId,
+          winCategory,
+          curLive.usedQuestionIds || [],
+        );
+
+        if (!questionResult) {
+          return next(new AppError(`No unused questions available in category "${winCategory}".`, 400));
+        }
+
+        let existingGameStateDoc = await gameStateService.fetchGameStateBySessionId(sessionId);
+        if (existingGameStateDoc) {
+          existingGameStateDoc.currentQuestionIndex = questionResult.questionIndex;
+          existingGameStateDoc.gameStatus = GameStatus.IDLE;
+          await existingGameStateDoc.save();
+        }
+
         const live = await gamistanLiveState.updateState(sessionId, {
           selectedCategory: winCategory,
           spinPermissionGranted: false,
+          isQuestionVisible: true,
         });
+        await gamistanLiveState.addUsedQuestionId(sessionId, questionResult.questionId);
 
         additionalData.category = winCategory;
+        additionalData.questionIndex = questionResult.questionIndex;
+        additionalData.questionId = questionResult.questionId;
 
         SessionEmitters.toSession(sessionId, Events.SPIN_WHEEL_RESULT, {
           category: winCategory,
+          questionId: questionResult.questionId,
+          questionIndex: questionResult.questionIndex,
           timestamp: Date.now(),
         });
 
         SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
           selectedCategory: winCategory,
           spinPermissionGranted: false,
+          currentQuestionIndex: questionResult.questionIndex,
+          gameStatus: GameStatus.BUZZER_ROUND,
+          isQuestionVisible: true,
         });
         break;
       }
@@ -1108,35 +1278,61 @@ export const spinWheelParticipant = async (
       }
     }
 
-    const categoriesList = liveState.availableCategories && liveState.availableCategories.length > 0
-      ? liveState.availableCategories
-      : ["Who Am I?", "English", "Song", "Jumble", "Prop Round", "Bollywood", "Sports", "GK"];
+    const validCategories = (liveState.availableCategories || []).filter((c: string) =>
+      ALLOWED_SPIN_WHEEL_CATEGORIES.includes(c)
+    );
+    const categoriesList = validCategories.length > 0
+      ? validCategories
+      : ALLOWED_SPIN_WHEEL_CATEGORIES;
 
     const randomIndex = Math.floor(Math.random() * categoriesList.length);
     const winningCategory = categoriesList[randomIndex];
 
+    const questionResult = await selectUnusedQuestionForCategory(
+      sessionId,
+      winningCategory,
+      liveState.usedQuestionIds || [],
+    );
+
+    if (!questionResult) {
+      return next(new AppError(`No unused questions available in category "${winningCategory}".`, 400));
+    }
+
+    let gameStateDoc = await gameStateService.fetchGameStateBySessionId(sessionId);
+    if (gameStateDoc) {
+      gameStateDoc.currentQuestionIndex = questionResult.questionIndex;
+      gameStateDoc.gameStatus = GameStatus.IDLE;
+      await gameStateDoc.save();
+    }
+
     const updatedLive = await gamistanLiveState.updateState(sessionId, {
       selectedCategory: winningCategory,
       spinPermissionGranted: false,
+      isQuestionVisible: true,
     });
+    await gamistanLiveState.addUsedQuestionId(sessionId, questionResult.questionId);
 
-    const gameStateDoc = await gameStateService.fetchGameStateBySessionId(sessionId);
     const mergedState = {
       ...(gameStateDoc ? gameStateDoc.toObject() : {}),
       ...updatedLive,
+      currentQuestionIndex: questionResult.questionIndex,
     };
 
     SessionEmitters.toSession(sessionId, Events.SPIN_WHEEL_RESULT, {
       category: winningCategory,
+      questionId: questionResult.questionId,
+      questionIndex: questionResult.questionIndex,
       timestamp: Date.now(),
     });
 
     SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, mergedState);
 
     res.status(200).json({
-      message: "Spin completed successfully.",
+      message: "Spin completed successfully. Question assigned automatically.",
       data: {
         category: winningCategory,
+        questionIndex: questionResult.questionIndex,
+        questionId: questionResult.questionId,
         gameState: mergedState,
       },
     });

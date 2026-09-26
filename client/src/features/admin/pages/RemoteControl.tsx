@@ -282,7 +282,7 @@ const RemoteControl: React.FC = () => {
       ? teams.find((team) => team._id === currentAnsweringTeamRaw) || null
       : currentAnsweringTeamRaw || null;
   const isNoBuzzerMode =
-    (isSpinWheelMode || currentQuestionKeepBuzzer === false) && !currentAnsweringTeamId;
+    !isSpinWheelMode && currentQuestionKeepBuzzer === false && !currentAnsweringTeamId;
 
   // Filter out already selected team from dropdown options
   const availableTeams = useMemo(
@@ -515,12 +515,14 @@ const RemoteControl: React.FC = () => {
   };
 
   const handleNextQuestion = async () => {
-    // If no next question exists, or we have already ended the game, call nextQuestion() directly
-    if (currentQuestionIndex + 1 >= totalQuestions) {
+    // If Spin Wheel mode is active or no next question exists, execute nextQuestion() directly without sequential preview popup
+    if (isSpinWheelMode || currentQuestionIndex + 1 >= totalQuestions) {
       try {
         const result = await nextQuestion().unwrap();
         if (result.data.gameEnded) {
           showSnackbar("Game completed! All questions done.", "success");
+        } else {
+          showSnackbar("Moved to next spin turn", "success");
         }
       } catch (error: any) {
         showSnackbar(
@@ -925,7 +927,7 @@ const RemoteControl: React.FC = () => {
             isLeaderboardVisible={!!gameState?.isLeaderboardVisible}
             onOpenSpinWheel={() => setSpinWheelOpen(true)}
             onToggleSpinWheelMode={handleToggleSpinWheelMode}
-            isSpinWheelEnabled={!!gameState?.isSpinWheelEnabled}
+            isSpinWheelEnabled={isSpinWheelMode}
             onGrantSpinPermission={handleGrantSpinPermission}
             spinPermissionGranted={!!gameState?.spinPermissionGranted}
             hasHint={

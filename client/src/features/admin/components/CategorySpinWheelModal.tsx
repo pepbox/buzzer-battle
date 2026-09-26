@@ -22,13 +22,10 @@ interface CategorySpinWheelModalProps {
 
 const DEFAULT_CATEGORIES = [
   "Who Am I?",
-  "English",
-  "Song",
-  "Jumble",
-  "Prop Round",
-  "Bollywood",
-  "Sports",
-  "GK",
+  "English Vinglish",
+  "Guess The Song",
+  "Rumble Jumble : Guess The Movie and the song",
+  "Prop Round : Guess The Movie",
 ];
 
 const WHEEL_COLORS = [

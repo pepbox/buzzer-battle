@@ -136,8 +136,17 @@ const BuzzerRound: React.FC = () => {
     return <Loader />;
   }
 
+  const isSpinWheelMode =
+    gameState?.roundType === "SPIN_WHEEL" || gameState?.isSpinWheelEnabled;
+
   // Show error state
-  if (error || (!activeQuestion && !isFetching && !isQuestionTransitioning)) {
+  if (
+    error ||
+    (!activeQuestion &&
+      !isFetching &&
+      !isQuestionTransitioning &&
+      !isSpinWheelMode)
+  ) {
     return (
       <Box
         minHeight={"100%"}
@@ -233,16 +242,18 @@ const BuzzerRound: React.FC = () => {
             marginBottom: "20px",
           }}
         >
-          {activeQuestion && (
-            <Question
-              key={questionDataFormatted.id}
-              questionData={questionDataFormatted}
-              questionNumber={(currentQuestionIndex || 0) + 1}
-              showOptions={false}
-              showVerbalHint={false}
-              disabled={true}
-            />
-          )}
+          {activeQuestion &&
+            (!(gameState?.roundType === "SPIN_WHEEL" || gameState?.isSpinWheelEnabled) ||
+              (gameState?.selectedCategory && !gameState?.spinPermissionGranted)) && (
+              <Question
+                key={questionDataFormatted.id}
+                questionData={questionDataFormatted}
+                questionNumber={(currentQuestionIndex || 0) + 1}
+                showOptions={false}
+                showVerbalHint={false}
+                disabled={true}
+              />
+            )}
         </Box>
 
         {/* Action Section: Buzzer or Spin Wheel according to active round mode */}
