@@ -41,26 +41,43 @@ export default class TeamService {
     }
 
     if (team) {
-      // Check duplicate name
-      const nameExists = team.members.some(
-        (m) => m.name.toLowerCase() === playerName.toLowerCase()
+      // Check if member already exists in this team
+      const existingMemberIndex = team.members.findIndex(
+        (m) => m.name.trim().toLowerCase() === playerName.trim().toLowerCase()
       );
-      if (nameExists) {
-        throw new Error("Player name already exists in this team");
-      }
 
-      // Check if buzzer person already exists if joining as buzzer person
-      if (playerRole === "BUZZER_PERSON") {
-        const hasBuzzerPerson = team.members.some(
-          (m) => m.role === "BUZZER_PERSON"
-        );
-        if (hasBuzzerPerson) {
-          throw new Error("Buzzer Person already exists in this team");
+      if (existingMemberIndex !== -1) {
+        const existingMember = team.members[existingMemberIndex];
+
+        // Check if buzzer person already exists if attempting to claim buzzer person role
+        if (playerRole === "BUZZER_PERSON" && existingMember.role !== "BUZZER_PERSON") {
+          const hasAnotherBuzzerPerson = team.members.some(
+            (m, idx) => idx !== existingMemberIndex && m.role === "BUZZER_PERSON"
+          );
+          if (hasAnotherBuzzerPerson) {
+            throw new Error("Buzzer Person already exists in this team");
+          }
         }
-      }
 
-      team.members.push(newMember);
-      await team.save(options);
+        // Allow re-joining/logging in by updating member role and timestamp
+        team.members[existingMemberIndex].role = playerRole;
+        team.members[existingMemberIndex].joinedAt = new Date();
+        await team.save(options);
+      } else {
+        // New member joining team
+        // Check if buzzer person already exists if joining as buzzer person
+        if (playerRole === "BUZZER_PERSON") {
+          const hasBuzzerPerson = team.members.some(
+            (m) => m.role === "BUZZER_PERSON"
+          );
+          if (hasBuzzerPerson) {
+            throw new Error("Buzzer Person already exists in this team");
+          }
+        }
+
+        team.members.push(newMember);
+        await team.save(options);
+      }
     } else {
       // Fetch session to determine teamName
       const sessionDoc = await Session.findById(sessionId).select("teamMode");
@@ -259,14 +276,18 @@ export default class TeamService {
   // Fetch joined teams details in a session
   async fetchJoinedTeamsDetails(
     sessionId: Types.ObjectId | string,
-  ): Promise<{ teamNumber: number; hasBuzzerPerson: boolean }[]> {
+  ): Promise<{ teamNumber: number; hasBuzzerPerson: boolean; buzzerPersonName?: string }[]> {
     const teams = await Team.find({ session: sessionId })
       .select("teamNumber members")
       .lean();
-    return teams.map((team: any) => ({
-      teamNumber: Number(team.teamNumber),
-      hasBuzzerPerson: team.members?.some((m: any) => m.role === "BUZZER_PERSON") || false
-    }));
+    return teams.map((team: any) => {
+      const buzzerMember = team.members?.find((m: any) => m.role === "BUZZER_PERSON");
+      return {
+        teamNumber: Number(team.teamNumber),
+        hasBuzzerPerson: !!buzzerMember,
+        buzzerPersonName: buzzerMember?.name,
+      };
+    });
   }
 
   // Update team by ID (for admin)
@@ -289,5 +310,52 @@ export default class TeamService {
     }
 
     return team as unknown as ITeam;
+  }
+
+  // Kick out an individual member from a team
+  async kickoutMember(
+    teamId: Types.ObjectId | string,
+    playerName: string,
+  ): Promise<ITeam | null> {
+    const options: any = {};
+    if (this.session) {
+      options.session = this.session;
+    }
+
+    const query = Team.findById(teamId);
+    if (this.session) {
+      query.session(this.session);
+    }
+    const team = await query;
+    if (!team) {
+      throw new Error("Team not found");
+    }
+
+    const initialCount = team.members.length;
+    team.members = team.members.filter(
+      (m) => m.name.trim().toLowerCase() !== playerName.trim().toLowerCase()
+    );
+
+    if (team.members.length === initialCount) {
+      throw new Error("Player not found in team");
+    }
+
+    // If no members left in team, remove the team document
+    if (team.members.length === 0) {
+      await Team.findByIdAndDelete(teamId, options);
+      return null;
+    }
+
+    await team.save(options);
+    return team;
+  }
+
+  // Delete team completely
+  async deleteTeam(teamId: Types.ObjectId | string): Promise<void> {
+    const options: any = {};
+    if (this.session) {
+      options.session = this.session;
+    }
+    await Team.findByIdAndDelete(teamId, options);
   }
 }

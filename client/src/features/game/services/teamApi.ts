@@ -48,6 +48,7 @@ export interface LeaderboardResponse {
 export interface JoinedTeamDetail {
   teamNumber: number;
   hasBuzzerPerson: boolean;
+  buzzerPersonName?: string;
 }
 
 export const teamApi = api.injectEndpoints({

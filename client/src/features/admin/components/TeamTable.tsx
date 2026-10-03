@@ -25,15 +25,23 @@ import {
   Stack,
   Divider,
   TableSortLabel,
+  Tooltip,
+  CircularProgress,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import {
   Edit as EditIcon,
   Search as SearchIcon,
   Visibility as VisibilityIcon,
   EmojiEvents as TrophyIcon,
+  Group as GroupIcon,
+  PersonRemove as PersonRemoveIcon,
+  DeleteOutline as DeleteOutlineIcon,
 } from '@mui/icons-material';
 import { Team, TeamTableProps } from '../types/interfaces';
 import TeamMembersModal from './TeamMembersModal';
+import { useKickoutTeamMutation } from '../services/admin.Api';
 
 interface EditTeamData {
   teamName?: string;
@@ -58,6 +66,7 @@ const TeamTable: React.FC<TeamTableProps> = ({
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [kickoutTeam, { isLoading: isKickingTeam }] = useKickoutTeamMutation();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState<SortField>('rank');
@@ -76,6 +85,60 @@ const TeamTable: React.FC<TeamTableProps> = ({
     open: false,
     team: null,
   });
+
+  const [kickTeamDialog, setKickTeamDialog] = useState<{
+    open: boolean;
+    team: Team | null;
+  }>({
+    open: false,
+    team: null,
+  });
+
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
+
+  const handleOpenKickTeamConfirm = (team: Team) => {
+    setKickTeamDialog({
+      open: true,
+      team,
+    });
+  };
+
+  const handleCloseKickTeamConfirm = () => {
+    setKickTeamDialog({
+      open: false,
+      team: null,
+    });
+  };
+
+  const handleExecuteKickTeam = async () => {
+    if (!kickTeamDialog.team) return;
+    const team = kickTeamDialog.team;
+
+    try {
+      await kickoutTeam({ teamId: team._id }).unwrap();
+      setSnackbar({
+        open: true,
+        message: `Team #${team.teamNumber} (${team.teamName}) has been kicked out.`,
+        severity: 'success',
+      });
+      handleCloseKickTeamConfirm();
+    } catch (err: any) {
+      setSnackbar({
+        open: true,
+        message: err?.data?.message || 'Failed to kick out team.',
+        severity: 'error',
+      });
+      handleCloseKickTeamConfirm();
+    }
+  };
 
   const handleTeamNameClick = (team: Team) => {
     setMembersModal({
@@ -296,15 +359,78 @@ const TeamTable: React.FC<TeamTableProps> = ({
                     </Typography>
                   </Box>
 
-                  {/* View Responses Button */}
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    startIcon={<VisibilityIcon />}
-                    onClick={() => onViewResponses(team._id)}
-                  >
-                    View Responses
-                  </Button>
+                  {/* Members Info */}
+                  {(() => {
+                    const buzzerPerson = team.members?.find((m) => m.role === "BUZZER_PERSON");
+                    const totalMembers = team.members?.length || 0;
+                    return (
+                      <Box
+                        display="flex"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        onClick={() => handleTeamNameClick(team)}
+                        sx={{
+                          cursor: "pointer",
+                          p: 1,
+                          backgroundColor: "#f5f5f5",
+                          borderRadius: 1,
+                        }}
+                      >
+                        <Typography variant="body2" fontWeight="medium" color="text.secondary">
+                          Team Members:
+                        </Typography>
+                        {buzzerPerson ? (
+                          <Chip
+                            icon={<GroupIcon style={{ fontSize: 16 }} />}
+                            label={`👑 ${buzzerPerson.name}${totalMembers > 1 ? ` (+${totalMembers - 1})` : ""}`}
+                            size="small"
+                            color="secondary"
+                            variant="outlined"
+                          />
+                        ) : totalMembers > 0 ? (
+                          <Chip
+                            icon={<GroupIcon style={{ fontSize: 16 }} />}
+                            label={`${totalMembers} joined`}
+                            size="small"
+                            variant="outlined"
+                          />
+                        ) : (
+                          <Typography variant="caption" color="text.secondary" fontStyle="italic">
+                            No members
+                          </Typography>
+                        )}
+                      </Box>
+                    );
+                  })()}
+
+                  {/* Action Buttons */}
+                  <Box display="flex" gap={1}>
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      color="secondary"
+                      startIcon={<GroupIcon />}
+                      onClick={() => handleTeamNameClick(team)}
+                    >
+                      Members ({team.members?.length || 0})
+                    </Button>
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      startIcon={<VisibilityIcon />}
+                      onClick={() => onViewResponses(team._id)}
+                    >
+                      Responses
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      startIcon={<PersonRemoveIcon />}
+                      onClick={() => handleOpenKickTeamConfirm(team)}
+                    >
+                      Kick
+                    </Button>
+                  </Box>
                 </Stack>
               </CardContent>
             </Card>
@@ -413,6 +539,7 @@ const TeamTable: React.FC<TeamTableProps> = ({
                   Team Name
                 </TableSortLabel>
               </TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Members</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>
                 <TableSortLabel
                   active={sortField === 'teamScore'}
@@ -446,78 +573,141 @@ const TeamTable: React.FC<TeamTableProps> = ({
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredAndSortedTeams.map((team) => (
-              <TableRow
-                key={team._id}
-                sx={{
-                  '&:hover': { backgroundColor: theme.palette.action.hover },
-                }}
-              >
-                <TableCell>
-                  <Box display="flex" alignItems="center" gap={1}>
-                    {getRankDisplay(team.rank)}
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <Chip label={team.teamNumber} color="primary" size="small" />
-                </TableCell>
-                <TableCell>
-                  <Box display="flex" alignItems="center" gap={1}>
-                    <Typography
+            {filteredAndSortedTeams.map((team) => {
+              const buzzerPerson = team.members?.find((m) => m.role === "BUZZER_PERSON");
+              const totalMembers = team.members?.length || 0;
+
+              return (
+                <TableRow
+                  key={team._id}
+                  sx={{
+                    '&:hover': { backgroundColor: theme.palette.action.hover },
+                  }}
+                >
+                  <TableCell>
+                    <Box display="flex" alignItems="center" gap={1}>
+                      {getRankDisplay(team.rank)}
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Chip label={team.teamNumber} color="primary" size="small" />
+                  </TableCell>
+                  <TableCell>
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <Typography
+                        onClick={() => handleTeamNameClick(team)}
+                        sx={{
+                          cursor: "pointer",
+                          fontWeight: "medium",
+                          "&:hover": {
+                            textDecoration: "underline",
+                            color: theme.palette.primary.main,
+                          },
+                        }}
+                      >
+                        {team.teamName}
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleEditClick(team, 'name')}
+                        disabled={!transactionMode}
+                        color="primary"
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Box
+                      display="flex"
+                      alignItems="center"
+                      gap={1}
                       onClick={() => handleTeamNameClick(team)}
-                      sx={{
-                        cursor: "pointer",
-                        fontWeight: "medium",
-                        "&:hover": {
-                          textDecoration: "underline",
-                          color: theme.palette.primary.main,
-                        },
-                      }}
+                      sx={{ cursor: "pointer" }}
                     >
-                      {team.teamName}
-                    </Typography>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleEditClick(team, 'name')}
-                      disabled={!transactionMode}
-                      color="primary"
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <Box display="flex" alignItems="center" gap={1}>
-                    <Typography fontWeight="bold" color="primary">
-                      {team.teamScore}
-                    </Typography>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleEditClick(team, 'score')}
-                      disabled={!transactionMode}
-                      color="primary"
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <Chip label={team.status} color={getStatusColor(team.status)} size="small" />
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2">{team.responsesCount}</Typography>
-                </TableCell>
-                <TableCell>
-                  <IconButton
-                    color="primary"
-                    onClick={() => onViewResponses(team._id)}
-                    title="View Responses"
-                  >
-                    <VisibilityIcon />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
+                      {buzzerPerson ? (
+                        <Tooltip title={`Captain: ${buzzerPerson.name} (${totalMembers} total member${totalMembers > 1 ? "s" : ""}) - Click to view`}>
+                          <Chip
+                            icon={<GroupIcon style={{ fontSize: 16 }} />}
+                            label={`👑 ${buzzerPerson.name}${totalMembers > 1 ? ` (+${totalMembers - 1})` : ""}`}
+                            size="small"
+                            color="secondary"
+                            variant="outlined"
+                            clickable
+                          />
+                        </Tooltip>
+                      ) : totalMembers > 0 ? (
+                        <Tooltip title={`${totalMembers} team members joined - Click to view`}>
+                          <Chip
+                            icon={<GroupIcon style={{ fontSize: 16 }} />}
+                            label={`${totalMembers} joined`}
+                            size="small"
+                            variant="outlined"
+                            clickable
+                          />
+                        </Tooltip>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                          No members yet
+                        </Typography>
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <Typography fontWeight="bold" color="primary">
+                        {team.teamScore}
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleEditClick(team, 'score')}
+                        disabled={!transactionMode}
+                        color="primary"
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Chip label={team.status} color={getStatusColor(team.status)} size="small" />
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">{team.responsesCount}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Box display="flex" alignItems="center" gap={0.5}>
+                      <Tooltip title="View Team Members">
+                        <IconButton
+                          color="secondary"
+                          onClick={() => handleTeamNameClick(team)}
+                        >
+                          <GroupIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="View Responses">
+                        <IconButton
+                          color="primary"
+                          onClick={() => onViewResponses(team._id)}
+                        >
+                          <VisibilityIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Kick Out Entire Team">
+                        <IconButton
+                          color="error"
+                          onClick={() => handleOpenKickTeamConfirm(team)}
+                          sx={{
+                            "&:hover": { backgroundColor: "rgba(239, 68, 68, 0.1)" },
+                          }}
+                        >
+                          <DeleteOutlineIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </TableContainer>
@@ -555,16 +745,68 @@ const TeamTable: React.FC<TeamTableProps> = ({
         </DialogActions>
       </Dialog>
 
+      {/* Kick Out Team Confirmation Dialog */}
+      <Dialog
+        open={kickTeamDialog.open}
+        onClose={handleCloseKickTeamConfirm}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: "16px", p: 1 } }}
+      >
+        <DialogTitle sx={{ fontWeight: "bold", color: theme.palette.error.main }}>
+          Kick Out Team?
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1">
+            Are you sure you want to kick out <strong>Team #{kickTeamDialog.team?.teamNumber} ({kickTeamDialog.team?.teamName})</strong>?
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+            All {kickTeamDialog.team?.members?.length || 0} player(s) in this team will be immediately logged out and disconnected.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={handleCloseKickTeamConfirm} disabled={isKickingTeam} color="inherit">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleExecuteKickTeam}
+            variant="contained"
+            color="error"
+            disabled={isKickingTeam}
+            startIcon={isKickingTeam ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
+          >
+            {isKickingTeam ? "Kicking..." : "Kick Out Team"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Team Members Modal */}
       {membersModal.team && (
         <TeamMembersModal
           open={membersModal.open}
           onClose={handleCloseMembersModal}
+          teamId={membersModal.team._id}
           teamName={membersModal.team.teamName}
           teamNumber={membersModal.team.teamNumber}
           members={membersModal.team.members || []}
         />
       )}
+
+      {/* Feedback Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

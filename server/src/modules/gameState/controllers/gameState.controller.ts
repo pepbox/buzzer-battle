@@ -4,6 +4,7 @@ import AppError from "../../../utils/appError";
 import GameStateService from "../services/gameState.service";
 import QuestionService from "../../questions/services/question.service";
 import TeamService from "../../teams/services/team.service";
+import BuzzerQueueService from "../../buzzerQueue/services/buzzerQueue.service";
 import { GameStatus } from "../types/enums";
 import { SessionEmitters } from "../../../services/socket/sessionEmitters";
 import { Events } from "../../../services/socket/enums/Events";
@@ -15,6 +16,7 @@ import { gamistanLiveState } from "../services/gamistanLiveState";
 const gameStateService = new GameStateService();
 const questionService = new QuestionService();
 const teamService = new TeamService();
+const buzzerQueueService = new BuzzerQueueService();
 
 export const ALLOWED_SPIN_WHEEL_CATEGORIES = [
   "Who Am I?",
@@ -153,7 +155,24 @@ export const fetchGameState = async (
       gameState = await gameStateService.createGameState(sessionId);
     }
 
-    const liveState = await gamistanLiveState.getState(sessionId);
+    const liveState = await gamistanLiveState.getState(sessionId, {
+      isSpinWheelEnabled: gameState.isSpinWheelEnabled,
+      roundType: gameState.roundType,
+      selectedCategory: gameState.selectedCategory,
+      availableCategories: gameState.availableCategories,
+      spinPermissionGranted: gameState.spinPermissionGranted,
+    });
+
+    // If MongoDB has spin mode enabled but liveState defaulted to false, sync liveState
+    if (gameState.isSpinWheelEnabled && !liveState.isSpinWheelEnabled) {
+      liveState.isSpinWheelEnabled = true;
+      liveState.roundType = "SPIN_WHEEL";
+      await gamistanLiveState.updateState(sessionId, {
+        isSpinWheelEnabled: true,
+        roundType: "SPIN_WHEEL",
+      });
+    }
+
     const mergedState = {
       ...gameState.toObject(),
       ...liveState,
@@ -221,7 +240,55 @@ export const updateGameStateUnified = async (
         });
         break;
 
-      case "RESUME":
+      case "RESUME": {
+        const curLive = await gamistanLiveState.getState(sessionId);
+        const isSpinMode = curLive.roundType === "SPIN_WHEEL" || curLive.isSpinWheelEnabled;
+
+        if (isSpinMode) {
+          gameState = await gameStateService.updateGameState(sessionId, {
+            gameStatus: existingGameState.currentAnsweringTeam ? GameStatus.ANSWERING : GameStatus.IDLE,
+          });
+
+          SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+            gameStatus: gameState.gameStatus,
+            currentQuestionIndex: gameState.currentQuestionIndex,
+            currentAnsweringTeam: gameState.currentAnsweringTeam,
+            isSpinWheelEnabled: true,
+            roundType: "SPIN_WHEEL",
+            spinPermissionGranted: curLive.spinPermissionGranted,
+            canSpinTeam: curLive.canSpinTeam,
+            selectedCategory: curLive.selectedCategory,
+          });
+          break;
+        }
+
+        // Check if current question has keepBuzzer: false
+        let isNoBuzzer = false;
+        try {
+          const currentQuestion = await questionService.fetchCurrentQuestion(
+            sessionId,
+            existingGameState.currentQuestionIndex,
+          );
+          if (currentQuestion && currentQuestion.keepBuzzer === false) {
+            isNoBuzzer = true;
+          }
+        } catch (_) {}
+
+        if (isNoBuzzer) {
+          gameState = await gameStateService.updateGameState(sessionId, {
+            gameStatus: existingGameState.currentAnsweringTeam ? GameStatus.ANSWERING : GameStatus.IDLE,
+          });
+
+          SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+            gameStatus: gameState.gameStatus,
+            currentQuestionIndex: gameState.currentQuestionIndex,
+            currentAnsweringTeam: gameState.currentAnsweringTeam,
+            keepBuzzer: false,
+            isNoBuzzerQuestion: true,
+          });
+          break;
+        }
+
         gameState = await gameStateService.resumeGame(sessionId);
 
         // Emit socket event
@@ -233,26 +300,38 @@ export const updateGameStateUnified = async (
           answeringStartTime: gameState.answeringRoundStartTime,
         });
         break;
+      }
 
-      case "NEXT_QUESTION":
+      case "NEXT_QUESTION": {
         // Cancel any active timers for this session
         timerManager.cancelSessionTimers(sessionId);
+
+        const session = await Session.findById(sessionId);
+        if (!session) {
+          return next(new AppError("Session not found.", 404));
+        }
+
+        const curLive = await gamistanLiveState.getState(sessionId);
+        const isSpinMode = curLive.roundType === "SPIN_WHEEL" || curLive.isSpinWheelEnabled;
+
+        if (!isSpinMode && (!session.questions || session.questions.length === 0)) {
+          return next(
+            new AppError(
+              "Cannot start game. Please add questions to the session first.",
+              400,
+            ),
+          );
+        }
 
         if (existingGameState.currentQuestionIndex < 0) {
           const joinedTeams = await teamService.fetchTeamsBySession(sessionId);
           const joinedTeamCount = joinedTeams.length;
-          const session = await Session.findById(sessionId).select(
-            "numberOfTeams",
-          );
 
           if (session && session.numberOfTeams !== joinedTeamCount) {
             session.numberOfTeams = joinedTeamCount;
             await session.save();
           }
         }
-
-        const curLive = await gamistanLiveState.getState(sessionId);
-        const isSpinMode = curLive.roundType === "SPIN_WHEEL" || curLive.isSpinWheelEnabled;
 
         if (isSpinMode) {
           await gamistanLiveState.updateState(sessionId, {
@@ -261,8 +340,14 @@ export const updateGameStateUnified = async (
             canSpinTeam: "",
           });
 
+          const nextIndex =
+            existingGameState.currentQuestionIndex < 0
+              ? 0
+              : existingGameState.currentQuestionIndex;
+
           gameState = await gameStateService.updateGameState(sessionId, {
             gameStatus: GameStatus.IDLE,
+            currentQuestionIndex: nextIndex,
             currentAnsweringTeam: null,
           });
 
@@ -361,6 +446,7 @@ export const updateGameStateUnified = async (
           });
         }
         break;
+      }
 
       case "SHOW_ANSWER":
         // Must have an active/current question before revealing answer.
@@ -659,8 +745,18 @@ export const updateGameStateUnified = async (
           isSpinWheelEnabled: isSpinEnabled,
         });
 
+        let currentDoc = existingGameState;
+        currentDoc.isSpinWheelEnabled = isSpinEnabled;
+        currentDoc.roundType = isSpinEnabled ? "SPIN_WHEEL" : "BUZZER";
+        if (isSpinEnabled && currentDoc.gameStatus === GameStatus.PAUSED) {
+          currentDoc.gameStatus = GameStatus.IDLE;
+        }
+        currentDoc = await currentDoc.save();
+
         SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
           isSpinWheelEnabled: live.isSpinWheelEnabled,
+          roundType: live.roundType,
+          gameStatus: currentDoc.gameStatus,
         });
         break;
       }
@@ -671,6 +767,9 @@ export const updateGameStateUnified = async (
             availableCategories: payload.categories,
           });
 
+          existingGameState.availableCategories = payload.categories;
+          await existingGameState.save();
+
           SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
             availableCategories: live.availableCategories,
           });
@@ -679,16 +778,31 @@ export const updateGameStateUnified = async (
       }
 
       case "GRANT_SPIN_PERMISSION": {
+        let currentDoc = existingGameState;
+        if (currentDoc.gameStatus === GameStatus.PAUSED) {
+          currentDoc.gameStatus = GameStatus.IDLE;
+        }
+
+        const targetTeamId = payload?.teamId || payload?.targetTeamId || payload?.teamName || "";
+        if (targetTeamId) {
+          currentDoc.currentAnsweringTeam = targetTeamId as any;
+        }
+        currentDoc.spinPermissionGranted = true;
+        currentDoc.selectedCategory = "";
+        currentDoc = await currentDoc.save();
+
         const live = await gamistanLiveState.updateState(sessionId, {
           spinPermissionGranted: true,
-          canSpinTeam: payload?.teamName || payload?.teamId || "",
+          canSpinTeam: targetTeamId,
           selectedCategory: "",
         });
 
         SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
           spinPermissionGranted: true,
           canSpinTeam: live.canSpinTeam,
+          currentAnsweringTeam: currentDoc.currentAnsweringTeam,
           selectedCategory: "",
+          gameStatus: currentDoc.gameStatus,
         });
         break;
       }
@@ -720,18 +834,30 @@ export const updateGameStateUnified = async (
         }
 
         let existingGameStateDoc = await gameStateService.fetchGameStateBySessionId(sessionId);
-        if (existingGameStateDoc) {
-          existingGameStateDoc.currentQuestionIndex = questionResult.questionIndex;
-          existingGameStateDoc.gameStatus = GameStatus.IDLE;
-          await existingGameStateDoc.save();
-        }
-
+        const answeringStartTime = Date.now();
         const live = await gamistanLiveState.updateState(sessionId, {
           selectedCategory: winCategory,
           spinPermissionGranted: false,
           isQuestionVisible: true,
         });
         await gamistanLiveState.addUsedQuestionId(sessionId, questionResult.questionId);
+
+        const targetTeamId = live.canSpinTeam || existingGameStateDoc?.currentAnsweringTeam;
+        if (existingGameStateDoc) {
+          existingGameStateDoc.currentQuestionIndex = questionResult.questionIndex;
+          existingGameStateDoc.gameStatus = GameStatus.ANSWERING;
+          existingGameStateDoc.currentAnsweringTeam = targetTeamId ? (targetTeamId as any) : undefined;
+          existingGameStateDoc.answeringRoundStartTime = answeringStartTime;
+          existingGameStateDoc.isNoBuzzerQuestion = true;
+          existingGameStateDoc.selectedCategory = winCategory;
+          existingGameStateDoc.spinPermissionGranted = false;
+          existingGameStateDoc.isSpinWheelEnabled = true;
+          existingGameStateDoc.roundType = "SPIN_WHEEL";
+          gameState = await existingGameStateDoc.save();
+        }
+
+        const session = await Session.findById(sessionId);
+        const answerDuration = session?.answerTimeLimit || 60;
 
         additionalData.category = winCategory;
         additionalData.questionIndex = questionResult.questionIndex;
@@ -744,12 +870,28 @@ export const updateGameStateUnified = async (
           timestamp: Date.now(),
         });
 
+        if (targetTeamId) {
+          SessionEmitters.toTeam(
+            sessionId,
+            targetTeamId.toString(),
+            Events.ANSWERING_ROUND_STARTED,
+            {
+              questionId: questionResult.questionId,
+              startTime: answeringStartTime,
+              duration: answerDuration * 1000,
+            },
+          );
+        }
+
         SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
           selectedCategory: winCategory,
           spinPermissionGranted: false,
           currentQuestionIndex: questionResult.questionIndex,
-          gameStatus: GameStatus.BUZZER_ROUND,
+          gameStatus: GameStatus.ANSWERING,
+          currentAnsweringTeam: targetTeamId,
+          answeringStartTime,
           isQuestionVisible: true,
+          isNoBuzzerQuestion: true,
         });
         break;
       }
@@ -892,8 +1034,14 @@ export const moveToNextQuestion = async (
   try {
     const sessionId = req.user?.sessionId;
 
-    if (!sessionId) {
-      return next(new AppError("Session ID not found in token.", 401));
+    const session = await Session.findById(sessionId);
+    if (!session || !session.questions || session.questions.length === 0) {
+      return next(
+        new AppError(
+          "Cannot start or advance game. No questions have been added to this session.",
+          400,
+        ),
+      );
     }
 
     const gameState = await gameStateService.moveToNextQuestion(sessionId);
@@ -1120,8 +1268,8 @@ export const markAnswer = async (
       await teamService.updateTeamScore(teamId, pointsAwarded);
 
       // Emit ANSWER_MARKED_CORRECT to the session
-      SessionEmitters.toSession(sessionId, Events.ANSWER_MARKED_CORRECT, {
-        teamId,
+      SessionEmitters.toSession(sessionId.toString(), Events.ANSWER_MARKED_CORRECT, {
+        teamId: teamId.toString(),
         isCorrect: true,
         pointsAwarded,
         timestamp: Date.now(),
@@ -1131,11 +1279,17 @@ export const markAnswer = async (
       const idleGameState = await gameStateService.transitionToIdle(sessionId);
 
       // Emit game state change
-      SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+      SessionEmitters.toSession(sessionId.toString(), Events.GAME_STATE_CHANGED, {
         gameStatus: idleGameState.gameStatus,
         currentQuestionIndex: idleGameState.currentQuestionIndex,
         currentAnsweringTeam: idleGameState.currentAnsweringTeam,
         idleStartTime: idleGameState.idleStartTime,
+      });
+
+      // Emit team updated event to refresh leaderboards/scores in real-time
+      SessionEmitters.toSession(sessionId.toString(), Events.TEAM_UPDATED, {
+        teamId: teamId.toString(),
+        pointsAwarded,
       });
 
       res.status(200).json({
@@ -1166,29 +1320,38 @@ export const markAnswer = async (
       }
 
       // Emit ANSWER_MARKED_WRONG to the session
-      SessionEmitters.toSession(sessionId, Events.ANSWER_MARKED_WRONG, {
-        teamId,
+      SessionEmitters.toSession(sessionId.toString(), Events.ANSWER_MARKED_WRONG, {
+        teamId: teamId.toString(),
         isCorrect: false,
         pointsAwarded,
         timestamp: Date.now(),
       });
 
-      if (currentQuestion?.keepBuzzer === false) {
+      if (pointsAwarded !== 0) {
+        SessionEmitters.toSession(sessionId.toString(), Events.TEAM_UPDATED, {
+          teamId: teamId.toString(),
+          pointsAwarded,
+        });
+      }
+
+      if (currentQuestion?.keepBuzzer === false || isSpinMode) {
         const updatedState = await gameStateService.updateGameState(sessionId, {
           gameStatus: GameStatus.IDLE,
           currentAnsweringTeam: null,
         });
 
-        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+        SessionEmitters.toSession(sessionId.toString(), Events.GAME_STATE_CHANGED, {
           gameStatus: updatedState.gameStatus,
           currentQuestionIndex: updatedState.currentQuestionIndex,
           currentAnsweringTeam: updatedState.currentAnsweringTeam,
-          keepBuzzer: false,
+          isSpinWheelEnabled: isSpinMode,
+          keepBuzzer: !isSpinMode ? false : undefined,
         });
 
         res.status(200).json({
-          message:
-            "Answer marked as wrong. Select another team for this no-buzzer question.",
+          message: isSpinMode
+            ? "Answer marked as wrong (0 penalty). Admin can move to next spin turn."
+            : "Answer marked as wrong. Select another team for this no-buzzer question.",
           data: {
             gameState: updatedState,
             isCorrect: false,
@@ -1199,11 +1362,24 @@ export const markAnswer = async (
         return;
       }
 
+      // For standard buzzer questions:
+      // Clear current answering team in database so user side transitions back from answering screen
+      const updatedState = await gameStateService.updateGameState(sessionId, {
+        currentAnsweringTeam: null,
+      });
+
+      SessionEmitters.toSession(sessionId.toString(), Events.GAME_STATE_CHANGED, {
+        gameStatus: updatedState.gameStatus,
+        currentQuestionIndex: updatedState.currentQuestionIndex,
+        currentAnsweringTeam: null,
+        lastAnswerWasWrong: true,
+      });
+
       res.status(200).json({
         message:
           "Answer marked as wrong. Admin can pass to second team or move to next question.",
         data: {
-          gameState,
+          gameState: updatedState,
           isCorrect: false,
           pointsAwarded,
           teamId,
@@ -1298,10 +1474,17 @@ export const spinWheelParticipant = async (
       return next(new AppError(`No unused questions available in category "${winningCategory}".`, 400));
     }
 
+    const userTeamId = user?.id || (user as any)?.teamId;
+    const spinningTeamId = liveState.canSpinTeam || userTeamId;
+
     let gameStateDoc = await gameStateService.fetchGameStateBySessionId(sessionId);
+    const answeringStartTime = Date.now();
     if (gameStateDoc) {
       gameStateDoc.currentQuestionIndex = questionResult.questionIndex;
-      gameStateDoc.gameStatus = GameStatus.IDLE;
+      gameStateDoc.gameStatus = GameStatus.ANSWERING;
+      gameStateDoc.currentAnsweringTeam = spinningTeamId ? (spinningTeamId as any) : undefined;
+      gameStateDoc.answeringRoundStartTime = answeringStartTime;
+      gameStateDoc.isNoBuzzerQuestion = true;
       await gameStateDoc.save();
     }
 
@@ -1312,10 +1495,17 @@ export const spinWheelParticipant = async (
     });
     await gamistanLiveState.addUsedQuestionId(sessionId, questionResult.questionId);
 
+    const session = await Session.findById(sessionId);
+    const answerDuration = session?.answerTimeLimit || 60;
+
     const mergedState = {
       ...(gameStateDoc ? gameStateDoc.toObject() : {}),
       ...updatedLive,
       currentQuestionIndex: questionResult.questionIndex,
+      gameStatus: GameStatus.ANSWERING,
+      currentAnsweringTeam: spinningTeamId,
+      answeringStartTime,
+      isNoBuzzerQuestion: true,
     };
 
     SessionEmitters.toSession(sessionId, Events.SPIN_WHEEL_RESULT, {
@@ -1324,6 +1514,19 @@ export const spinWheelParticipant = async (
       questionIndex: questionResult.questionIndex,
       timestamp: Date.now(),
     });
+
+    if (spinningTeamId) {
+      SessionEmitters.toTeam(
+        sessionId,
+        spinningTeamId.toString(),
+        Events.ANSWERING_ROUND_STARTED,
+        {
+          questionId: questionResult.questionId,
+          startTime: answeringStartTime,
+          duration: answerDuration * 1000,
+        },
+      );
+    }
 
     SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, mergedState);
 

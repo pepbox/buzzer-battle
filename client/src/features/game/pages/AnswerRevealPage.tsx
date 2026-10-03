@@ -2,7 +2,6 @@ import React, { useEffect } from "react";
 import { Box, Typography } from "@mui/material";
 import { useFetchCurrentQuestionQuery } from "../../question/services/questions.api";
 import Loader from "../../../components/ui/Loader";
-import Error from "../../../components/ui/Error";
 import normalBg from "../../../assets/background/question_bg.webp";
 import SmartMedia from "../../../components/ui/SmartMedia";
 
@@ -28,7 +27,49 @@ const AnswerRevealPage: React.FC<AnswerRevealPageProps> = ({
   }, [refetch]);
 
   if (isLoading) return <Loader />;
-  if (error || !question) return <Error />;
+  if (error || !question) {
+    return (
+      <Box
+        sx={{
+          width: "100%",
+          flex: "1 0 auto",
+          minHeight: "100%",
+          background: "linear-gradient(180deg, #87CEEB 0%, #4682B4 100%)",
+          backgroundImage: `url(${normalBg})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: presenterMode ? "12px" : "24px",
+        }}
+      >
+        <Box
+          sx={{
+            backgroundColor: "rgba(255, 255, 255, 0.95)",
+            borderRadius: "20px",
+            padding: "36px 28px",
+            width: "100%",
+            maxWidth: "420px",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+            textAlign: "center",
+          }}
+        >
+          <Typography
+            variant="h5"
+            sx={{ color: "primary.main", fontWeight: "bold", mb: 1 }}
+          >
+            🎮 Buzzer Battle
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Waiting for the administrator to start the round...
+          </Typography>
+        </Box>
+      </Box>
+    );
+  }
 
   // Render media arrays helpers
   const renderMediaList = (mediaArray?: any[]) => {

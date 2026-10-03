@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Box, Alert, Button, Chip, Typography, Backdrop, CircularProgress, useTheme } from "@mui/material";
+import { Box, Alert, Chip, Typography, Backdrop, CircularProgress, useTheme } from "@mui/material";
 import Question, { QuestionData } from "../../question/components/Question";
 import Buzzer from "../../../components/ui/Buzzer";
+import SpinWheel from "../components/SpinWheel";
 import normalBg from "../../../assets/background/question_bg.webp";
 import { useFetchCurrentQuestionQuery } from "../../question/services/questions.api";
 import { usePressBuzzerMutation } from "../services/buzzerApi";
@@ -131,21 +132,21 @@ const BuzzerRound: React.FC = () => {
     }
   };
 
-  // Show loading state
-  if (isLoading && !activeQuestion) {
-    return <Loader />;
-  }
-
   const isSpinWheelMode =
     gameState?.roundType === "SPIN_WHEEL" || gameState?.isSpinWheelEnabled;
 
+  // Show loading state
+  if (isLoading && !activeQuestion && !isSpinWheelMode) {
+    return <Loader />;
+  }
+
   // Show error state
   if (
-    error ||
-    (!activeQuestion &&
-      !isFetching &&
-      !isQuestionTransitioning &&
-      !isSpinWheelMode)
+    !isSpinWheelMode &&
+    (error ||
+      (!activeQuestion &&
+        !isFetching &&
+        !isQuestionTransitioning))
   ) {
     return (
       <Box
@@ -202,7 +203,7 @@ const BuzzerRound: React.FC = () => {
         }}
       >
         {/* Spin Wheel Header Banner */}
-        {(gameState?.roundType === "SPIN_WHEEL" || gameState?.isSpinWheelEnabled) && (
+        {isSpinWheelMode && (
           <Box
             sx={{
               width: "100%",
@@ -243,13 +244,13 @@ const BuzzerRound: React.FC = () => {
           }}
         >
           {activeQuestion &&
-            (!(gameState?.roundType === "SPIN_WHEEL" || gameState?.isSpinWheelEnabled) ||
+            (!isSpinWheelMode ||
               (gameState?.selectedCategory && !gameState?.spinPermissionGranted)) && (
               <Question
                 key={questionDataFormatted.id}
                 questionData={questionDataFormatted}
                 questionNumber={(currentQuestionIndex || 0) + 1}
-                showOptions={false}
+                showOptions={Boolean(questionDataFormatted?.options && questionDataFormatted.options.length > 0)}
                 showVerbalHint={false}
                 disabled={true}
               />
@@ -268,77 +269,68 @@ const BuzzerRound: React.FC = () => {
             marginBottom: "16px",
           }}
         >
-          {gameState?.roundType === "SPIN_WHEEL" || gameState?.isSpinWheelEnabled ? (
+          {isSpinWheelMode ? (
             /* SPIN WHEEL ROUND ACTION */
-            isBuzzerPerson ? (
-              gameState?.spinPermissionGranted ? (
-                <Button
-                  variant="contained"
-                  onClick={handleSpinWheel}
-                  disabled={isSpinning}
-                  sx={{
-                    px: 4,
-                    py: 2,
-                    fontSize: "20px",
-                    fontWeight: 800,
-                    borderRadius: "16px",
-                    backgroundColor: "#10B981",
-                    color: "white",
-                    boxShadow: "0 8px 25px rgba(16, 185, 129, 0.4)",
-                    "&:hover": {
-                      backgroundColor: "#059669",
-                      transform: "scale(1.03)",
-                    },
-                  }}
-                >
-                  {isSpinning ? "Spinning..." : "SPIN WHEEL 🎡"}
-                </Button>
-              ) : (
-                <Box
-                  sx={{
-                    backgroundColor: "rgba(255, 255, 255, 0.95)",
-                    borderRadius: "16px",
-                    padding: "20px 24px",
-                    textAlign: "center",
-                    boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
-                    maxWidth: "380px",
-                    width: "100%",
-                  }}
-                >
-                  <Typography
-                    variant="h6"
+            (() => {
+              const normalizeId = (val: any): string => {
+                if (!val) return "";
+                if (typeof val === "string") return val;
+                if (typeof val === "object") {
+                  if (val._id) return String(val._id);
+                  if (val.id) return String(val.id);
+                }
+                return String(val);
+              };
+
+              const myTeamId = normalizeId(team?._id);
+              const targetSpinTeamId =
+                normalizeId((gameState as any)?.canSpinTeam) ||
+                normalizeId(gameState?.currentAnsweringTeam);
+
+              const isMyTeamTurn = !targetSpinTeamId || targetSpinTeamId === myTeamId;
+              const isGameStarted =
+                (currentQuestionIndex !== undefined && currentQuestionIndex >= 0) ||
+                !!gameState?.spinPermissionGranted;
+
+              if (!isGameStarted) {
+                return (
+                  <Box
                     sx={{
-                      color: "#F59E0B",
-                      fontWeight: 800,
+                      backgroundColor: "rgba(255, 255, 255, 0.95)",
+                      borderRadius: "16px",
+                      padding: "20px 24px",
+                      textAlign: "center",
+                      boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
+                      maxWidth: "420px",
+                      width: "100%",
                     }}
                   >
-                    ⏳ Waiting for Operator to grant Spin access...
-                  </Typography>
-                </Box>
-              )
-            ) : (
-              <Box
-                sx={{
-                  backgroundColor: "rgba(255, 255, 255, 0.95)",
-                  borderRadius: "16px",
-                  padding: "20px 24px",
-                  textAlign: "center",
-                  boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
-                  maxWidth: "380px",
-                  width: "100%",
-                }}
-              >
-                <Typography
-                  variant="h6"
-                  sx={{
-                    color: theme.palette.primary.main,
-                    fontWeight: "bold",
-                  }}
-                >
-                  ⏳ Waiting for Team Captain to spin...
-                </Typography>
-              </Box>
-            )
+                    <Typography
+                      variant="h6"
+                      sx={{
+                        color: theme.palette.primary.main,
+                        fontWeight: 800,
+                      }}
+                    >
+                      ⏳ Waiting for the administrator to start the game...
+                    </Typography>
+                  </Box>
+                );
+              }
+
+              return (
+                <SpinWheel
+                  categories={gameState?.availableCategories}
+                  selectedCategory={gameState?.selectedCategory}
+                  spinPermissionGranted={gameState?.spinPermissionGranted}
+                  canSpin={isMyTeamTurn && !!gameState?.spinPermissionGranted}
+                  isBuzzerPerson={isBuzzerPerson}
+                  isMyTeamTurn={isMyTeamTurn}
+                  onSpin={handleSpinWheel}
+                  isSpinning={isSpinning}
+                />
+              );
+            })()
           ) : (
             /* BUZZER ROUND ACTION */
             isBuzzerPerson ? (

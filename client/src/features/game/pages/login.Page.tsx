@@ -81,6 +81,21 @@ const LoginPage: React.FC = () => {
     }
   }, [sessionId]);
 
+  // Check if user was kicked out
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const kicked = urlParams.get("kicked");
+    if (kicked === "player") {
+      setSnackbarMessage("You have been removed from the team by the administrator.");
+      setShowSnackbar(true);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (kicked === "team") {
+      setSnackbarMessage("Your team has been removed by the administrator.");
+      setShowSnackbar(true);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
   // Show error from API if any
   useEffect(() => {
     if (createError) {
@@ -143,16 +158,22 @@ const LoginPage: React.FC = () => {
   }, [availableTeams, selectedTeamNumber]);
 
   // Check if the currently selected team already has a buzzer person
-  const selectedTeamHasBuzzer = joinedTeamsDetails.some(
-    (t) => Number(t.teamNumber) === Number(selectedTeamNumber) && t.hasBuzzerPerson
+  const selectedTeamDetail = joinedTeamsDetails.find(
+    (t) => Number(t.teamNumber) === Number(selectedTeamNumber)
   );
+  const selectedTeamHasBuzzer = selectedTeamDetail?.hasBuzzerPerson || false;
+  const isBuzzerPersonSelf = Boolean(
+    selectedTeamDetail?.buzzerPersonName &&
+    playerName.trim().toLowerCase() === selectedTeamDetail.buzzerPersonName.toLowerCase()
+  );
+  const isBuzzerPersonDisabled = selectedTeamHasBuzzer && !isBuzzerPersonSelf;
 
-  // Automatically switch role to TEAM_MEMBER if BUZZER_PERSON is already taken
+  // Automatically switch role to TEAM_MEMBER if BUZZER_PERSON is taken by another player
   useEffect(() => {
-    if (selectedTeamHasBuzzer && playerRole === "BUZZER_PERSON") {
+    if (isBuzzerPersonDisabled && playerRole === "BUZZER_PERSON") {
       setPlayerRole("TEAM_MEMBER");
     }
-  }, [selectedTeamHasBuzzer, selectedTeamNumber, playerRole]);
+  }, [isBuzzerPersonDisabled, selectedTeamNumber, playerRole]);
 
   // Conditional returns AFTER all hooks
   if (isLoading) {
@@ -270,7 +291,7 @@ const LoginPage: React.FC = () => {
   };
 
   if (isAuthenticated && team) {
-    return <Navigate to={`/game/${sessionId}/leaderboard`} />;
+    return <Navigate to={`/game/${sessionId}/buzzer`} />;
   }
 
   return (
@@ -372,27 +393,6 @@ const LoginPage: React.FC = () => {
             }}
           />
 
-          {/* Role Dropdown */}
-          <FormControl variant="outlined" fullWidth>
-            <Select
-              value={playerRole}
-              onChange={(e) => setPlayerRole(e.target.value as any)}
-              displayEmpty
-              sx={{
-                borderRadius: 1,
-                backgroundColor: "white",
-                "& .MuiInputBase-input": {
-                  color: theme.palette.primary.main,
-                },
-              }}
-            >
-              <MenuItem value="BUZZER_PERSON" disabled={selectedTeamHasBuzzer}>
-                {selectedTeamHasBuzzer ? "Buzzer Person (Already taken)" : "Buzzer Person"}
-              </MenuItem>
-              <MenuItem value="TEAM_MEMBER">Team Member</MenuItem>
-            </Select>
-          </FormControl>
-
           {/* Team Dropdown Selection */}
           <FormControl variant="outlined" fullWidth>
             <Select
@@ -431,6 +431,27 @@ const LoginPage: React.FC = () => {
               ) : (
                 <MenuItem disabled>No teams configured</MenuItem>
               )}
+            </Select>
+          </FormControl>
+
+          {/* Role Dropdown */}
+          <FormControl variant="outlined" fullWidth>
+            <Select
+              value={playerRole}
+              onChange={(e) => setPlayerRole(e.target.value as any)}
+              displayEmpty
+              sx={{
+                borderRadius: 1,
+                backgroundColor: "white",
+                "& .MuiInputBase-input": {
+                  color: theme.palette.primary.main,
+                },
+              }}
+            >
+              <MenuItem value="BUZZER_PERSON" disabled={isBuzzerPersonDisabled}>
+                {isBuzzerPersonDisabled ? "Team Captain / Buzzer Person (Already taken)" : "Team Captain / Buzzer Person"}
+              </MenuItem>
+              <MenuItem value="TEAM_MEMBER">Team Member</MenuItem>
             </Select>
           </FormControl>
 

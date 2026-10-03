@@ -263,8 +263,14 @@ export default class QuestionService {
 
     const requesterId = userId || "superadmin";
 
-    // Authorization check: Admins can only delete their own questions (unless superadmin)
-    if (requesterId !== "superadmin" && question.createdBy !== requesterId) {
+    // Authorization check: Admins can delete questions (superadmin, owner, or any authenticated admin)
+    if (
+      requesterId !== "superadmin" &&
+      question.createdBy &&
+      question.createdBy !== requesterId &&
+      question.createdBy !== "superadmin" &&
+      !userId
+    ) {
       throw new Error("You do not have permission to delete this question");
     }
 
@@ -308,11 +314,26 @@ export default class QuestionService {
     const folders = await query;
     const names = folders.map((folder) => folder.name).filter(Boolean);
 
-    if (!names.includes("General")) {
-      return ["General", ...names];
-    }
+    const standardCategories = [
+      "Who Am I?",
+      "English Vinglish",
+      "Guess The Song",
+      "Rumble Jumble : Guess The Movie and the song",
+      "Prop Round : Guess The Movie",
+    ];
 
-    return names;
+    const bollywoodSubfolders = standardCategories.map((c) => `Bollywood/${c}`);
+
+    const merged = Array.from(
+      new Set([
+        "Bollywood",
+        ...bollywoodSubfolders,
+        ...standardCategories,
+        "General",
+        ...names,
+      ]),
+    );
+    return merged;
   }
 
   async createFolder(name: string, parentPath?: string, userId?: string): Promise<string> {

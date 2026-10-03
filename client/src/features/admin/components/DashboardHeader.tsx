@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
   Paper,
@@ -121,6 +121,12 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     activeModeFromLive || "BUZZER"
   );
 
+  useEffect(() => {
+    if (activeModeFromLive) {
+      setSelectedMode(activeModeFromLive);
+    }
+  }, [activeModeFromLive]);
+
   const handleSelectMode = async (mode: "BUZZER" | "SPIN_WHEEL") => {
     setSelectedMode(mode);
     try {
@@ -179,15 +185,15 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     if (mode === "NUMBER" && (isNaN(numberOfTeams) || numberOfTeams < 1)) {
       return;
     }
-    
+
     if (mode === "COLOR" && colors.length === 0) {
       return;
     }
 
-    UpdateNumberOfTeams({ 
-      numberOfTeams: mode === "COLOR" ? colors.length : numberOfTeams, 
-      teamMode: mode, 
-      colorTeams: colors 
+    UpdateNumberOfTeams({
+      numberOfTeams: mode === "COLOR" ? colors.length : numberOfTeams,
+      teamMode: mode,
+      colorTeams: colors
     } as any)
       .unwrap()
       .then(() => {
@@ -359,141 +365,141 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         {(data?.sessionName ||
           data?.teamsRegistered !== undefined ||
           data?.currentQuestion !== undefined) && (
-          <>
-            <Box sx={{ mb: 3 }}>
-              <Box
-                display="flex"
-                flexDirection={isMobile ? "column" : "row"}
-                gap={isMobile ? 2 : 4}
-                justifyContent="space-around"
-              >
-                {data?.sessionName && (
-                  <Box textAlign="center" flex={1}>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      gutterBottom
-                    >
-                      Session Name
-                    </Typography>
-                    <Typography variant="h6" fontWeight="bold">
-                      {data.sessionName}
-                    </Typography>
-                  </Box>
-                )}
-
-                {data?.teamsRegistered !== undefined && (
-                  <Box textAlign="center" flex={1}>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      gutterBottom
-                    >
-                      Teams Registered
-                    </Typography>
-                    <Box
-                      display="flex"
-                      justifyContent="center"
-                      alignItems="center"
-                      gap={1}
-                    >
-                      <GroupIcon color="primary" />
-                      <Typography variant="h6" fontWeight="bold">
-                        {data.teamsRegistered}
-                        {data.totalTeams ? ` / ${data.totalTeams}` : ""}
-                      </Typography>
-                      <IconButton
-                        size="small"
-                        onClick={handleEditTeamsClick}
-                        color="primary"
-                        sx={{ ml: 0.5 }}
+            <>
+              <Box sx={{ mb: 3 }}>
+                <Box
+                  display="flex"
+                  flexDirection={isMobile ? "column" : "row"}
+                  gap={isMobile ? 2 : 4}
+                  justifyContent="space-around"
+                >
+                  {data?.sessionName && (
+                    <Box textAlign="center" flex={1}>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        gutterBottom
                       >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  </Box>
-                )}
-
-                {data?.currentQuestion !== undefined && (
-                  <Box textAlign="center" flex={1}>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      gutterBottom
-                    >
-                      Current Question
-                    </Typography>
-                    <Box
-                      display="flex"
-                      justifyContent="center"
-                      alignItems="center"
-                      gap={1}
-                    >
-                      <QuizIcon color="primary" />
-                      <Typography variant="h6" fontWeight="bold">
-                        {data.currentQuestion}
-                        {data.totalQuestions ? ` / ${data.totalQuestions}` : ""}
+                        Session Name
                       </Typography>
-                      <Tooltip title="Add Questions">
+                      <Typography variant="h6" fontWeight="bold">
+                        {data.sessionName}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {data?.teamsRegistered !== undefined && (
+                    <Box textAlign="center" flex={1}>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        gutterBottom
+                      >
+                        Teams Registered
+                      </Typography>
+                      <Box
+                        display="flex"
+                        justifyContent="center"
+                        alignItems="center"
+                        gap={1}
+                      >
+                        <GroupIcon color="primary" />
+                        <Typography variant="h6" fontWeight="bold">
+                          {data.teamsRegistered}
+                          {data.totalTeams ? ` / ${data.totalTeams}` : ""}
+                        </Typography>
                         <IconButton
                           size="small"
-                          onClick={handleOpenQuestionLibrary}
+                          onClick={handleEditTeamsClick}
                           color="primary"
                           sx={{ ml: 0.5 }}
                         >
-                          <AddCircleOutlineIcon fontSize="small" />
+                          <EditIcon fontSize="small" />
                         </IconButton>
-                      </Tooltip>
+                      </Box>
                     </Box>
-                  </Box>
-                )}
-                {/* Game Status Chip */}
-                <Box textAlign="center" flex={1}>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    gutterBottom
-                  >
-                    Status
-                  </Typography>
-                  <Box
-                    display="flex"
-                    justifyContent="center"
-                    alignItems="center"
-                    gap={1}
-                  >
+                  )}
+
+                  {data?.currentQuestion !== undefined && (
+                    <Box textAlign="center" flex={1}>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        gutterBottom
+                      >
+                        Current Question
+                      </Typography>
+                      <Box
+                        display="flex"
+                        justifyContent="center"
+                        alignItems="center"
+                        gap={1}
+                      >
+                        <QuizIcon color="primary" />
+                        <Typography variant="h6" fontWeight="bold">
+                          {data.currentQuestion}
+                          {data.totalQuestions ? ` / ${data.totalQuestions}` : ""}
+                        </Typography>
+                        <Tooltip title="Add Questions">
+                          <IconButton
+                            size="small"
+                            onClick={handleOpenQuestionLibrary}
+                            color="primary"
+                            sx={{ ml: 0.5 }}
+                          >
+                            <AddCircleOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </Box>
+                  )}
+                  {/* Game Status Chip */}
+                  <Box textAlign="center" flex={1}>
                     <Typography
-                      variant="h6"
-                      fontWeight="bold"
-                      color={
-                        data?.gameStatus === "playing"
-                          ? "success"
-                          : data?.gameStatus === "paused"
-                            ? "warning"
-                            : "default"
-                      }
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
                     >
-                      {(() => {
-                        const raw = data?.gameStatus || "idle";
-                        const spaced = raw
-                          .replace(/[_-]/g, " ")
-                          .replace(/([a-z])([A-Z])/g, "$1 $2");
-                        return spaced
-                          .split(" ")
-                          .filter(Boolean)
-                          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-                          .join(" ");
-                      })()}
+                      Status
                     </Typography>
+                    <Box
+                      display="flex"
+                      justifyContent="center"
+                      alignItems="center"
+                      gap={1}
+                    >
+                      <Typography
+                        variant="h6"
+                        fontWeight="bold"
+                        color={
+                          data?.gameStatus === "playing"
+                            ? "success"
+                            : data?.gameStatus === "paused"
+                              ? "warning"
+                              : "default"
+                        }
+                      >
+                        {(() => {
+                          const raw = data?.gameStatus || "idle";
+                          const spaced = raw
+                            .replace(/[_-]/g, " ")
+                            .replace(/([a-z])([A-Z])/g, "$1 $2");
+                          return spaced
+                            .split(" ")
+                            .filter(Boolean)
+                            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                            .join(" ");
+                        })()}
+                      </Typography>
+                    </Box>
                   </Box>
                 </Box>
               </Box>
-            </Box>
-            <Divider sx={{ mb: 3 }} />
-          </>
-        )}
+              <Divider sx={{ mb: 3 }} />
+            </>
+          )}
 
-       
+
 
         {/* Controls Container - Mode Selector & Action Buttons in One Row */}
         <Box
@@ -768,8 +774,8 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         onClose={() => setCurrentQuestionsModalOpen(false)}
         selectedQuestionIds={selectedQuestionIds}
         questionLookup={questionLookup}
-        onSave={onSaveQuestions || (async () => {})}
-        onEdit={onEditQuestion || (() => {})}
+        onSave={onSaveQuestions || (async () => { })}
+        onEdit={onEditQuestion || (() => { })}
       />
 
       {/* Session Branding Modal */}

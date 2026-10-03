@@ -1,5 +1,5 @@
 import React from "react";
-import { Box, Button, CircularProgress } from "@mui/material";
+import { Box, Button, CircularProgress, Alert, AlertTitle } from "@mui/material";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import PauseIcon from "@mui/icons-material/Pause";
 import SkipNextIcon from "@mui/icons-material/SkipNext";
@@ -8,6 +8,7 @@ import BoltIcon from "@mui/icons-material/Bolt";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import LeaderboardIcon from "@mui/icons-material/Leaderboard";
+import CasinoIcon from "@mui/icons-material/Casino";
 
 interface RemoteActionButtonsProps {
   gameStatus: "paused" | "buzzer_round" | "answering" | "idle";
@@ -97,6 +98,22 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
         gap: "12px",
       }}
     >
+      {/* Warning banner when no questions configured */}
+      {!hasQuestions && (
+        <Alert
+          severity="warning"
+          variant="filled"
+          sx={{
+            borderRadius: "12px",
+            fontWeight: 600,
+            boxShadow: "0 4px 12px rgba(245, 158, 11, 0.3)",
+          }}
+        >
+          <AlertTitle sx={{ fontWeight: 800 }}>⚠️ No Questions Configured</AlertTitle>
+          Please add questions to this session from the Dashboard before starting the game.
+        </Alert>
+      )}
+
       {/* Mark Answer Buttons - Only during answering state (for verbal answer flow) */}
       {gameStatus === "answering" && !lastAnswerWasWrong && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%" }}>
@@ -176,15 +193,28 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
         disabled={isLoading || !hasQuestions}
         sx={{
           ...buttonBaseStyles,
-          backgroundColor: currentQuestionIndex === -1 ? "#10B981" : "#3B82F6",
+          backgroundColor: !hasQuestions
+            ? "#9CA3AF"
+            : currentQuestionIndex === -1
+            ? "#10B981"
+            : "#3B82F6",
           "&:hover": {
-            backgroundColor:
-              currentQuestionIndex === -1 ? "#059669" : "#2563EB",
+            backgroundColor: !hasQuestions
+              ? "#9CA3AF"
+              : currentQuestionIndex === -1
+              ? "#059669"
+              : "#2563EB",
             ...buttonBaseStyles["&:hover"],
           },
         }}
       >
-        {currentQuestionIndex === -1 ? " Start Game" : " Next Question"}
+        {!hasQuestions
+          ? "⚠️ Add Questions to Start"
+          : currentQuestionIndex === -1
+          ? " Start Game"
+          : isSpinWheelEnabled
+          ? " Next Spin Turn"
+          : " Next Question"}
       </Button>
 
       {/* Show Answer Button */}

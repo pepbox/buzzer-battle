@@ -85,8 +85,11 @@ const PresenterBuzzerRound: React.FC = () => {
   // Use synced timer with server timestamp
   // const { progress } = useTimerSync(gameState?.buzzerRoundStartTime, timeLimit);
 
+  const isSpinWheelMode =
+    gameState?.roundType === "SPIN_WHEEL" || gameState?.isSpinWheelEnabled;
+
   // Show loading state
-  if (isLoading && !activeQuestion) {
+  if (isLoading && !activeQuestion && !isSpinWheelMode) {
     return <Loader />;
   }
 
@@ -117,6 +120,53 @@ const PresenterBuzzerRound: React.FC = () => {
         >
           Loading question...
         </Typography>
+      </Box>
+    );
+  }
+
+  if (isSpinWheelMode && !activeQuestion) {
+    return (
+      <Box
+        sx={{
+          width: "100%",
+          height: "100%",
+          backgroundImage: `url(${normalBg})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          p: 3,
+        }}
+      >
+        <Box
+          sx={{
+            backgroundColor: "rgba(255, 255, 255, 0.94)",
+            borderRadius: "24px",
+            p: 3,
+            textAlign: "center",
+            boxShadow: "0 12px 40px rgba(0,0,0,0.25)",
+            maxWidth: "500px",
+            width: "100%",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
+          <Typography variant="h5" fontWeight="bold" color="primary.main" gutterBottom>
+            🎰 CATEGORY SPIN WHEEL
+          </Typography>
+          <SpinWheel
+            categories={gameState?.availableCategories}
+            selectedCategory={gameState?.selectedCategory}
+            spinPermissionGranted={gameState?.spinPermissionGranted}
+            canSpin={false}
+            isBuzzerPerson={false}
+            isMyTeamTurn={false}
+          />
+        </Box>
       </Box>
     );
   }

@@ -62,9 +62,57 @@ export const setupGlobalListeners = () => {
     Events.TEAM_JOINED,
     (data: any) => {
       console.log("New team joined:", data);
-      // Invalidate teams list and dashboard data
-      // Note: You'll need to add these API tags to your teams API
       store.dispatch(adminApi.util.invalidateTags(["Team"]));
+      store.dispatch(teamApi.util.invalidateTags(["Team", "Leaderboard"]));
+    },
+    "redux",
+  );
+
+  // Player Kicked Out Event
+  websocketService.addGlobalListener(
+    Events.PLAYER_KICKED_OUT,
+    (data: any) => {
+      console.warn("Player kicked out event received:", data);
+      store.dispatch(adminApi.util.invalidateTags(["Team"]));
+      store.dispatch(teamApi.util.invalidateTags(["Team", "Leaderboard"]));
+
+      const state = store.getState() as any;
+      const currentTeam = state.team?.team;
+
+      if (
+        currentTeam &&
+        String(currentTeam._id) === String(data?.teamId) &&
+        currentTeam.playerName?.trim().toLowerCase() === data?.playerName?.trim().toLowerCase()
+      ) {
+        store.dispatch(clearTeam());
+        const pathname = window.location.pathname;
+        const sessionIdFromPath = pathname.split("/")[2] || currentTeam.sessionId || "";
+        window.location.replace(`/game/${sessionIdFromPath}/?kicked=player`);
+      }
+    },
+    "redux",
+  );
+
+  // Team Kicked Out Event
+  websocketService.addGlobalListener(
+    Events.TEAM_KICKED_OUT,
+    (data: any) => {
+      console.warn("Team kicked out event received:", data);
+      store.dispatch(adminApi.util.invalidateTags(["Team"]));
+      store.dispatch(teamApi.util.invalidateTags(["Team", "Leaderboard"]));
+
+      const state = store.getState() as any;
+      const currentTeam = state.team?.team;
+
+      if (
+        currentTeam &&
+        String(currentTeam._id) === String(data?.teamId)
+      ) {
+        store.dispatch(clearTeam());
+        const pathname = window.location.pathname;
+        const sessionIdFromPath = pathname.split("/")[2] || currentTeam.sessionId || "";
+        window.location.replace(`/game/${sessionIdFromPath}/?kicked=team`);
+      }
     },
     "redux",
   );
@@ -122,6 +170,18 @@ export const setupGlobalListeners = () => {
       console.log("Answer marked wrong:", data);
       store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
       store.dispatch(teamApi.util.invalidateTags(["Leaderboard", "Team"]));
+    },
+    "redux",
+  );
+
+  // Team Updated Event (scores, stats, admin edits)
+  websocketService.addGlobalListener(
+    Events.TEAM_UPDATED,
+    (data: any) => {
+      console.log("Team updated:", data);
+      store.dispatch(teamApi.util.invalidateTags(["Leaderboard", "Team"]));
+      store.dispatch(adminApi.util.invalidateTags(["Team"]));
+      store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
     },
     "redux",
   );

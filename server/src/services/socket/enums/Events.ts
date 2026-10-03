@@ -29,6 +29,8 @@ export enum Events {
   // Session Events
   SESSION_UPDATE = "session-update", // Session settings changed
   SESSION_ENDED = "session-ended", // Super admin ended the session - log out all users
+  PLAYER_KICKED_OUT = "player-kicked-out", // Individual player kicked out by admin
+  TEAM_KICKED_OUT = "team-kicked-out", // Entire team kicked out by admin
   HINT_REVEALED = "hint-revealed",
   SPIN_WHEEL_RESULT = "spin-wheel-result",
 }

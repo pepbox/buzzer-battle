@@ -4,6 +4,8 @@ import TeamService from "../../teams/services/team.service";
 import SessionService from "../../session/services/session.service";
 import GameStateService from "../../gameState/services/gameState.service";
 import QuestionService from "../../questions/services/question.service";
+import { SessionEmitters } from "../../../services/socket/sessionEmitters";
+import { Events } from "../../../services/socket/enums/Events";
 
 const teamService = new TeamService();
 const sessionService = new SessionService();
@@ -305,5 +307,121 @@ export const fetchTeamResponses = async (
   } catch (error: any) {
     console.error("Error fetching team responses:", error);
     next(new AppError(error.message || "Failed to fetch team responses.", 500));
+  }
+};
+
+/**
+ * Kick out an individual member from a team
+ * POST /api/v1/admin/teams/:teamId/kickout-member
+ * Body: { playerName: string }
+ */
+export const kickoutMember = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { teamId } = req.params;
+    const { playerName } = req.body;
+
+    if (!teamId || !playerName) {
+      return next(new AppError("Team ID and Player Name are required.", 400));
+    }
+
+    const team = await teamService.fetchTeamById(teamId);
+    if (!team) {
+      return next(new AppError("Team not found.", 404));
+    }
+
+    const sessionId = team.session?._id?.toString() || team.session?.toString();
+    const updatedTeam = await teamService.kickoutMember(teamId, playerName);
+
+    // Emit event to session so the player's client logs out immediately
+    SessionEmitters.toSession(
+      sessionId,
+      Events.PLAYER_KICKED_OUT,
+      {
+        teamId: team._id.toString(),
+        teamNumber: team.teamNumber,
+        playerName: playerName.trim(),
+        message: "You have been removed from the team by the administrator.",
+      },
+    );
+
+    // Notify admins to update team lists
+    SessionEmitters.toSessionAdmins(
+      sessionId,
+      Events.TEAM_UPDATED,
+      {
+        team: updatedTeam,
+      },
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Player "${playerName}" has been kicked out successfully.`,
+      data: {
+        team: updatedTeam,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error kicking out member:", error);
+    next(new AppError(error.message || "Failed to kick out member.", 500));
+  }
+};
+
+/**
+ * Kick out / delete an entire team
+ * DELETE /api/v1/admin/teams/:teamId
+ */
+export const kickoutTeam = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { teamId } = req.params;
+
+    if (!teamId) {
+      return next(new AppError("Team ID is required.", 400));
+    }
+
+    const team = await teamService.fetchTeamById(teamId);
+    if (!team) {
+      return next(new AppError("Team not found.", 404));
+    }
+
+    const sessionId = team.session?._id?.toString() || team.session?.toString();
+    const teamNumber = team.teamNumber;
+
+    await teamService.deleteTeam(teamId);
+
+    // Emit event to session so all team players get logged out immediately
+    SessionEmitters.toSession(
+      sessionId,
+      Events.TEAM_KICKED_OUT,
+      {
+        teamId: teamId.toString(),
+        teamNumber: teamNumber,
+        message: "Your team has been removed by the administrator.",
+      },
+    );
+
+    // Notify admins to update team lists
+    SessionEmitters.toSessionAdmins(
+      sessionId,
+      Events.TEAM_UPDATED,
+      {
+        teamId,
+      },
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Team #${teamNumber} has been kicked out successfully.`,
+    });
+  } catch (error: any) {
+    console.error("Error kicking out team:", error);
+    next(new AppError(error.message || "Failed to kick out team.", 500));
   }
 };

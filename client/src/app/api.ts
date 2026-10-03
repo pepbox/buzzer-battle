@@ -14,7 +14,7 @@ const baseQuery = fetchBaseQuery({
     const state = getState() as any;
     const urlSessionIdMatch =
       typeof window !== "undefined"
-        ? window.location.pathname.match(/\/admin\/([a-f0-9]{24})\//i)?.[1]
+        ? window.location.pathname.match(/\/(?:admin|game)\/([a-f0-9]{24})/i)?.[1]
         : undefined;
 
     const sessionId =

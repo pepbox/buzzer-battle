@@ -38,7 +38,9 @@ const GameMain = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const [authResolved, setAuthResolved] = useState(false);
   const [gameStateLoaded, setGameStateLoaded] = useState(false);
-  const isLoginRoute = location.pathname === `/game/${sessionId}/`;
+  const isLoginRoute =
+    location.pathname === `/game/${sessionId}` ||
+    location.pathname === `/game/${sessionId}/`;
 
   useEffect(() => {
     dispatch(setSessionId(sessionId ?? ""));

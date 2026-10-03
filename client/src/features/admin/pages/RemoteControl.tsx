@@ -29,7 +29,6 @@ import normalBg from "../../../assets/background/normal_bg.webp";
 import RemoteTeamInfo from "../components/RemoteTeamInfo";
 import RemoteActionButtons from "../components/RemoteActionButtons";
 import RemoteBuzzerStats from "../components/RemoteBuzzerStats";
-import CategorySpinWheelModal from "../components/CategorySpinWheelModal";
 import {
   usePauseGame,
   useResumeGame,
@@ -153,7 +152,6 @@ const RemoteControl: React.FC = () => {
   const [selectedTeamIdForNoBuzzer, setSelectedTeamIdForNoBuzzer] =
     useState("");
   const [hintConfirmOpen, setHintConfirmOpen] = useState(false);
-  const [spinWheelOpen, setSpinWheelOpen] = useState(false);
 
   const { toggleLeaderboard, isLoading: toggleLeaderboardLoading } = useToggleLeaderboard();
   const { toggleSpinWheel, isLoading: toggleSpinWheelLoading } = useToggleSpinWheel();
@@ -187,11 +185,24 @@ const RemoteControl: React.FC = () => {
 
   const handleGrantSpinPermission = async () => {
     try {
-      const targetTeamId = currentAnsweringTeam?._id || (gameState as any)?.currentTurnTeam;
+      const targetTeamId =
+        currentAnsweringTeam?._id ||
+        selectedTeamIdForNoBuzzer ||
+        (gameState as any)?.currentTurnTeam ||
+        (gameState as any)?.canSpinTeam;
       await grantSpinPermission(targetTeamId ? targetTeamId.toString() : undefined).unwrap();
-      showSnackbar("Granted Spin Wheel permission to team's Buzzer Person", "success");
+      showSnackbar("Granted Spin Wheel permission to team's Captain", "success");
     } catch (err: any) {
       showSnackbar(err?.data?.message || "Failed to grant spin permission", "error");
+    }
+  };
+
+  const handleAdminSpinWheel = async () => {
+    try {
+      await spinWheelRequest().unwrap();
+      showSnackbar("Spinning Wheel for the active turn! 🎡", "success");
+    } catch (err: any) {
+      showSnackbar(err?.data?.message || "Failed to spin wheel", "error");
     }
   };
 
@@ -282,7 +293,8 @@ const RemoteControl: React.FC = () => {
       ? teams.find((team) => team._id === currentAnsweringTeamRaw) || null
       : currentAnsweringTeamRaw || null;
   const isNoBuzzerMode =
-    !isSpinWheelMode && currentQuestionKeepBuzzer === false && !currentAnsweringTeamId;
+    (!isSpinWheelMode && currentQuestionKeepBuzzer === false && !currentAnsweringTeamId) ||
+    (isSpinWheelMode && !currentAnsweringTeamId);
 
   // Filter out already selected team from dropdown options
   const availableTeams = useMemo(
@@ -344,23 +356,34 @@ const RemoteControl: React.FC = () => {
     }
   }, [currentQuestionIndex, refetchCurrentQuestion]);
 
-  // Handle team selection for no-buzzer questions
+  // Handle team selection for no-buzzer questions or spin wheel turns
   const handleSelectTeamForNoBuzzer = async (
     event: SelectChangeEvent<string>,
   ) => {
     const teamId = event.target.value;
     if (!teamId) return;
 
-    try {
-      await setAnsweringTeam(teamId).unwrap();
-      setSelectedTeamIdForNoBuzzer(teamId);
-      setLastAnswerWasWrong(false);
-      setAttemptedTeamIds((prev) =>
-        prev.includes(teamId) ? prev : [...prev, teamId],
-      );
-      showSnackbar(`Team selected. Answering round started.`, "success");
-    } catch (error: any) {
-      showSnackbar(error?.data?.message || "Failed to select team", "error");
+    setSelectedTeamIdForNoBuzzer(teamId);
+
+    if (isSpinWheelMode) {
+      try {
+        await grantSpinPermission(teamId).unwrap();
+        setLastAnswerWasWrong(false);
+        showSnackbar(`Granted spin permission to Team Captain`, "success");
+      } catch (error: any) {
+        showSnackbar(error?.data?.message || "Failed to grant spin permission", "error");
+      }
+    } else {
+      try {
+        await setAnsweringTeam(teamId).unwrap();
+        setLastAnswerWasWrong(false);
+        setAttemptedTeamIds((prev) =>
+          prev.includes(teamId) ? prev : [...prev, teamId],
+        );
+        showSnackbar(`Team selected. Answering round started.`, "success");
+      } catch (error: any) {
+        showSnackbar(error?.data?.message || "Failed to select team", "error");
+      }
     }
   };
 
@@ -515,6 +538,11 @@ const RemoteControl: React.FC = () => {
   };
 
   const handleNextQuestion = async () => {
+    if (totalQuestions === 0) {
+      showSnackbar("Cannot start game. Please add questions to the session in the Dashboard first.", "error");
+      return;
+    }
+
     // If Spin Wheel mode is active or no next question exists, execute nextQuestion() directly without sequential preview popup
     if (isSpinWheelMode || currentQuestionIndex + 1 >= totalQuestions) {
       try {
@@ -872,7 +900,7 @@ const RemoteControl: React.FC = () => {
                   onChange={handleSelectTeamForNoBuzzer}
                   disabled={setTeamLoading}
                 >
-                  {availableTeams.map((team) => (
+                  {(isSpinWheelMode ? teams : availableTeams).map((team) => (
                     <MenuItem key={team._id} value={team._id}>
                       Team {team.teamNumber} - {team.teamName}
                     </MenuItem>
@@ -1283,11 +1311,6 @@ const RemoteControl: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <CategorySpinWheelModal
-        open={spinWheelOpen}
-        onClose={() => setSpinWheelOpen(false)}
-      />
 
       <Snackbar
         open={snackbarOpen}

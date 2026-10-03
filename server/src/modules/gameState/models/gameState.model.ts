@@ -54,6 +54,27 @@ const gameStateSchema = new Schema<IGameState>(
       type: Boolean,
       default: false,
     },
+    isSpinWheelEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    roundType: {
+      type: String,
+      enum: ["BUZZER", "SPIN_WHEEL"],
+      default: "BUZZER",
+    },
+    selectedCategory: {
+      type: String,
+      default: "",
+    },
+    availableCategories: {
+      type: [String],
+      default: [],
+    },
+    spinPermissionGranted: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

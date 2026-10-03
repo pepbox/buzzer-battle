@@ -19,6 +19,8 @@ router.get('/dashboard', authenticateUser, authorizeRoles("ADMIN"), asyncHandele
 
 // Admin team management
 router.put('/teams/:teamId', authenticateUser, authorizeRoles("ADMIN"), asyncHandeler(adminTeamControllers.updateTeam));
+router.delete('/teams/:teamId', authenticateUser, authorizeRoles("ADMIN"), asyncHandeler(adminTeamControllers.kickoutTeam));
+router.post('/teams/:teamId/kickout-member', authenticateUser, authorizeRoles("ADMIN"), asyncHandeler(adminTeamControllers.kickoutMember));
 router.get('/teams/:teamId/responses', authenticateUser, authorizeRoles("ADMIN"), asyncHandeler(adminTeamControllers.fetchTeamResponses));
 
 export default router;

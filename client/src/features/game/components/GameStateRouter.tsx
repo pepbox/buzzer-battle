@@ -37,9 +37,9 @@ const GameStateRouter = () => {
     if (!value) return undefined;
     if (typeof value === "string") return value;
     if (typeof value === "object") {
-      if (typeof value._id === "string") return value._id;
       if (value._id) return String(value._id);
       if (value.id) return String(value.id);
+      if (value.teamId) return String(value.teamId);
       return String(value);
     }
     return String(value);
@@ -55,6 +55,7 @@ const GameStateRouter = () => {
   const [isDelayingAnswer, setIsDelayingAnswer] = useState(false);
   const [answeredWrong, setAnsweredWrong] = useState(false);
   const [forceAnswerReveal, setForceAnswerReveal] = useState(false);
+  const [isDelayingForSpin, setIsDelayingForSpin] = useState(false);
 
   // Invalidate caches and reset slices when question changes
   useEffect(() => {
@@ -192,6 +193,14 @@ const GameStateRouter = () => {
       }
     };
 
+    const handleSpinWheelResult = () => {
+      // Hold navigation on buzzer round page for 4.5s while the wheel animation spins & shows result
+      setIsDelayingForSpin(true);
+      setTimeout(() => {
+        setIsDelayingForSpin(false);
+      }, 4500);
+    };
+
     websocketService.on(
       Events.ANSWER_MARKED_CORRECT,
       handleAnswerMarkedCorrect,
@@ -199,6 +208,7 @@ const GameStateRouter = () => {
     websocketService.on(Events.ANSWER_MARKED_WRONG, handleAnswerMarkedWrong);
     websocketService.on(Events.SHOW_ANSWER, handleShowAnswer);
     websocketService.on(Events.GAME_STATE_CHANGED, handleGameStateChanged);
+    websocketService.on(Events.SPIN_WHEEL_RESULT, handleSpinWheelResult);
 
     return () => {
       websocketService.off(
@@ -208,6 +218,7 @@ const GameStateRouter = () => {
       websocketService.off(Events.ANSWER_MARKED_WRONG, handleAnswerMarkedWrong);
       websocketService.off(Events.SHOW_ANSWER, handleShowAnswer);
       websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChanged);
+      websocketService.off(Events.SPIN_WHEEL_RESULT, handleSpinWheelResult);
     };
   }, [team?._id]);
 
@@ -230,14 +241,6 @@ const GameStateRouter = () => {
       (entry) => normalizeId(entry.teamId) === currentTeamId,
     );
 
-    // console.log("🎮 Game State Router:", {
-    //   status: currentStatus,
-    //   currentAnsweringTeam,
-    //   currentTeamId,
-    //   teamInBuzzerQueue,
-    //   currentPath: location.pathname,
-    // });
-
     // Helper function to navigate only if different from last navigation
     const safeNavigate = (path: string) => {
       const fullPath = `/game/${sessionId}${path}`;
@@ -250,8 +253,8 @@ const GameStateRouter = () => {
       }
     };
 
-    // Avoid navigating if we are currently delaying for a status card to show
-    if (isDelayingAnswer) {
+    // Avoid navigating if we are currently delaying for a status card to show or spin animation to complete
+    if (isDelayingAnswer || isDelayingForSpin) {
       return;
     }
 
@@ -271,13 +274,16 @@ const GameStateRouter = () => {
         }
         break;
 
-      case "answering":
-        // Check if this is a no-buzzer question
-        const isNoBuzzerQuestion = (currentGameState as any)
-          ?.isNoBuzzerQuestion;
+      case "answering": {
+        // Check if this is a no-buzzer question or Spin Wheel mode
+        const isSpinWheel =
+          currentGameState?.roundType === "SPIN_WHEEL" ||
+          currentGameState?.isSpinWheelEnabled;
+        const isNoBuzzerQuestion =
+          (currentGameState as any)?.isNoBuzzerQuestion || isSpinWheel;
 
         if (isNoBuzzerQuestion) {
-          // For no-buzzer questions, everyone sees the question
+          // For spin wheel & no-buzzer questions, all teams see the question
           safeNavigate("/question");
         } else {
           // For buzzer questions, only answering team sees question
@@ -293,10 +299,29 @@ const GameStateRouter = () => {
           }
         }
         break;
+      }
 
       case "idle":
         if (forceAnswerReveal) {
           safeNavigate("/answer-reveal");
+          break;
+        }
+
+        // If game has not started yet (no question index yet and no spin permission), stay on leaderboard / waiting
+        if (
+          (currentGameState?.currentQuestionIndex ?? -1) < 0 &&
+          !currentGameState?.spinPermissionGranted
+        ) {
+          safeNavigate("/leaderboard");
+          break;
+        }
+
+        const isSpinMode =
+          currentGameState?.roundType === "SPIN_WHEEL" ||
+          currentGameState?.isSpinWheelEnabled;
+
+        if (isSpinMode) {
+          safeNavigate("/buzzer");
           break;
         }
 
@@ -323,6 +348,7 @@ const GameStateRouter = () => {
     sessionId,
     buzzerData,
     isDelayingAnswer,
+    isDelayingForSpin,
     answeredWrong,
     forceAnswerReveal,
   ]);

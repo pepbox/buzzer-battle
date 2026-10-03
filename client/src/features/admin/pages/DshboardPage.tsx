@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Dashboard from "../components/Dashboard";
 import TeamResponsesModal from "../components/TeamResponsesModal";
 import {
@@ -15,9 +15,32 @@ import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 import { TeamResponse, Team, QuestionBankItem } from "../types/interfaces";
 import QuestionEditorDialog from "../components/QuestionEditorDialog";
+import { websocketService } from "../../../services/websocket/websocketService";
+import { Events } from "../../../services/websocket/enums/Events";
 
 const DashboardPage: React.FC = () => {
-  const { data, isError, isLoading } = useFetchTeamDashboardQuery();
+  const { data, isError, isLoading, refetch } = useFetchTeamDashboardQuery(
+    undefined,
+    {
+      pollingInterval: 3000,
+    },
+  );
+
+  useEffect(() => {
+    const handleLiveSync = () => {
+      refetch();
+    };
+
+    websocketService.on(Events.TEAM_JOINED, handleLiveSync);
+    websocketService.on(Events.TEAM_UPDATED, handleLiveSync);
+    websocketService.on(Events.GAME_STATE_CHANGED, handleLiveSync);
+
+    return () => {
+      websocketService.off(Events.TEAM_JOINED, handleLiveSync);
+      websocketService.off(Events.TEAM_UPDATED, handleLiveSync);
+      websocketService.off(Events.GAME_STATE_CHANGED, handleLiveSync);
+    };
+  }, [refetch]);
   const { data: sessionData } = useFetchSessionQuery();
   const { data: allQuestionsResponse } = useFetchQuestionBankQuery({
     sort: "newest",

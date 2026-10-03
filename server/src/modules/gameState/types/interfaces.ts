@@ -12,6 +12,11 @@ export interface IGameState extends Document {
   idleStartTime?: number;
   teamsWhoAnsweredThisQuestion: Types.ObjectId[];
   isNoBuzzerQuestion: boolean;
+  isSpinWheelEnabled?: boolean;
+  roundType?: "BUZZER" | "SPIN_WHEEL";
+  selectedCategory?: string;
+  availableCategories?: string[];
+  spinPermissionGranted?: boolean;
   hintRevealed?: boolean;
   isLeaderboardVisible?: boolean;
   createdAt: Date;

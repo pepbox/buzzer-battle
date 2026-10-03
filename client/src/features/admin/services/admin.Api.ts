@@ -432,6 +432,31 @@ export const adminApi = api.injectEndpoints({
       }),
       transformResponse: (response: any) => response.data,
     }),
+
+    // Kick out an individual team member
+    kickoutMember: builder.mutation<
+      { message: string; success: boolean; data?: { team: Team } },
+      { teamId: string; playerName: string }
+    >({
+      query: ({ teamId, playerName }) => ({
+        url: `/admin/teams/${teamId}/kickout-member`,
+        method: "POST",
+        body: { playerName },
+      }),
+      invalidatesTags: ["Team", "Leaderboard"],
+    }),
+
+    // Kick out / delete an entire team
+    kickoutTeam: builder.mutation<
+      { message: string; success: boolean },
+      { teamId: string }
+    >({
+      query: ({ teamId }) => ({
+        url: `/admin/teams/${teamId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Team", "Leaderboard", "GameState"],
+    }),
   }),
 });
 
@@ -465,4 +490,6 @@ export const {
   useUpdateTeamMutation,
   useFetchTeamResponsesQuery,
   useLazyFetchTeamResponsesQuery,
+  useKickoutMemberMutation,
+  useKickoutTeamMutation,
 } = adminApi;

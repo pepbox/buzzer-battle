@@ -45,7 +45,12 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
 }) => {
   const { admin } = useAdminAuth();
   const currentAdminId = admin?.id || "";
-  const isOwner = currentAdminId === "superadmin" || question.createdBy === currentAdminId || !question.createdBy;
+  const isOwner =
+    currentAdminId === "superadmin" ||
+    question.createdBy === currentAdminId ||
+    !question.createdBy ||
+    question.createdBy === "superadmin" ||
+    Boolean(currentAdminId);
 
   const showSelectButton =
     actionButtons === "select" || actionButtons === "all";

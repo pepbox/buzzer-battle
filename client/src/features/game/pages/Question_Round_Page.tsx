@@ -24,9 +24,9 @@ const QuestionRoundPage: React.FC = () => {
     if (!value) return undefined;
     if (typeof value === "string") return value;
     if (typeof value === "object") {
-      if (typeof value._id === "string") return value._id;
       if (value._id) return String(value._id);
       if (value.id) return String(value.id);
+      if (value.teamId) return String(value.teamId);
       return String(value);
     }
     return String(value);
@@ -148,16 +148,21 @@ const QuestionRoundPage: React.FC = () => {
     const handleAnswerMarkedCorrect = (data: any) => {
       console.log("✅ Answer marked correct by admin:", data);
 
-      // Only process if this is for the current team
-      if (normalizeId(data?.teamId) === normalizeId(team?._id)) {
+      const targetTeamId = normalizeId(data?.teamId);
+      const myTeamId = normalizeId(team?._id);
+
+      // Process if this is for the current team, or if this team was currently marked answering
+      if ((targetTeamId && targetTeamId === myTeamId) || (!targetTeamId && isAnsweringTeam)) {
         setAnswerResult({
           isCorrect: true,
           pointsAwarded: data.pointsAwarded || 0,
         });
         setAnswerStatus("status");
 
-        // We show NailedIt for 2 seconds.
-        // GameStateRouter automatically navigates us to /answer-reveal after 2 seconds!
+        // Safety fallback to clean status card after 2.5s
+        setTimeout(() => {
+          setAnswerStatus((prev) => (prev === "status" ? null : prev));
+        }, 2500);
       }
     };
 
@@ -166,15 +171,21 @@ const QuestionRoundPage: React.FC = () => {
 
       setIsWaitingAfterWrong(true);
 
-      // Only process if this is for the current team
-      if (normalizeId(data?.teamId) === normalizeId(team?._id)) {
+      const targetTeamId = normalizeId(data?.teamId);
+      const myTeamId = normalizeId(team?._id);
+
+      // Process if this is for the current team, or if this team was currently marked answering
+      if ((targetTeamId && targetTeamId === myTeamId) || (!targetTeamId && isAnsweringTeam)) {
         setAnswerResult({
           isCorrect: false,
           pointsAwarded: 0,
         });
         setAnswerStatus("status");
 
-        // GameStateRouter automatically navigates us after 2 seconds because it watches the same socket event!
+        // Safety fallback to clean status card after 2.5s
+        setTimeout(() => {
+          setAnswerStatus((prev) => (prev === "status" ? null : prev));
+        }, 2500);
       }
     };
 
@@ -183,12 +194,12 @@ const QuestionRoundPage: React.FC = () => {
     };
 
     const handleGameStateChanged = (data: any) => {
-      console.log("🎮 Game state changed:", data.gameStatus);
+      console.log("🎮 Game state changed:", data?.gameStatus);
 
       // If game transitions to idle and we haven't received answer result,
       // it means another team is being processed or question is complete
       if (
-        data.gameStatus === "idle" &&
+        data?.gameStatus === "idle" &&
         answerStatus === null &&
         isAnsweringTeam
       ) {
@@ -197,7 +208,7 @@ const QuestionRoundPage: React.FC = () => {
       }
 
       // If game transitions to buzzer_round (new question), navigate accordingly
-      if (data.gameStatus === "buzzer_round") {
+      if (data?.gameStatus === "buzzer_round") {
         setIsWaitingAfterWrong(false);
         navigate(`/game/${sessionId}/buzzer`);
       }
@@ -240,7 +251,7 @@ const QuestionRoundPage: React.FC = () => {
     };
   }, [team?._id, sessionId, navigate, answerStatus, isAnsweringTeam]);
 
-  // If not the answering team AND this is a buzzer question, redirect to leaderboard
+  // If not the answering team AND this is a buzzer question, redirect to buzzer leaderboard
   // For no-buzzer questions, everyone stays on the question page
   useEffect(() => {
     const isNoBuzzerQuestion = (gameState as any)?.isNoBuzzerQuestion;
@@ -254,7 +265,7 @@ const QuestionRoundPage: React.FC = () => {
       !isNoBuzzerQuestion &&
       !isShowingCloseCall
     ) {
-      navigate(`/game/${sessionId}/leaderboard`);
+      navigate(`/game/${sessionId}/buzzer-leaderboard`);
     }
   }, [
     gameState,
@@ -360,8 +371,8 @@ const QuestionRoundPage: React.FC = () => {
           <QuestionRound
             questionData={questionDataFormatted}
             questionNumber={(currentQuestionIndex || 0) + 1}
-            disabled={true} // Always disabled - no MCQ selection
-            showOptions={false} // Hide options for verbal answer flow
+            disabled={true}
+            showOptions={Boolean(questionDataFormatted?.options && questionDataFormatted.options.length > 0)}
             showVerbalHint={isAnsweringTeam && isBuzzerPerson}
           />
 

@@ -199,11 +199,40 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
     }
   };
 
+  const handleConfirmDeleteQuestion = async () => {
+    if (!questionToDelete?._id) return;
+    setActionError(null);
+    try {
+      await deleteQuestion(questionToDelete._id).unwrap();
+      const deletedId = questionToDelete._id;
+      setQuestionToDelete(null);
+      setSelectedQuestionIds((prev) => prev.filter((id) => id !== deletedId));
+      await refetchQuestions();
+    } catch (error: any) {
+      setActionError(error?.data?.message || "Failed to delete question");
+    }
+  };
+
   const folders = useMemo(() => {
     const apiFolders = foldersResponse?.data?.folders || [];
+    const standardCategories = [
+      "Who Am I?",
+      "English Vinglish",
+      "Guess The Song",
+      "Rumble Jumble : Guess The Movie and the song",
+      "Prop Round : Guess The Movie",
+    ];
+    const bollywoodSubfolders = standardCategories.map((c) => `Bollywood/${c}`);
     return [
       "all",
-      ...apiFolders.filter((folder) => folder.toLowerCase() !== "all"),
+      ...Array.from(
+        new Set([
+          "Bollywood",
+          ...bollywoodSubfolders,
+          ...standardCategories,
+          ...apiFolders.filter((folder) => folder.toLowerCase() !== "all"),
+        ]),
+      ),
     ];
   }, [foldersResponse]);
 
@@ -1322,6 +1351,61 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
             disabled={isBulkCopyLoading || isBulkMoveLoading}
           >
             {isBulkCopyLoading || isBulkMoveLoading ? "Processing..." : "Confirm"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Question Confirmation Dialog */}
+      <Dialog
+        open={Boolean(questionToDelete)}
+        onClose={() => setQuestionToDelete(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 700, color: "#DC2626" }}>
+          Delete Question
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 1.5 }}>
+            Are you sure you want to delete this question?
+          </Typography>
+          {questionToDelete && (
+            <Paper
+              variant="outlined"
+              sx={{ p: 1.5, backgroundColor: "#F8FAFC", borderRadius: 2 }}
+            >
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                {questionToDelete.questionContent?.text ||
+                  questionToDelete.questionText ||
+                  "Untitled Question"}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Folder: {questionToDelete.folder || "General"}
+              </Typography>
+            </Paper>
+          )}
+          <Typography
+            variant="caption"
+            color="error"
+            sx={{ display: "block", mt: 1.5 }}
+          >
+            ⚠️ This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button
+            onClick={() => setQuestionToDelete(null)}
+            disabled={isDeletingQuestion}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleConfirmDeleteQuestion}
+            disabled={isDeletingQuestion}
+          >
+            {isDeletingQuestion ? "Deleting..." : "Delete"}
           </Button>
         </DialogActions>
       </Dialog>

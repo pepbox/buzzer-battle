@@ -96,6 +96,31 @@ const formatFolderLabel = (folderPath: string) => {
   return `${"  ".repeat(depth)}${label}`;
 };
 
+export const STANDARD_CATEGORIES = [
+  "Who Am I?",
+  "English Vinglish",
+  "Guess The Song",
+  "Rumble Jumble : Guess The Movie and the song",
+  "Prop Round : Guess The Movie",
+];
+
+const parseFolder = (folderPath: string) => {
+  if (!folderPath || folderPath === "all") {
+    return { theme: "Bollywood", subCategory: STANDARD_CATEGORIES[0] };
+  }
+  if (folderPath.includes("/")) {
+    const parts = folderPath.split("/");
+    return {
+      theme: parts[0] || "Bollywood",
+      subCategory: parts.slice(1).join("/") || STANDARD_CATEGORIES[0],
+    };
+  }
+  if (STANDARD_CATEGORIES.includes(folderPath)) {
+    return { theme: "Bollywood", subCategory: folderPath };
+  }
+  return { theme: folderPath, subCategory: STANDARD_CATEGORIES[0] };
+};
+
 const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
   open,
   onClose,
@@ -124,21 +149,24 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
     hint: [],
   });
 
+  const parsedInitial = useMemo(() => {
+    const target = initialQuestion?.folder || (defaultFolder && defaultFolder.toLowerCase() !== "all" ? defaultFolder : "Bollywood/Who Am I?");
+    return parseFolder(target);
+  }, [defaultFolder, initialQuestion]);
+
   const [questionText, setQuestionText] = useState("");
   const [answerText, setAnswerText] = useState("");
   const [hintText, setHintText] = useState("");
-  const initialFolder = useMemo(() => {
-    if (defaultFolder && defaultFolder.toLowerCase() !== "all") return defaultFolder;
-    const firstValid = (folders || []).find((f) => f && f.toLowerCase() !== "all");
-    return firstValid || "General";
-  }, [defaultFolder, folders]);
+  const [selectedTheme, setSelectedTheme] = useState(parsedInitial.theme);
+  const [selectedSubCategory, setSelectedSubCategory] = useState(parsedInitial.subCategory);
+  const [customThemes, setCustomThemes] = useState<string[]>([]);
+  const [newThemeInput, setNewThemeInput] = useState("");
+  const [folder, setFolder] = useState(`${parsedInitial.theme}/${parsedInitial.subCategory}`);
 
   const [hintPenalty, setHintPenalty] = useState<number>(0);
   const [score, setScore] = useState<number>(0);
   const [keepBuzzer, setKeepBuzzer] = useState(true);
   const [hideFromUsers, setHideFromUsers] = useState(false);
-  const [folder, setFolder] = useState(initialFolder);
-  const [newFolderName, setNewFolderName] = useState("");
   const [questionLinkInput, setQuestionLinkInput] = useState("");
   const [answerLinkInput, setAnswerLinkInput] = useState("");
   const [hintLinkInput, setHintLinkInput] = useState("");
@@ -155,17 +183,21 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
     null,
   );
 
-  const selectableFolders = useMemo(() => {
-    const list = (folders || []).filter((f) => f && f.toLowerCase() !== "all");
-    const currentClean = folder && folder.toLowerCase() !== "all" ? folder : "";
-    if (currentClean && !list.includes(currentClean)) {
-      list.unshift(currentClean);
+  const availableThemes = useMemo(() => {
+    const themes = new Set(["Bollywood", "General", ...customThemes]);
+    (folders || []).forEach((f) => {
+      if (f && f.toLowerCase() !== "all") {
+        const parent = f.split("/")[0];
+        if (parent && !STANDARD_CATEGORIES.includes(parent)) {
+          themes.add(parent);
+        }
+      }
+    });
+    if (selectedTheme) {
+      themes.add(selectedTheme);
     }
-    if (!list.length) {
-      list.push("General");
-    }
-    return list;
-  }, [folders, folder]);
+    return Array.from(themes);
+  }, [folders, customThemes, selectedTheme]);
 
   const isUploadingMedia = useMemo(
     () =>
@@ -181,6 +213,11 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
     removedUploadIdsRef.current.clear();
 
     if (mode === "edit" && initialQuestion) {
+      const parsed = parseFolder(initialQuestion.folder || "");
+      setSelectedTheme(parsed.theme);
+      setSelectedSubCategory(parsed.subCategory);
+      setFolder(initialQuestion.folder || `${parsed.theme}/${parsed.subCategory}`);
+
       setQuestionText(
         initialQuestion.questionContent?.text ||
           initialQuestion.questionText ||
@@ -190,7 +227,6 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
       setScore(initialQuestion.score ?? 0);
       setKeepBuzzer(initialQuestion.keepBuzzer ?? true);
       setHideFromUsers(initialQuestion.hideFromUsers ?? false);
-      setFolder(initialQuestion.folder || initialFolder);
       setOptions(
         (initialQuestion.options || []).map((opt) => ({
           optionText: opt.optionText,
@@ -218,13 +254,22 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
         toEditableMediaItems(initialQuestion.hint?.media),
       );
       setSubmitError(null);
-      setNewFolderName("");
+      setNewThemeInput("");
       setQuestionLinkInput("");
       setAnswerLinkInput("");
       setHintLinkInput("");
       setOptionText("");
       return;
     }
+
+    const defaultParsed = parseFolder(
+      defaultFolder && defaultFolder.toLowerCase() !== "all"
+        ? defaultFolder
+        : "Bollywood/Who Am I?"
+    );
+    setSelectedTheme(defaultParsed.theme);
+    setSelectedSubCategory(defaultParsed.subCategory);
+    setFolder(`${defaultParsed.theme}/${defaultParsed.subCategory}`);
 
     setQuestionText("");
     setAnswerText("");
@@ -233,7 +278,6 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
     setScore(0);
     setKeepBuzzer(true);
     setHideFromUsers(false);
-    setFolder(initialFolder);
     setQuestionLinkInput("");
     setAnswerLinkInput("");
     setHintLinkInput("");
@@ -243,7 +287,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
     setQuestionAssets([]);
     setAnswerMedia([]);
     setHintMedia([]);
-    setNewFolderName("");
+    setNewThemeInput("");
     setSubmitError(null);
     setPreviewMedia(null);
   }, [defaultFolder, initialQuestion, mode, open]);
@@ -359,18 +403,31 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
     });
   };
 
-  const handleAddFolder = async () => {
-    if (!newFolderName.trim()) return;
+  const handleThemeChange = (newTheme: string) => {
+    setSelectedTheme(newTheme);
+    const updated = `${newTheme}/${selectedSubCategory}`;
+    setFolder(updated);
+  };
+
+  const handleSubCategoryChange = (newSub: string) => {
+    setSelectedSubCategory(newSub);
+    const updated = `${selectedTheme}/${newSub}`;
+    setFolder(updated);
+  };
+
+  const handleAddTheme = async () => {
+    const trimmed = newThemeInput.trim();
+    if (!trimmed) return;
 
     setSubmitError(null);
     try {
-      const created = await createFolder({
-        name: newFolderName.trim(),
-      }).unwrap();
-      setFolder(created.data.folder);
-      setNewFolderName("");
+      await createFolder({ name: trimmed }).unwrap();
+      setCustomThemes((prev) => Array.from(new Set([...prev, trimmed])));
+      setSelectedTheme(trimmed);
+      setFolder(`${trimmed}/${selectedSubCategory}`);
+      setNewThemeInput("");
     } catch (error: any) {
-      setSubmitError(error?.data?.message || "Failed to create folder");
+      setSubmitError(error?.data?.message || "Failed to create theme");
     }
   };
 
@@ -547,41 +604,69 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
                 gap: 1.5,
               }}
             >
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
-                Question Category / Folder (Required)
-              </Typography>
-              <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start", flexWrap: "wrap" }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
+                  📁 Question Category & Theme (Required)
+                </Typography>
+                <Chip
+                  label={`Target Folder: ${folder}`}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                  sx={{ fontWeight: 700 }}
+                />
+              </Box>
+
+              <Box sx={{ display: "flex", gap: 1.5, alignItems: "center", flexWrap: "wrap" }}>
+                {/* 1. Main Theme / Parent Folder */}
                 <TextField
                   select
-                  sx={{ flex: 1, minWidth: 220 }}
-                  label="Category / Folder"
-                  value={folder && folder.toLowerCase() !== "all" ? folder : "General"}
-                  onChange={(e) => setFolder(e.target.value)}
+                  sx={{ flex: 1, minWidth: 200 }}
+                  label="1. Main Theme / Folder"
+                  value={selectedTheme}
+                  onChange={(e) => handleThemeChange(e.target.value)}
                 >
-                  {selectableFolders.map((folderName) => (
-                    <MenuItem key={folderName} value={folderName}>
-                      {formatFolderLabel(folderName)}
+                  {availableThemes.map((t) => (
+                    <MenuItem key={t} value={t}>
+                      📂 {t}
                     </MenuItem>
                   ))}
                 </TextField>
 
-                <Box sx={{ display: "flex", gap: 1, flex: 1, minWidth: 260 }}>
-                  <TextField
-                    fullWidth
-                    label="Create New Category"
-                    placeholder="e.g. Bollywood, Sports, GK..."
-                    value={newFolderName}
-                    onChange={(e) => setNewFolderName(e.target.value)}
-                  />
-                  <Button
-                    variant="outlined"
-                    onClick={handleAddFolder}
-                    disabled={isCreatingFolder || !newFolderName.trim()}
-                    sx={{ height: 56, minWidth: 90 }}
-                  >
-                    Create
-                  </Button>
-                </Box>
+                {/* 2. Sub-Category / Game Round (5 Standard Categories) */}
+                <TextField
+                  select
+                  sx={{ flex: 1.5, minWidth: 260 }}
+                  label="2. Sub-Category (Game Round)"
+                  value={selectedSubCategory}
+                  onChange={(e) => handleSubCategoryChange(e.target.value)}
+                >
+                  {STANDARD_CATEGORIES.map((cat) => (
+                    <MenuItem key={cat} value={cat}>
+                      🎯 {cat}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Box>
+
+              {/* Quick Add Custom Theme / Parent Folder */}
+              <Box sx={{ display: "flex", gap: 1, alignItems: "center", mt: 0.5 }}>
+                <TextField
+                  size="small"
+                  fullWidth
+                  label="Create New Main Theme (e.g. Hollywood, Sports, 90s Retro)"
+                  placeholder="Type new theme name..."
+                  value={newThemeInput}
+                  onChange={(e) => setNewThemeInput(e.target.value)}
+                />
+                <Button
+                  variant="outlined"
+                  onClick={handleAddTheme}
+                  disabled={isCreatingFolder || !newThemeInput.trim()}
+                  sx={{ height: 40, minWidth: 120, whiteSpace: "nowrap" }}
+                >
+                  + Add Theme
+                </Button>
               </Box>
             </Box>
 
