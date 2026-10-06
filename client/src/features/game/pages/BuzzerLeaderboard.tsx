@@ -90,8 +90,24 @@ const BuzzerLeaderboard: React.FC = () => {
   }, [isWaitingAfterWrong, sessionId, currentQuestionIndex]);
 
   useEffect(() => {
-    const handleAnswerMarkedWrong = () => {
+    const handleAnswerMarkedWrong = (data: any) => {
       setIsWaitingAfterWrong(true);
+      const targetTeamId = normalizeId(data?.teamId);
+      const myTeamId = normalizeId(team?._id);
+      if (targetTeamId && targetTeamId === myTeamId) {
+        setWasMarkedWrong(true);
+        if (currentQuestionIndex !== undefined && sessionId) {
+          sessionStorage.setItem(
+            `answerResult_${sessionId}_${currentQuestionIndex}`,
+            JSON.stringify({ isCorrect: false, pointsAwarded: 0 })
+          );
+        }
+      }
+    };
+
+    const handleAnswerMarkedCorrect = () => {
+      setIsWaitingAfterWrong(false);
+      setWasMarkedWrong(false);
     };
 
     const handleTeamSelected = () => {
@@ -105,15 +121,17 @@ const BuzzerLeaderboard: React.FC = () => {
     };
 
     websocketService.on(Events.ANSWER_MARKED_WRONG, handleAnswerMarkedWrong);
+    websocketService.on(Events.ANSWER_MARKED_CORRECT, handleAnswerMarkedCorrect);
     websocketService.on(Events.TEAM_SELECTED, handleTeamSelected);
     websocketService.on(Events.GAME_STATE_CHANGED, handleGameStateChanged);
 
     return () => {
       websocketService.off(Events.ANSWER_MARKED_WRONG, handleAnswerMarkedWrong);
+      websocketService.off(Events.ANSWER_MARKED_CORRECT, handleAnswerMarkedCorrect);
       websocketService.off(Events.TEAM_SELECTED, handleTeamSelected);
       websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChanged);
     };
-  }, []);
+  }, [team?._id, sessionId, currentQuestionIndex]);
 
   // Fetch buzzer leaderboard
   const {

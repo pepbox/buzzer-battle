@@ -153,11 +153,17 @@ const QuestionRoundPage: React.FC = () => {
 
       // Process if this is for the current team, or if this team was currently marked answering
       if ((targetTeamId && targetTeamId === myTeamId) || (!targetTeamId && isAnsweringTeam)) {
-        setAnswerResult({
+        const result = {
           isCorrect: true,
           pointsAwarded: data.pointsAwarded || 0,
-        });
+        };
+        setAnswerResult(result);
         setAnswerStatus("status");
+
+        if (currentQuestionIndex !== undefined && sessionId) {
+          sessionStorage.setItem(`answerStatus_${sessionId}_${currentQuestionIndex}`, JSON.stringify("status"));
+          sessionStorage.setItem(`answerResult_${sessionId}_${currentQuestionIndex}`, JSON.stringify(result));
+        }
 
         // Safety fallback to clean status card after 2.5s
         setTimeout(() => {
@@ -176,11 +182,17 @@ const QuestionRoundPage: React.FC = () => {
 
       // Process if this is for the current team, or if this team was currently marked answering
       if ((targetTeamId && targetTeamId === myTeamId) || (!targetTeamId && isAnsweringTeam)) {
-        setAnswerResult({
+        const result = {
           isCorrect: false,
           pointsAwarded: 0,
-        });
+        };
+        setAnswerResult(result);
         setAnswerStatus("status");
+
+        if (currentQuestionIndex !== undefined && sessionId) {
+          sessionStorage.setItem(`answerStatus_${sessionId}_${currentQuestionIndex}`, JSON.stringify("status"));
+          sessionStorage.setItem(`answerResult_${sessionId}_${currentQuestionIndex}`, JSON.stringify(result));
+        }
 
         // Safety fallback to clean status card after 2.5s
         setTimeout(() => {
@@ -249,21 +261,20 @@ const QuestionRoundPage: React.FC = () => {
       websocketService.off(Events.TEAM_SELECTED, handleTeamSelected);
       websocketService.off(Events.HINT_REVEALED, handleHintRevealed);
     };
-  }, [team?._id, sessionId, navigate, answerStatus, isAnsweringTeam]);
+  }, [team?._id, sessionId, navigate, answerStatus, isAnsweringTeam, currentQuestionIndex]);
 
   // If not the answering team AND this is a buzzer question, redirect to buzzer leaderboard
   // For no-buzzer questions, everyone stays on the question page
   useEffect(() => {
     const isNoBuzzerQuestion = (gameState as any)?.isNoBuzzerQuestion;
-    const isShowingCloseCall =
-      answerStatus === "status" && answerResult?.isCorrect === false;
+    const isShowingStatus = answerStatus === "status";
 
     if (
       gameState &&
       !isAnsweringTeam &&
       gameState.gameStatus === "answering" &&
       !isNoBuzzerQuestion &&
-      !isShowingCloseCall
+      !isShowingStatus
     ) {
       navigate(`/game/${sessionId}/buzzer-leaderboard`);
     }
@@ -273,7 +284,6 @@ const QuestionRoundPage: React.FC = () => {
     navigate,
     sessionId,
     answerStatus,
-    answerResult?.isCorrect,
   ]);
 
   if (isLoading && !activeQuestion) {
@@ -306,10 +316,9 @@ const QuestionRoundPage: React.FC = () => {
   const isNoBuzzerQuestion = (gameState as any)?.isNoBuzzerQuestion;
   const isHiddenQuestion = activeQuestion.hideFromUsers === true;
 
-  const isShowingCloseCall =
-    answerStatus === "status" && answerResult?.isCorrect === false;
+  const isShowingStatus = answerStatus === "status";
 
-  if (!isAnsweringTeam && !isNoBuzzerQuestion && !isShowingCloseCall) {
+  if (!isAnsweringTeam && !isNoBuzzerQuestion && !isShowingStatus) {
     // For buzzer questions, non-answering teams see waiting screen
     return (
       <Box

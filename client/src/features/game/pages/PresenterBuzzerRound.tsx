@@ -6,6 +6,7 @@ import { useFetchCurrentQuestionQuery } from "../../question/services/questions.
 import { useFetchOverallLeaderboardQuery } from "../services/teamApi";
 import Loader from "../../../components/ui/Loader";
 import Error from "../../../components/ui/Error";
+import SpinWheel from "../components/SpinWheel";
 import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
 // import { useTimerSync } from "../../../hooks/useTimerSync";

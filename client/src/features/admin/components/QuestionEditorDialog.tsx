@@ -88,14 +88,6 @@ const cleanupMediaItems = (mediaItems: EditableMediaItem[]) => {
 
 const previewMediaSource = (media: QuestionMediaItem) =>
   media.url || media.previewUrl || "";
-
-const formatFolderLabel = (folderPath: string) => {
-  const segments = folderPath.split("/").filter(Boolean);
-  const depth = Math.max(0, segments.length - 1);
-  const label = segments[segments.length - 1] || folderPath;
-  return `${"  ".repeat(depth)}${label}`;
-};
-
 export const STANDARD_CATEGORIES = [
   "Who Am I?",
   "English Vinglish",

@@ -147,9 +147,21 @@ const GameStateRouter = () => {
 
   // Handle global Answer Reveal timing
   useEffect(() => {
-    const handleAnswerMarkedCorrect = () => {
+    const handleAnswerMarkedCorrect = (data: any) => {
       // Wait 2 seconds (during which answering team sees NailedIt status card)
       setIsDelayingAnswer(true);
+
+      if (normalizeId(data?.teamId) === normalizeId(team?._id)) {
+        const qIndex = currentGameState?.currentQuestionIndex;
+        if (qIndex !== undefined && sessionId) {
+          sessionStorage.setItem(`answerStatus_${sessionId}_${qIndex}`, JSON.stringify("status"));
+          sessionStorage.setItem(`answerResult_${sessionId}_${qIndex}`, JSON.stringify({
+            isCorrect: true,
+            pointsAwarded: data?.pointsAwarded || 0,
+          }));
+        }
+      }
+
       setTimeout(() => {
         setIsDelayingAnswer(false);
       }, 2000);

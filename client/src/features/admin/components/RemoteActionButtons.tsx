@@ -8,7 +8,6 @@ import BoltIcon from "@mui/icons-material/Bolt";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import LeaderboardIcon from "@mui/icons-material/Leaderboard";
-import CasinoIcon from "@mui/icons-material/Casino";
 
 interface RemoteActionButtonsProps {
   gameStatus: "paused" | "buzzer_round" | "answering" | "idle";

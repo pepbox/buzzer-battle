@@ -42,6 +42,7 @@ import {
   useSetAnsweringTeam,
   useShowHint,
 } from "../services/adminRemoteApi";
+import CategorySpinWheelModal from "../components/CategorySpinWheelModal";
 import {
   useFetchTeamDashboardQuery,
   useUpdateSessionQuestionsMutation,
@@ -152,6 +153,7 @@ const RemoteControl: React.FC = () => {
   const [selectedTeamIdForNoBuzzer, setSelectedTeamIdForNoBuzzer] =
     useState("");
   const [hintConfirmOpen, setHintConfirmOpen] = useState(false);
+  const [spinWheelOpen, setSpinWheelOpen] = useState(false);
 
   const { toggleLeaderboard, isLoading: toggleLeaderboardLoading } = useToggleLeaderboard();
   const { toggleSpinWheel, isLoading: toggleSpinWheelLoading } = useToggleSpinWheel();
@@ -194,15 +196,6 @@ const RemoteControl: React.FC = () => {
       showSnackbar("Granted Spin Wheel permission to team's Captain", "success");
     } catch (err: any) {
       showSnackbar(err?.data?.message || "Failed to grant spin permission", "error");
-    }
-  };
-
-  const handleAdminSpinWheel = async () => {
-    try {
-      await spinWheelRequest().unwrap();
-      showSnackbar("Spinning Wheel for the active turn! 🎡", "success");
-    } catch (err: any) {
-      showSnackbar(err?.data?.message || "Failed to spin wheel", "error");
     }
   };
 
@@ -1326,6 +1319,11 @@ const RemoteControl: React.FC = () => {
           {snackbarMessage}
         </Alert>
       </Snackbar>
+      <CategorySpinWheelModal
+        open={spinWheelOpen}
+        onClose={() => setSpinWheelOpen(false)}
+        categories={gameState?.availableCategories}
+      />
     </>
   );
 };
