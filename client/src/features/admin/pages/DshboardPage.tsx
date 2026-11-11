@@ -13,6 +13,7 @@ import { useFetchSessionQuery } from "../../session/services/session.api";
 import ErrorLayout from "../../../components/ui/Error";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
+import { Box, CircularProgress, Typography } from "@mui/material";
 import { TeamResponse, Team, QuestionBankItem } from "../types/interfaces";
 import QuestionEditorDialog from "../components/QuestionEditorDialog";
 
@@ -166,7 +167,23 @@ const DashboardPage: React.FC = () => {
   }
 
   if (isLoading || !data) {
-    return <div>Loading...</div>;
+    return (
+      <Box
+        sx={{
+          minHeight: "60vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 2,
+        }}
+      >
+        <CircularProgress />
+        <Typography color="text.secondary" fontWeight={600}>
+          Loading dashboard…
+        </Typography>
+      </Box>
+    );
   }
 
   // Construct header data
@@ -180,6 +197,8 @@ const DashboardPage: React.FC = () => {
     currentQuestion: data.data.statistics.currentQuestion,
     totalQuestions: data.data.statistics.totalQuestions,
     gameMode: sessionData?.data?.gameMode || (data.data.session as any)?.gameMode,
+    sessionStatus: data.data.session.status || sessionData?.data?.status,
+    currentQuestionIndex: data.data.gameState.currentQuestionIndex,
   };
 
   return (

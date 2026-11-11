@@ -23,6 +23,7 @@ import {
 } from "../services/teamApi";
 import { setTeam } from "../services/teamSlice";
 import Loader from "../../../components/ui/Loader";
+import { GameBackground } from "../../../components/ui/GameScreen";
 import ErrorLayout from "../../../components/ui/Error";
 import { useFetchSessionByIdQuery } from "../../session/services/session.api";
 
@@ -156,11 +157,19 @@ const LoginPage: React.FC = () => {
 
   // Conditional returns AFTER all hooks
   if (isLoading) {
-    return <Loader />;
+    return (
+      <GameBackground>
+        <Loader />
+      </GameBackground>
+    );
   }
 
   if (error) {
-    return <ErrorLayout />;
+    return (
+      <GameBackground>
+        <ErrorLayout />
+      </GameBackground>
+    );
   }
 
   const MAX_WORD_LENGTH = 15; // Maximum length per word

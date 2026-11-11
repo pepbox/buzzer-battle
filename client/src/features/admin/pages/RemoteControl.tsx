@@ -730,6 +730,9 @@ const RemoteControl: React.FC = () => {
           left: 0,
           width: "100vw",
           height: "100vh",
+          // Use the dynamic viewport height where supported so mobile browser
+          // toolbars don't hide the bottom of the remote.
+          "@supports (height: 100dvh)": { height: "100dvh" },
           backgroundImage: `url(${normalBg})`,
           backgroundSize: "cover",
           backgroundPosition: "center",
@@ -741,6 +744,7 @@ const RemoteControl: React.FC = () => {
             alignItems: "flex-start",
             backgroundColor: "#000",
             paddingTop: "20px",
+            paddingBottom: "20px",
           },
         }}
       >

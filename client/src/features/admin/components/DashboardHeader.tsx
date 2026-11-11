@@ -6,7 +6,7 @@ import {
   Switch,
   FormControlLabel,
   Button,
-  Divider,
+  Chip,
   useTheme,
   useMediaQuery,
   Dialog,
@@ -17,6 +17,7 @@ import {
   IconButton,
   Tooltip,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
 import { DashboardHeaderProps } from "../types/interfaces";
 import { useAdminAuth } from "../services/useAdminAuth";
@@ -32,6 +33,9 @@ import BrandingWatermarkIcon from "@mui/icons-material/BrandingWatermark";
 import LockIcon from "@mui/icons-material/Lock";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
+import DashboardIcon from "@mui/icons-material/Dashboard";
+import EventNoteIcon from "@mui/icons-material/EventNote";
+import TimelineIcon from "@mui/icons-material/Timeline";
 import {
   useAdminLogoutMutation,
   useUpdateNumberOfTeamsMutation,
@@ -43,6 +47,92 @@ import { RootState } from "../../../app/store";
 import { clearAdmin } from "../services/adminSlice";
 import CurrentQuestionsModal from "./CurrentQuestionsModal";
 import SessionBrandingModal from "./SessionBrandingModal";
+
+// Human-readable label for a raw game status ("buzzer_round" -> "Buzzer Round")
+const formatStatus = (raw?: string) =>
+  (raw || "idle")
+    .replace(/[_-]/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+
+const statusChipColor = (
+  raw?: string,
+): "success" | "warning" | "primary" | "default" => {
+  switch (raw) {
+    case "buzzer_round":
+    case "answering":
+    case "spin_round":
+      return "success";
+    case "paused":
+      return "warning";
+    case "idle":
+      return "primary";
+    default:
+      return "default";
+  }
+};
+
+// Compact stat tile used in the header summary grid
+const StatCard: React.FC<{
+  label: string;
+  icon: React.ReactNode;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ label, icon, action, children }) => (
+  <Paper
+    elevation={0}
+    sx={{
+      p: 2,
+      borderRadius: "12px",
+      border: "1px solid",
+      borderColor: "divider",
+      backgroundColor: "background.paper",
+      display: "flex",
+      alignItems: "center",
+      gap: 1.5,
+      minWidth: 0,
+    }}
+  >
+    <Box
+      sx={(theme) => ({
+        width: 40,
+        height: 40,
+        borderRadius: "10px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        color: "primary.main",
+        backgroundColor: alpha(theme.palette.primary.main, 0.1),
+      })}
+    >
+      {icon}
+    </Box>
+    <Box sx={{ minWidth: 0, flex: 1 }}>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        fontWeight={600}
+        sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}
+      >
+        {label}
+      </Typography>
+      {children}
+    </Box>
+    {action}
+  </Paper>
+);
+
+const navButtonSx = {
+  textTransform: "none",
+  borderRadius: "8px",
+  fontWeight: 600,
+  minWidth: { xs: 40, sm: "fit-content" },
+  px: { xs: 1, sm: 2 },
+} as const;
 
 // Dashboard Header Component
 const DashboardHeader: React.FC<DashboardHeaderProps> = ({
@@ -64,8 +154,16 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   const CurretQuestionIndex = useAppSelector(
     (state: RootState) => state.gameState.gameState?.currentQuestionIndex,
   );
-  const isGameNotStarted =
-    (CurretQuestionIndex ?? -1) === -1 || (data?.currentQuestion ?? 0) === 0;
+  // The game counts as started if ANY source says so: the session status (set to
+  // "playing" on start in both Buzzer Battle and Spin Wheel modes — spin wheel keeps
+  // currentQuestionIndex at -1 until the first spin), the live Redux game state, or the
+  // dashboard's own game state. A missing value must never force "not started".
+  const isGameStarted =
+    data?.sessionStatus === "playing" ||
+    (CurretQuestionIndex ?? -1) >= 0 ||
+    (data?.currentQuestionIndex ?? -1) >= 0 ||
+    (data?.currentQuestion ?? 0) > 0;
+  const isGameNotStarted = !isGameStarted;
   const dispatch = useAppDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -207,6 +305,46 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     window.open(`/admin/${sessionId}/questions`, "_blank");
   };
 
+  const navActions: {
+    label: string;
+    icon: React.ReactNode;
+    onClick: () => void;
+    color: "primary" | "secondary" | "error";
+    disabled?: boolean;
+  }[] = [
+    {
+      label: "Current Questions",
+      icon: <ListIcon />,
+      onClick: () => setCurrentQuestionsModalOpen(true),
+      color: "secondary",
+      disabled: (selectedQuestionIds?.length || 0) === 0,
+    },
+    {
+      label: "Remote Control",
+      icon: <SettingsRemoteIcon />,
+      onClick: handleRemoteControl,
+      color: "secondary",
+    },
+    {
+      label: "Presenter View",
+      icon: <SlideshowIcon />,
+      onClick: handlePresenterView,
+      color: "primary",
+    },
+    {
+      label: "Session Branding",
+      icon: <BrandingWatermarkIcon />,
+      onClick: () => setBrandingModalOpen(true),
+      color: "primary",
+    },
+    {
+      label: "Log Out",
+      icon: <LogoutIcon />,
+      onClick: handleLogout,
+      color: "error",
+    },
+  ];
+
   return (
     <>
       {/* Top Navigation Bar */}
@@ -214,148 +352,77 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         display="flex"
         justifyContent="space-between"
         alignItems="center"
+        flexWrap="wrap"
+        gap={1.5}
         px={isMobile ? 2 : 4}
         py={2}
       >
-        <Typography variant={isMobile ? "h6" : "h5"} fontWeight="bold">
-          Admin Dashboard
-        </Typography>
+        <Box display="flex" alignItems="center" gap={1}>
+          <DashboardIcon color="primary" />
+          <Typography variant={isMobile ? "h6" : "h5"} fontWeight="bold">
+            Admin Dashboard
+          </Typography>
+        </Box>
 
-        <Box display="flex" gap={1} alignItems="center">
-          <Button
-            variant="outlined"
-            color="secondary"
-            startIcon={<ListIcon />}
-            onClick={() => setCurrentQuestionsModalOpen(true)}
-            disabled={(selectedQuestionIds?.length || 0) === 0}
-            sx={{
-              textTransform: "none",
-              borderRadius: "8px",
-              fontWeight: 500,
-              minWidth: isMobile ? "auto" : "fit-content",
-            }}
-          >
-            <Box
-              sx={{
-                display: { xs: "none", sm: "inline" },
-              }}
-            >
-              Current Questions
-            </Box>
-          </Button>
-
-          <Button
-            variant="outlined"
-            color="secondary"
-            startIcon={<SettingsRemoteIcon />}
-            onClick={handleRemoteControl}
-            sx={{
-              textTransform: "none",
-              borderRadius: "8px",
-              fontWeight: 500,
-              minWidth: isMobile ? "auto" : "fit-content",
-            }}
-          >
-            <Box
-              sx={{
-                display: { xs: "none", sm: "inline" },
-              }}
-            >
-              Remote Control
-            </Box>
-          </Button>
-
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<SlideshowIcon />}
-            onClick={handlePresenterView}
-            sx={{
-              textTransform: "none",
-              borderRadius: "8px",
-              fontWeight: 500,
-              minWidth: isMobile ? "auto" : "fit-content",
-            }}
-          >
-            <Box
-              sx={{
-                display: { xs: "none", sm: "inline" },
-              }}
-            >
-              Presenter View
-            </Box>
-          </Button>
-
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<BrandingWatermarkIcon />}
-            onClick={() => setBrandingModalOpen(true)}
-            sx={{
-              textTransform: "none",
-              borderRadius: "8px",
-              fontWeight: 500,
-              minWidth: isMobile ? "auto" : "fit-content",
-            }}
-          >
-            <Box
-              sx={{
-                display: { xs: "none", sm: "inline" },
-              }}
-            >
-              Session Branding
-            </Box>
-          </Button>
-
-          <Button
-            variant="outlined"
-            color="error"
-            startIcon={<LogoutIcon />}
-            onClick={handleLogout}
-            sx={{
-              textTransform: "none",
-              borderRadius: "8px",
-              border: "1px solid #FF6363",
-              fontWeight: 500,
-              color: "#FF6363",
-              minWidth: isMobile ? "auto" : "fit-content",
-            }}
-          >
-            <Box
-              sx={{
-                display: { xs: "none", sm: "inline" },
-              }}
-            >
-              Log Out
-            </Box>
-          </Button>
+        <Box display="flex" gap={1} alignItems="center" flexWrap="wrap">
+          {navActions.map((action) => (
+            <Tooltip key={action.label} title={action.label}>
+              {/* span wrapper keeps the tooltip working when the button is disabled */}
+              <span>
+                <Button
+                  variant="outlined"
+                  color={action.color}
+                  startIcon={action.icon}
+                  onClick={action.onClick}
+                  disabled={action.disabled}
+                  aria-label={action.label}
+                  sx={{
+                    ...navButtonSx,
+                    // Icon-only on small screens: center the icon and drop the label gap
+                    "& .MuiButton-startIcon": {
+                      mr: { xs: 0, sm: 1 },
+                      ml: { xs: 0, sm: -0.5 },
+                    },
+                  }}
+                >
+                  <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
+                    {action.label}
+                  </Box>
+                </Button>
+              </span>
+            </Tooltip>
+          ))}
         </Box>
       </Box>
 
       {/* Main Header Section */}
       <Paper
+        elevation={0}
         sx={{
           p: isMobile ? 2 : 3,
           px: isMobile ? 2 : 4,
-          mb: 2,
-          backgroundColor: "rgba(252, 166, 30, 0.10)",
-          dropShadow: "0px 2px 4px rgba(0, 0, 0, 0.1)",
+          mx: isMobile ? 2 : 4,
+          mb: 3,
+          borderRadius: "16px",
+          border: "1px solid",
+          borderColor: "divider",
+          background: `linear-gradient(135deg, ${alpha(
+            theme.palette.warning.main,
+            0.08,
+          )} 0%, ${alpha(theme.palette.primary.main, 0.06)} 100%)`,
+          boxShadow: "0px 2px 8px rgba(15, 23, 42, 0.06)",
         }}
       >
         {/* Admin Name */}
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            mb: 3,
-          }}
-        >
+        <Box sx={{ textAlign: "center", mb: 3 }}>
+          <Typography variant="body2" color="text.secondary" fontWeight={600}>
+            Welcome back
+          </Typography>
           <Typography
             variant={isMobile ? "h5" : "h3"}
             fontWeight="bold"
-            color="black"
-            textAlign={"center"}
+            color="text.primary"
+            sx={{ wordBreak: "break-word" }}
           >
             {admin?.name || data?.adminName || "Admin"}
           </Typography>
@@ -365,138 +432,97 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         {(data?.sessionName ||
           data?.teamsRegistered !== undefined ||
           data?.currentQuestion !== undefined) && (
-          <>
-            <Box sx={{ mb: 3 }}>
-              <Box
-                display="flex"
-                flexDirection={isMobile ? "column" : "row"}
-                gap={isMobile ? 2 : 4}
-                justifyContent="space-around"
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                sm: "repeat(2, 1fr)",
+                md: "repeat(4, 1fr)",
+              },
+              gap: 2,
+              mb: 3,
+            }}
+          >
+            {data?.sessionName && (
+              <StatCard label="Session Name" icon={<EventNoteIcon />}>
+                <Typography
+                  variant="h6"
+                  fontWeight="bold"
+                  noWrap
+                  title={data.sessionName}
+                >
+                  {data.sessionName}
+                </Typography>
+              </StatCard>
+            )}
+
+            {data?.teamsRegistered !== undefined && (
+              <StatCard
+                label="Teams Registered"
+                icon={<GroupIcon />}
+                action={
+                  <Tooltip title="Edit teams">
+                    <IconButton
+                      size="small"
+                      onClick={handleEditTeamsClick}
+                      color="primary"
+                      aria-label="Edit teams"
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                }
               >
-                {data?.sessionName && (
-                  <Box textAlign="center" flex={1}>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      gutterBottom
-                    >
-                      Session Name
+                <Typography variant="h6" fontWeight="bold">
+                  {data.teamsRegistered}
+                  {data.totalTeams ? (
+                    <Typography component="span" color="text.secondary" fontWeight={600}>
+                      {` / ${data.totalTeams}`}
                     </Typography>
-                    <Typography variant="h6" fontWeight="bold">
-                      {data.sessionName}
-                    </Typography>
-                  </Box>
-                )}
+                  ) : null}
+                </Typography>
+              </StatCard>
+            )}
 
-                {data?.teamsRegistered !== undefined && (
-                  <Box textAlign="center" flex={1}>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      gutterBottom
+            {data?.currentQuestion !== undefined && (
+              <StatCard
+                label="Current Question"
+                icon={<QuizIcon />}
+                action={
+                  <Tooltip title="Add questions">
+                    <IconButton
+                      size="small"
+                      onClick={handleOpenQuestionLibrary}
+                      color="primary"
+                      aria-label="Add questions"
                     >
-                      Teams Registered
+                      <AddCircleOutlineIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                }
+              >
+                <Typography variant="h6" fontWeight="bold">
+                  {data.currentQuestion}
+                  {data.totalQuestions ? (
+                    <Typography component="span" color="text.secondary" fontWeight={600}>
+                      {` / ${data.totalQuestions}`}
                     </Typography>
-                    <Box
-                      display="flex"
-                      justifyContent="center"
-                      alignItems="center"
-                      gap={1}
-                    >
-                      <GroupIcon color="primary" />
-                      <Typography variant="h6" fontWeight="bold">
-                        {data.teamsRegistered}
-                        {data.totalTeams ? ` / ${data.totalTeams}` : ""}
-                      </Typography>
-                      <IconButton
-                        size="small"
-                        onClick={handleEditTeamsClick}
-                        color="primary"
-                        sx={{ ml: 0.5 }}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  </Box>
-                )}
+                  ) : null}
+                </Typography>
+              </StatCard>
+            )}
 
-                {data?.currentQuestion !== undefined && (
-                  <Box textAlign="center" flex={1}>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      gutterBottom
-                    >
-                      Current Question
-                    </Typography>
-                    <Box
-                      display="flex"
-                      justifyContent="center"
-                      alignItems="center"
-                      gap={1}
-                    >
-                      <QuizIcon color="primary" />
-                      <Typography variant="h6" fontWeight="bold">
-                        {data.currentQuestion}
-                        {data.totalQuestions ? ` / ${data.totalQuestions}` : ""}
-                      </Typography>
-                      <Tooltip title="Add Questions">
-                        <IconButton
-                          size="small"
-                          onClick={handleOpenQuestionLibrary}
-                          color="primary"
-                          sx={{ ml: 0.5 }}
-                        >
-                          <AddCircleOutlineIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                  </Box>
-                )}
-                {/* Game Status Chip */}
-                <Box textAlign="center" flex={1}>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    gutterBottom
-                  >
-                    Status
-                  </Typography>
-                  <Box
-                    display="flex"
-                    justifyContent="center"
-                    alignItems="center"
-                    gap={1}
-                  >
-                    <Typography
-                      variant="h6"
-                      fontWeight="bold"
-                      color={
-                        data?.gameStatus === "playing"
-                          ? "success"
-                          : data?.gameStatus === "paused"
-                            ? "warning"
-                            : "default"
-                      }
-                    >
-                      {(() => {
-                        const raw = data?.gameStatus || "idle";
-                        const spaced = raw
-                          .replace(/[_-]/g, " ")
-                          .replace(/([a-z])([A-Z])/g, "$1 $2");
-                        return spaced
-                          .split(" ")
-                          .filter(Boolean)
-                          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-                          .join(" ");
-                      })()}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Box>
-            </Box>
-            <Divider sx={{ mb: 3 }} />
-          </>
+            {/* Game Status */}
+            <StatCard label="Status" icon={<TimelineIcon />}>
+              <Chip
+                label={formatStatus(data?.gameStatus)}
+                color={statusChipColor(data?.gameStatus)}
+                size="small"
+                sx={{ fontWeight: 700, fontSize: "0.85rem", px: 0.5 }}
+              />
+            </StatCard>
+          </Box>
         )}
 
         {/* Game Mode Selection / Status Section */}
@@ -506,8 +532,9 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               sx={{
                 p: { xs: 2, sm: 2.5 },
                 borderRadius: "12px",
-                border: "1px dashed rgba(245, 158, 11, 0.6)",
-                backgroundColor: "rgba(245, 158, 11, 0.05)",
+                border: "1px dashed",
+                borderColor: alpha(theme.palette.warning.main, 0.6),
+                backgroundColor: alpha(theme.palette.warning.main, 0.05),
               }}
             >
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
@@ -542,7 +569,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                     "&:hover": {
                       transform: "translateY(-2px)",
                       boxShadow: 3,
-                      backgroundColor: "rgba(25, 118, 210, 0.04)",
+                      backgroundColor: alpha(theme.palette.primary.main, 0.04),
                     },
                   }}
                 >
@@ -566,13 +593,13 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                     borderRadius: "10px",
                     cursor: "pointer",
                     border: "2px solid",
-                    borderColor: "#f59e0b",
+                    borderColor: "warning.main",
                     backgroundColor: "background.paper",
                     transition: "all 0.2s ease",
                     "&:hover": {
                       transform: "translateY(-2px)",
                       boxShadow: 3,
-                      backgroundColor: "rgba(245, 158, 11, 0.04)",
+                      backgroundColor: alpha(theme.palette.warning.main, 0.04),
                     },
                   }}
                 >
@@ -600,18 +627,18 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                 borderRadius: "20px",
                 backgroundColor:
                   data.gameMode === "SPIN_WHEEL"
-                    ? "rgba(245, 158, 11, 0.12)"
-                    : "rgba(25, 118, 210, 0.12)",
+                    ? alpha(theme.palette.warning.main, 0.12)
+                    : alpha(theme.palette.primary.main, 0.12),
                 border: "1px solid",
                 borderColor:
-                  data.gameMode === "SPIN_WHEEL" ? "#f59e0b" : "primary.main",
+                  data.gameMode === "SPIN_WHEEL" ? "warning.main" : "primary.main",
               }}
             >
               <LockIcon
                 sx={{
                   fontSize: 18,
                   color:
-                    data.gameMode === "SPIN_WHEEL" ? "#d97706" : "primary.main",
+                    data.gameMode === "SPIN_WHEEL" ? "warning.dark" : "primary.main",
                 }}
               />
               <Typography
@@ -619,7 +646,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                 fontWeight="bold"
                 sx={{
                   color:
-                    data.gameMode === "SPIN_WHEEL" ? "#b45309" : "primary.dark",
+                    data.gameMode === "SPIN_WHEEL" ? "warning.dark" : "primary.dark",
                 }}
               >
                 Round Mode:{" "}

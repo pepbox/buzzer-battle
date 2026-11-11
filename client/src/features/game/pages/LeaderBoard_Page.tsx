@@ -5,6 +5,8 @@ import LeaderBoard, { LeaderBoardTeam } from "../components/LeaderBoard";
 import { useFetchOverallLeaderboardQuery } from "../services/teamApi";
 import { websocketService } from "../../../services/websocket/websocketService";
 import { Events } from "../../../services/websocket/enums/Events";
+import { useAppSelector } from "../../../app/hooks";
+import { RootState } from "../../../app/store";
 
 interface LeaderBoardPageProps {
   isOverlay?: boolean;
@@ -16,6 +18,7 @@ const LeaderBoardPage: React.FC<LeaderBoardPageProps> = ({
   navigationBase = "game",
 }) => {
   const navigate = useNavigate();
+  const myTeam = useAppSelector((state: RootState) => state.team?.team);
   const { sessionId } = useParams<{ sessionId: string }>();
   const basePath = navigationBase === "admin" ? "admin" : "game";
   const returnPath =
@@ -72,7 +75,9 @@ const LeaderBoardPage: React.FC<LeaderBoardPageProps> = ({
           minHeight: "100%",
         }}
       >
-        <Typography color="error">Failed to load leaderboard</Typography>
+        <Typography color="error" sx={{ fontWeight: 600, textAlign: "center", px: 2 }}>
+          Couldn't load the leaderboard. Please try again in a moment.
+        </Typography>
       </Box>
     );
   }
@@ -89,7 +94,9 @@ const LeaderBoardPage: React.FC<LeaderBoardPageProps> = ({
     })
   );
 
-  return <LeaderBoard teams={teams} onBack={handleBack} />;
+  return (
+    <LeaderBoard teams={teams} onBack={handleBack} currentTeamId={myTeam?._id} />
+  );
 };
 
 export default LeaderBoardPage;

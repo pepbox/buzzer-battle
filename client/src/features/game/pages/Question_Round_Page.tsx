@@ -5,9 +5,12 @@ import { QuestionData } from "../../question/components/Question";
 import { useFetchCurrentQuestionQuery } from "../../question/services/questions.api";
 import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
-import Loader from "../../../components/ui/Loader";
 import Error from "../../../components/ui/Error";
-import { Box, CircularProgress, Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
+import {
+  GameBackground,
+  GameStatusScreen,
+} from "../../../components/ui/GameScreen";
 import { NailedIt, CloseCall } from "../../question/components/StatusCard";
 import { useFetchOverallLeaderboardQuery } from "../services/teamApi";
 import { useFetchSessionQuery } from "../../session/services/session.api";
@@ -87,19 +90,33 @@ const QuestionRoundPage: React.FC = () => {
     currentQuestionIndex !== expectedQuestionIndex;
   const activeQuestion = isQuestionTransitioning ? undefined : question;
 
-  // Check if current team is the answering team
+  // Is this team the one the host has currently selected to answer?
+  const isCurrentlyChosen = isSameTeam(gameState?.currentAnsweringTeam, team?._id);
+  const hasOtherAnsweringTeam =
+    Boolean(normalizeId(gameState?.currentAnsweringTeam)) && !isCurrentlyChosen;
+
+  // Treat as answering team if currently chosen, or if we just answered and no other
+  // team has been selected since (e.g. idle after our answer). Once the question is
+  // passed to another team, this team must no longer be treated as answering.
   const isAnsweringTeam =
-    isSameTeam(gameState?.currentAnsweringTeam, team?._id) ||
-    Boolean(answerResult?.isMyTeam && answerStatus === "result");
+    isCurrentlyChosen ||
+    Boolean(
+      answerResult?.isMyTeam &&
+        answerStatus === "result" &&
+        !hasOtherAnsweringTeam,
+    );
 
   // Fetch leaderboard and session data to resolve team names and mode
   const { data: leaderboardData } = useFetchOverallLeaderboardQuery();
   const { data: sessionData } = useFetchSessionQuery();
-  const isSpinWheel =
-    sessionData?.data?.gameMode === "SPIN_WHEEL" ||
-    (gameState as any)?.gameMode === "SPIN_WHEEL" ||
-    Boolean(gameState?.currentCategory) ||
-    Boolean((gameState as any)?.spinWheelState);
+  // gameMode is authoritative; `spinWheelState` always exists on the game state
+  // (Mongoose defaults), so its presence alone does not imply spin-wheel mode.
+  const knownGameMode =
+    sessionData?.data?.gameMode || (gameState as any)?.gameMode;
+  const isSpinWheel = knownGameMode
+    ? knownGameMode === "SPIN_WHEEL"
+    : Boolean(gameState?.currentCategory) ||
+      Boolean((gameState as any)?.spinWheelState?.selectedTeamId);
 
   const answeringTeamObj =
     typeof gameState?.currentAnsweringTeam === "object" &&
@@ -325,70 +342,64 @@ const QuestionRoundPage: React.FC = () => {
     );
   }
 
-  if (isLoading && !activeQuestion) {
-    return <Loader />;
-  }
-
-  if (isQuestionTransitioning || (isFetching && !activeQuestion)) {
+  if (
+    (isLoading && !activeQuestion) ||
+    isQuestionTransitioning ||
+    (isFetching && !activeQuestion)
+  ) {
     return (
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "center",
-          flex: 1,
-          minHeight: "100%",
-          gap: 2,
-        }}
-      >
-        <CircularProgress />
-        <Typography>Loading question...</Typography>
-      </Box>
+      <GameStatusScreen
+        icon="⏳"
+        title="Loading question..."
+        subtitle="Get ready!"
+        showSpinner
+      />
     );
   }
 
   if (error || !activeQuestion) {
-    return <Error />;
+    return (
+      <GameBackground>
+        <Error
+          title="Couldn't load the question"
+          message="Please wait a moment or try again."
+          onRetry={() => refetchCurrentQuestion()}
+        />
+      </GameBackground>
+    );
   }
 
   const isNoBuzzerQuestion = (gameState as any)?.isNoBuzzerQuestion;
   const isHiddenQuestion = activeQuestion.hideFromUsers === true;
 
   if (!isAnsweringTeam && !isNoBuzzerQuestion) {
-    // For non-answering teams in buzzer and spin questions, show answering screen instead of question
+    // For non-answering teams in buzzer and spin questions, show a waiting screen
+    // (on the game background) instead of the question.
+    const isIdle = gameState?.gameStatus === "idle";
     return (
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "center",
-          flex: 1,
-          minHeight: "100%",
-          gap: 2,
-        }}
-      >
-        <Typography
-          variant="h5"
-          sx={{
-            color: "#FFD700",
-            fontWeight: "bold",
-            textAlign: "center",
-            textShadow: "2px 2px 4px rgba(0,0,0,0.5)",
-            backgroundColor: "rgba(0, 0, 0, 0.4)",
-            padding: "16px 32px",
-            borderRadius: "16px",
-            border: "1px solid rgba(255, 215, 0, 0.3)",
-          }}
-        >
-          {gameState?.gameStatus === "idle"
-            ? (isSpinWheel
-                ? "Turn ended. Waiting for host to select next team..."
-                : "Waiting for next question...")
-            : `🎯 ${answeringTeamName} is answering...`}
-        </Typography>
-      </Box>
+      <GameStatusScreen
+        {...(isIdle
+          ? isSpinWheel
+            ? {
+                icon: "🎡",
+                title: "Turn ended",
+                subtitle: "Waiting for the host to select the next team...",
+                showSpinner: true,
+              }
+            : {
+                icon: "⏭️",
+                title: "Waiting for next question...",
+                subtitle: "Stay sharp — the next round is coming up.",
+                showSpinner: true,
+              }
+          : {
+              icon: "🎯",
+              title: `${answeringTeamName} is answering...`,
+              subtitle: isSpinWheel
+                ? "Watch closely — your turn is coming up."
+                : "Get ready — you might get a chance if they miss!",
+            })}
+      />
     );
   }
   // For no-buzzer questions, everyone sees the question (continue rendering below)
@@ -436,7 +447,11 @@ const QuestionRoundPage: React.FC = () => {
             questionNumber={(currentQuestionIndex || 0) + 1}
             disabled={true} // Always disabled - no MCQ selection
             showOptions={false} // Hide options for verbal answer flow
-            showVerbalHint={isAnsweringTeam && isBuzzerPerson}
+            showVerbalHint={
+              isCurrentlyChosen &&
+              gameState?.gameStatus === "answering" &&
+              isBuzzerPerson
+            }
           />
 
           {/* Waiting Overlay - Different message for answering team vs others */}

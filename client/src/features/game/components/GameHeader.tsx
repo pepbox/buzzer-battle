@@ -16,10 +16,14 @@ const GameHeader: React.FC = () => {
 
   // Calculate generic rank from the leaderboard response dynamically
   let rank = "-";
+  // Prefer the live score from the leaderboard (kept fresh via socket invalidation);
+  // the cached team object can lag behind after answers are marked.
+  let liveScore: number | undefined;
   if (!isLoading && leaderboardData?.data?.leaderboard && team?._id) {
     const index = leaderboardData.data.leaderboard.findIndex((t: any) => t._id === team._id);
     if (index !== -1) {
       rank = `#${index + 1}`;
+      liveScore = leaderboardData.data.leaderboard[index]?.teamScore;
     }
   }
 
@@ -75,11 +79,15 @@ const GameHeader: React.FC = () => {
         }}
       >
       {/* Left: Team Info */}
-      <Box sx={{ display: "flex", alignItems: "center" }}>
+      <Box sx={{ display: "flex", alignItems: "center", minWidth: 0, flex: 1, mr: 1.5 }}>
         <Typography 
           variant="body2" 
+          title={team.teamName}
           sx={{ 
             color: "black", 
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
             fontWeight: "bold", 
             textTransform: "uppercase",
             fontSize: "14px",
@@ -91,7 +99,7 @@ const GameHeader: React.FC = () => {
       </Box>
 
       {/* Right: Score & Rank */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexShrink: 0 }}>
         {/* Total Points */}
         <Box 
           sx={{ 
@@ -106,7 +114,7 @@ const GameHeader: React.FC = () => {
         >
           <Box component="img" src={doubleCoin} alt="" sx={{ width: "24px", height: "24px" }} />
           <Typography variant="body2" sx={{ color: "#991CAF", fontWeight: "bold", fontSize: "15px" }}>
-            {team.teamScore}
+            {liveScore ?? team.teamScore ?? 0}
           </Typography>
         </Box>
         

@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { Box, Typography } from "@mui/material";
 import { useFetchCurrentQuestionQuery } from "../../question/services/questions.api";
 import Loader from "../../../components/ui/Loader";
+import { GameBackground } from "../../../components/ui/GameScreen";
 import Error from "../../../components/ui/Error";
 import normalBg from "../../../assets/background/question_bg.webp";
 import SmartMedia from "../../../components/ui/SmartMedia";
@@ -27,8 +28,18 @@ const AnswerRevealPage: React.FC<AnswerRevealPageProps> = ({
     refetch();
   }, [refetch]);
 
-  if (isLoading) return <Loader />;
-  if (error || !question) return <Error />;
+  if (isLoading)
+    return (
+      <GameBackground variant="question">
+        <Loader />
+      </GameBackground>
+    );
+  if (error || !question)
+    return (
+      <GameBackground variant="question">
+        <Error />
+      </GameBackground>
+    );
 
   // Render media arrays helpers
   const renderMediaList = (mediaArray?: any[]) => {

@@ -17,9 +17,11 @@ export interface LeaderBoardTeam {
 interface LeaderBoardProps {
   teams: LeaderBoardTeam[];
   onBack?: () => void;
+  /** Highlights this team's row so players can spot themselves quickly. */
+  currentTeamId?: string;
 }
 
-const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams }) => {
+const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams, currentTeamId }) => {
   // Sort teams by rank and get top 3 for podium
   const sortedTeams = [...teams].sort((a, b) => a.rank - b.rank);
   const topThree = sortedTeams.slice(0, 3);
@@ -70,7 +72,7 @@ const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams }) => {
           display: "flex",
           alignItems: "center",
           padding: "4px 20px",
-          justifyContent: "flex-center",
+          justifyContent: "center",
         }}
       >
         {/* <IconButton
@@ -85,8 +87,9 @@ const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams }) => {
           variant="h6"
           sx={{
             color: "black",
-            fontWeight: 700,
-            fontSize: "12px",
+            fontWeight: 800,
+            fontSize: "18px",
+            letterSpacing: "0.5px",
             textAlign: "center",
             alignContent: "center",
             display: "flex",
@@ -112,7 +115,7 @@ const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams }) => {
           sx={{
             position: "relative",
             width: "100%",
-            maxWidth: "480",
+            maxWidth: 480,
             aspectRatio: "375/205", // Maintain aspect ratio
           }}
         >
@@ -199,25 +202,45 @@ const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams }) => {
         sx={{
           backgroundColor: "rgba(255, 255, 255, 0.95)",
           padding: "20px",
-          maxHeight: "40%",
+          flex: 1,
+          minHeight: 0,
           overflowY: "auto",
+          borderTopLeftRadius: "24px",
+          borderTopRightRadius: "24px",
         }}
       >
-        {leaderboardTeams.map((team) => (
+        {leaderboardTeams.length === 0 && (
+          <Typography
+            sx={{
+              textAlign: "center",
+              color: "#64748B",
+              fontWeight: 600,
+              fontSize: "14px",
+              py: 4,
+            }}
+          >
+            No teams on the board yet — scores will appear here once the game starts.
+          </Typography>
+        )}
+        {leaderboardTeams.map((team) => {
+          const isMe = Boolean(currentTeamId) && team.id === currentTeamId;
+          return (
           <Box
             key={team.id}
             sx={{
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              backgroundColor: "#D5ECFF",
+              gap: 1,
+              backgroundColor: isMe ? "#FFF4C2" : "#D5ECFF",
+              border: isMe ? "2px solid #F5B700" : "2px solid transparent",
               borderRadius: "16px",
               padding: "12px 16px",
               marginBottom: "8px",
             }}
           >
             {/* Left side - Star and rank */}
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, minWidth: 0 }}>
               <Box
                 sx={{
                   display: "flex",
@@ -253,16 +276,25 @@ const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams }) => {
                 variant="body1"
                 sx={{
                   fontWeight: 700,
-                  fontSize: "12px",
+                  fontSize: "13px",
                   color: "#1E293B",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
                 }}
+                title={team.name}
               >
                 {team.name}
+                {isMe && (
+                  <Box component="span" sx={{ color: "#B45309", ml: 0.75 }}>
+                    (You)
+                  </Box>
+                )}
               </Typography>
             </Box>
 
             {/* Right side - Buzzer time and total */}
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 2 }, flexShrink: 0 }}>
               <Box
                 sx={{
                   display: "flex",
@@ -270,6 +302,7 @@ const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams }) => {
                   backgroundColor: "white",
                   borderRadius: "12px",
                   padding: "4px 8px",
+                  whiteSpace: "nowrap",
                 }}
               >
                 <Typography
@@ -317,7 +350,8 @@ const LeaderBoard: React.FC<LeaderBoardProps> = ({ teams }) => {
               </Box>
             </Box>
           </Box>
-        ))}
+          );
+        })}
       </Box>
     </Box>
   );

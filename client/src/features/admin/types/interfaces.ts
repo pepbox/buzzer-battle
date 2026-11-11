@@ -140,6 +140,8 @@ export interface HeaderData {
   currentQuestion?: number;
   totalQuestions?: number;
   gameMode?: "BUZZER_BATTLE" | "SPIN_WHEEL" | null;
+  sessionStatus?: string;
+  currentQuestionIndex?: number;
 }
 
 export interface Player {

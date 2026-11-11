@@ -8,6 +8,7 @@ import { usePressBuzzerMutation } from "../services/buzzerApi";
 import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
 import Loader from "../../../components/ui/Loader";
+import { GameBackground } from "../../../components/ui/GameScreen";
 import Error from "../../../components/ui/Error";
 import { websocketService } from "../../../services/websocket/websocketService";
 import { Typography, Backdrop, CircularProgress, useTheme } from "@mui/material";
@@ -122,21 +123,19 @@ const BuzzerRound: React.FC = () => {
 
   // Show loading state
   if (isLoading && !activeQuestion) {
-    return <Loader />;
+    return (
+      <GameBackground variant="question">
+        <Loader />
+      </GameBackground>
+    );
   }
 
   // Show error state
   if (error || (!activeQuestion && !isFetching && !isQuestionTransitioning)) {
     return (
-      <Box
-        minHeight={"100%"}
-        flex={1}
-        display={"flex"}
-        justifyContent={"center"}
-        alignItems={"center"}
-      >
+      <GameBackground variant="question">
         <Error />
-      </Box>
+      </GameBackground>
     );
   }
 

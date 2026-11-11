@@ -73,9 +73,14 @@ const StatusCard: React.FC<StatusCardProps> = ({
             sm: "40px 32px",
             md: "48px 40px",
           },
-          minWidth: "320px",
           maxWidth: "400px",
-          width: "90%",
+          width: "calc(100% - 32px)",
+          boxSizing: "border-box",
+          animation: "statusCardPop 350ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+          "@keyframes statusCardPop": {
+            from: { opacity: 0, transform: "scale(0.85)" },
+            to: { opacity: 1, transform: "scale(1)" },
+          },
           textAlign: "center",
           position: "relative",
         }}
@@ -121,16 +126,25 @@ export const TimesUp = () => (
   />
 );
 
-export const NailedIt = ({
-  setAnswerStatus,
-}: {
-  setAnswerStatus: (status: any) => void;
-}) => {
+interface AnswerStatusCardProps {
+  setAnswerStatus?: (status: any) => void;
+  isMyTeam?: boolean;
+  teamName?: string;
+}
+
+// After the status card has been shown, move the answer flow to the "result" phase.
+const useAdvanceToResult = (setAnswerStatus?: (status: any) => void) => {
   useEffect(() => {
-    setTimeout(() => {
+    if (!setAnswerStatus) return;
+    const timer = setTimeout(() => {
       setAnswerStatus("result");
     }, 5000);
+    return () => clearTimeout(timer);
   }, [setAnswerStatus]);
+};
+
+export const NailedIt = ({ setAnswerStatus }: AnswerStatusCardProps) => {
+  useAdvanceToResult(setAnswerStatus);
 
   return (
     <StatusCard
@@ -142,13 +156,17 @@ export const NailedIt = ({
   );
 };
 
-export const CloseCall = () => (
-  <StatusCard
-    type="incorrect"
-    mainText="Close call!"
-    subText="You’ll get the next one…"
-    emoji="🚀"
-  />
-);
+export const CloseCall = ({ setAnswerStatus }: AnswerStatusCardProps = {}) => {
+  useAdvanceToResult(setAnswerStatus);
+
+  return (
+    <StatusCard
+      type="incorrect"
+      mainText="Close call!"
+      subText="You’ll get the next one…"
+      emoji="🚀"
+    />
+  );
+};
 
 export default StatusCard;

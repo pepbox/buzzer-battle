@@ -20,6 +20,7 @@ import { useAppDispatch } from "../app/hooks";
 import { RootState } from "../app/store";
 import { useAppSelector } from "../app/rootReducer";
 import Loader from "../components/ui/Loader";
+import { GameBackground } from "../components/ui/GameScreen";
 import AuthWrapper from "../components/auth/AuthWrapper";
 import { useLazyFetchCurrentTeamQuery } from "../features/game/services/teamApi";
 import { useLazyFetchGameStateQuery } from "../features/game/services/gameStateApi";
@@ -104,7 +105,24 @@ const GameMain = () => {
   ]);
 
   if (isLoading || (!isLoginRoute && (!authResolved || !gameStateLoaded))) {
-    return <Loader />;
+    // Initial boot: keep the same mobile frame + game background as the app shell
+    // so players don't see a blank white page while the session loads.
+    return (
+      <div
+        style={{
+          maxWidth: "480px",
+          width: "100%",
+          margin: "0 auto",
+          height: "100dvh",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <GameBackground>
+          <Loader />
+        </GameBackground>
+      </div>
+    );
   }
 
   return (

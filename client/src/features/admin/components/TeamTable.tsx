@@ -25,6 +25,8 @@ import {
   Stack,
   Divider,
   TableSortLabel,
+  Tooltip,
+  alpha,
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -176,6 +178,7 @@ const TeamTable: React.FC<TeamTableProps> = ({
   // Get status chip color
   const getStatusColor = (status: string): 'success' | 'error' | 'warning' | 'default' => {
     switch (status) {
+      case 'answering':
       case 'active':
         return 'success';
       case 'inactive':
@@ -186,6 +189,34 @@ const TeamTable: React.FC<TeamTableProps> = ({
         return 'default';
     }
   };
+
+  const formatStatusLabel = (status?: string) =>
+    status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Idle';
+
+  const editDisabledHint = 'Enable transactions to edit';
+
+  const emptyState = (
+    <Box textAlign="center" py={6} px={2}>
+      <Typography variant="h6" fontWeight={700} gutterBottom>
+        {teams.length === 0 ? 'No teams have joined yet' : 'No teams match your search'}
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        {teams.length === 0
+          ? 'Teams will appear here as soon as players join the session.'
+          : 'Try a different team name or number.'}
+      </Typography>
+    </Box>
+  );
+
+  const membersModalElement = membersModal.team && (
+    <TeamMembersModal
+      open={membersModal.open}
+      onClose={handleCloseMembersModal}
+      teamName={membersModal.team.teamName}
+      teamNumber={membersModal.team.teamNumber}
+      members={membersModal.team.members || []}
+    />
+  );
 
   // Get rank display with trophy
   const getRankDisplay = (rank: number) => {
@@ -206,7 +237,7 @@ const TeamTable: React.FC<TeamTableProps> = ({
           placeholder="Search teams..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          sx={{ mb: 2 }}
+          sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '12px', backgroundColor: 'background.paper' } }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -219,7 +250,16 @@ const TeamTable: React.FC<TeamTableProps> = ({
         {/* Team Cards */}
         <Stack spacing={2}>
           {filteredAndSortedTeams.map((team) => (
-            <Card key={team._id} elevation={3}>
+            <Card
+              key={team._id}
+              elevation={0}
+              sx={{
+                borderRadius: '12px',
+                border: '1px solid',
+                borderColor: team.status === 'answering' ? 'success.main' : 'divider',
+                boxShadow: '0px 2px 8px rgba(15, 23, 42, 0.06)',
+              }}
+            >
               <CardContent>
                 <Stack spacing={2}>
                   {/* Header with Rank and Team Number */}
@@ -228,8 +268,8 @@ const TeamTable: React.FC<TeamTableProps> = ({
                       <Typography variant="h6" component="div">
                         {getRankDisplay(team.rank)}
                       </Typography>
-                      {!shouldHideRank && typeof team.rank === 'number' && team.rank > 3 && (
-                        <Typography variant="h6" color="text.secondary">
+                      {!shouldHideRank && typeof team.rank === 'number' && team.rank <= 3 && (
+                        <Typography variant="body2" color="text.secondary" fontWeight={600}>
                           #{team.rank}
                         </Typography>
                       )}
@@ -259,14 +299,19 @@ const TeamTable: React.FC<TeamTableProps> = ({
                     >
                       {team.teamName}
                     </Typography>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleEditClick(team, 'name')}
-                      disabled={!transactionMode}
-                      color="primary"
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
+                    <Tooltip title={transactionMode ? 'Edit team name' : editDisabledHint}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditClick(team, 'name')}
+                          disabled={!transactionMode}
+                          color="primary"
+                          aria-label="Edit team name"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
                   </Box>
 
                   {/* Score */}
@@ -274,22 +319,28 @@ const TeamTable: React.FC<TeamTableProps> = ({
                     <Typography variant="h5" color="primary">
                       {team.teamScore} pts
                     </Typography>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleEditClick(team, 'score')}
-                      disabled={!transactionMode}
-                      color="primary"
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
+                    <Tooltip title={transactionMode ? 'Edit score' : editDisabledHint}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditClick(team, 'score')}
+                          disabled={!transactionMode}
+                          color="primary"
+                          aria-label="Edit score"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
                   </Box>
 
                   {/* Status and Responses */}
                   <Box display="flex" justifyContent="space-between" alignItems="center">
                     <Chip
-                      label={team.status}
+                      label={formatStatusLabel(team.status)}
                       color={getStatusColor(team.status)}
                       size="small"
+                      sx={{ fontWeight: 600 }}
                     />
                     <Typography variant="body2" color="text.secondary">
                       {team.responsesCount} responses
@@ -312,13 +363,10 @@ const TeamTable: React.FC<TeamTableProps> = ({
         </Stack>
 
         {/* No Teams Found */}
-        {filteredAndSortedTeams.length === 0 && (
-          <Box textAlign="center" py={4}>
-            <Typography variant="body1" color="text.secondary">
-              No teams found
-            </Typography>
-          </Box>
-        )}
+        {filteredAndSortedTeams.length === 0 && emptyState}
+
+        {/* Team Members Modal (was previously missing on mobile) */}
+        {membersModalElement}
 
         {/* Edit Modal */}
         <Dialog open={editModal.open} onClose={handleCloseModal} fullWidth maxWidth="sm">
@@ -347,6 +395,20 @@ const TeamTable: React.FC<TeamTableProps> = ({
     );
   }
 
+  const headCellSx = {
+    color: 'white',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    fontSize: '0.8rem',
+    letterSpacing: 0.5,
+    whiteSpace: 'nowrap',
+  } as const;
+  const sortLabelSx = {
+    color: 'white !important',
+    '&.Mui-active': { color: 'white !important' },
+    '& .MuiTableSortLabel-icon': { color: 'white !important' },
+  } as const;
+
   // Desktop Table View
   return (
     <Box sx={{ width: '100%' }}>
@@ -356,7 +418,7 @@ const TeamTable: React.FC<TeamTableProps> = ({
         placeholder="Search teams..."
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        sx={{ mb: 2 }}
+        sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '12px', backgroundColor: 'background.paper' } }}
         InputProps={{
           startAdornment: (
             <InputAdornment position="start">
@@ -367,82 +429,72 @@ const TeamTable: React.FC<TeamTableProps> = ({
       />
 
       {/* Table */}
-      <TableContainer component={Paper} elevation={3}>
+      <TableContainer
+        component={Paper}
+        elevation={0}
+        sx={{
+          borderRadius: '12px',
+          border: '1px solid',
+          borderColor: 'divider',
+          boxShadow: '0px 2px 8px rgba(15, 23, 42, 0.06)',
+          overflowX: 'auto',
+        }}
+      >
         <Table>
           <TableHead>
             <TableRow sx={{ backgroundColor: theme.palette.primary.main }}>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>
+              <TableCell sx={headCellSx}>
                 <TableSortLabel
                   active={sortField === 'rank'}
                   direction={sortField === 'rank' ? sortOrder : 'asc'}
                   onClick={() => handleSort('rank')}
-                  sx={{
-                    color: 'white !important',
-                    '&.Mui-active': { color: 'white !important' },
-                    '& .MuiTableSortLabel-icon': { color: 'white !important' },
-                  }}
+                  sx={sortLabelSx}
                 >
                   Rank
                 </TableSortLabel>
               </TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>
+              <TableCell sx={headCellSx}>
                 <TableSortLabel
                   active={sortField === 'teamNumber'}
                   direction={sortField === 'teamNumber' ? sortOrder : 'asc'}
                   onClick={() => handleSort('teamNumber')}
-                  sx={{
-                    color: 'white !important',
-                    '&.Mui-active': { color: 'white !important' },
-                    '& .MuiTableSortLabel-icon': { color: 'white !important' },
-                  }}
+                  sx={sortLabelSx}
                 >
                   Team #
                 </TableSortLabel>
               </TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>
+              <TableCell sx={headCellSx}>
                 <TableSortLabel
                   active={sortField === 'teamName'}
                   direction={sortField === 'teamName' ? sortOrder : 'asc'}
                   onClick={() => handleSort('teamName')}
-                  sx={{
-                    color: 'white !important',
-                    '&.Mui-active': { color: 'white !important' },
-                    '& .MuiTableSortLabel-icon': { color: 'white !important' },
-                  }}
+                  sx={sortLabelSx}
                 >
                   Team Name
                 </TableSortLabel>
               </TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>
+              <TableCell sx={headCellSx}>
                 <TableSortLabel
                   active={sortField === 'teamScore'}
                   direction={sortField === 'teamScore' ? sortOrder : 'asc'}
                   onClick={() => handleSort('teamScore')}
-                  sx={{
-                    color: 'white !important',
-                    '&.Mui-active': { color: 'white !important' },
-                    '& .MuiTableSortLabel-icon': { color: 'white !important' },
-                  }}
+                  sx={sortLabelSx}
                 >
                   Score
                 </TableSortLabel>
               </TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Status</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>
+              <TableCell sx={headCellSx}>Status</TableCell>
+              <TableCell sx={headCellSx}>
                 <TableSortLabel
                   active={sortField === 'responsesCount'}
                   direction={sortField === 'responsesCount' ? sortOrder : 'asc'}
                   onClick={() => handleSort('responsesCount')}
-                  sx={{
-                    color: 'white !important',
-                    '&.Mui-active': { color: 'white !important' },
-                    '& .MuiTableSortLabel-icon': { color: 'white !important' },
-                  }}
+                  sx={sortLabelSx}
                 >
                   Responses
                 </TableSortLabel>
               </TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Actions</TableCell>
+              <TableCell sx={headCellSx}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -451,6 +503,10 @@ const TeamTable: React.FC<TeamTableProps> = ({
                 key={team._id}
                 sx={{
                   '&:hover': { backgroundColor: theme.palette.action.hover },
+                  '&:last-child td': { borderBottom: 0 },
+                  ...(team.status === 'answering' && {
+                    backgroundColor: alpha(theme.palette.success.main, 0.08),
+                  }),
                 }}
               >
                 <TableCell>
@@ -476,45 +532,62 @@ const TeamTable: React.FC<TeamTableProps> = ({
                     >
                       {team.teamName}
                     </Typography>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleEditClick(team, 'name')}
-                      disabled={!transactionMode}
-                      color="primary"
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
+                    <Tooltip title={transactionMode ? 'Edit team name' : editDisabledHint}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditClick(team, 'name')}
+                          disabled={!transactionMode}
+                          color="primary"
+                          aria-label="Edit team name"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
                   </Box>
                 </TableCell>
                 <TableCell>
                   <Box display="flex" alignItems="center" gap={1}>
-                    <Typography fontWeight="bold" color="primary">
+                    <Typography fontWeight={800} fontSize="1.1rem" color="primary">
                       {team.teamScore}
                     </Typography>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleEditClick(team, 'score')}
-                      disabled={!transactionMode}
-                      color="primary"
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
+                    <Tooltip title={transactionMode ? 'Edit score' : editDisabledHint}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditClick(team, 'score')}
+                          disabled={!transactionMode}
+                          color="primary"
+                          aria-label="Edit score"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
                   </Box>
                 </TableCell>
                 <TableCell>
-                  <Chip label={team.status} color={getStatusColor(team.status)} size="small" />
+                  <Chip
+                    label={formatStatusLabel(team.status)}
+                    color={getStatusColor(team.status)}
+                    size="small"
+                    sx={{ fontWeight: 600 }}
+                  />
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2">{team.responsesCount}</Typography>
                 </TableCell>
                 <TableCell>
-                  <IconButton
-                    color="primary"
-                    onClick={() => onViewResponses(team._id)}
-                    title="View Responses"
-                  >
-                    <VisibilityIcon />
-                  </IconButton>
+                  <Tooltip title="View responses">
+                    <IconButton
+                      color="primary"
+                      onClick={() => onViewResponses(team._id)}
+                      aria-label="View responses"
+                    >
+                      <VisibilityIcon />
+                    </IconButton>
+                  </Tooltip>
                 </TableCell>
               </TableRow>
             ))}
@@ -523,13 +596,7 @@ const TeamTable: React.FC<TeamTableProps> = ({
       </TableContainer>
 
       {/* No Teams Found */}
-      {filteredAndSortedTeams.length === 0 && (
-        <Box textAlign="center" py={4}>
-          <Typography variant="body1" color="text.secondary">
-            No teams found
-          </Typography>
-        </Box>
-      )}
+      {filteredAndSortedTeams.length === 0 && emptyState}
 
       {/* Edit Modal */}
       <Dialog open={editModal.open} onClose={handleCloseModal} fullWidth maxWidth="sm">
@@ -556,15 +623,7 @@ const TeamTable: React.FC<TeamTableProps> = ({
       </Dialog>
 
       {/* Team Members Modal */}
-      {membersModal.team && (
-        <TeamMembersModal
-          open={membersModal.open}
-          onClose={handleCloseMembersModal}
-          teamName={membersModal.team.teamName}
-          teamNumber={membersModal.team.teamNumber}
-          members={membersModal.team.members || []}
-        />
-      )}
+      {membersModalElement}
     </Box>
   );
 };

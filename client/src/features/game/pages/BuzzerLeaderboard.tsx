@@ -6,6 +6,7 @@ import { useFetchCurrentQuestionQuery } from "../../question/services/questions.
 import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
 import Loader from "../../../components/ui/Loader";
+import { GameBackground } from "../../../components/ui/GameScreen";
 import Error from "../../../components/ui/Error";
 import { websocketService } from "../../../services/websocket/websocketService";
 import { Events } from "../../../services/websocket/enums/Events";
@@ -133,6 +134,16 @@ const BuzzerLeaderboard: React.FC = () => {
   const currentAnsweringTeam = gameState?.currentAnsweringTeam;
   const answeringTeamId = normalizeId(currentAnsweringTeam);
 
+  // Resolve the answering team's display name. The game state usually carries just the
+  // team id, so fall back to the buzzer queue (which includes team names).
+  const answeringTeamName =
+    (typeof currentAnsweringTeam === "object" &&
+      (currentAnsweringTeam as any)?.teamName) ||
+    (leaderboard.find(
+      (entry) => normalizeId(entry.teamId) === answeringTeamId,
+    ) as any)?.teamName ||
+    "Another team";
+
   // Check if we're in answering state
   const isAnsweringState = gameState?.gameStatus === "answering";
 
@@ -218,11 +229,19 @@ const BuzzerLeaderboard: React.FC = () => {
   };
 
   if (isLoading) {
-    return <Loader />;
+    return (
+      <GameBackground>
+        <Loader />
+      </GameBackground>
+    );
   }
 
   if (error) {
-    return <Error />;
+    return (
+      <GameBackground>
+        <Error />
+      </GameBackground>
+    );
   }
 
   return (
@@ -261,10 +280,7 @@ const BuzzerLeaderboard: React.FC = () => {
           {isMyTeamAnswering ? (
             "🎯 Your turn to answer!"
           ) : (
-            `🎯 ${typeof gameState?.currentAnsweringTeam === "object"
-              ? (gameState.currentAnsweringTeam as any).teamName
-              : "Another team"
-            } is answering...`
+            `🎯 ${answeringTeamName} is answering...`
           )}
         </Typography>
       )}

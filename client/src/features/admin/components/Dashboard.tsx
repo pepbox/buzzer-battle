@@ -86,7 +86,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         onEditQuestion={onEditQuestion}
         onAddQuestionsToModal={onAddQuestionsToModal}
       />
-      <Box sx={{ px: 4 }}>
+      <Box sx={{ px: { xs: 2, md: 4 } }}>
         <TeamTable
           teams={teams}
           transactionMode={transaction}

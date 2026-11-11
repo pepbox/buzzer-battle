@@ -17,6 +17,31 @@ type OverlayState = "paused" | "ready" | "countdown" | "go" | "hidden";
 const THEME_GREEN = "#2ECC71";
 const THEME_GREEN_DARK = "#27AE60";
 
+// Card component for overlay content. Defined outside the Overlay component so it
+// isn't re-created (and its pop-in animation replayed) on every Overlay re-render.
+const OverlayCard: React.FC<{ children: ReactNode }> = ({ children }) => (
+  <Box
+    sx={{
+      backgroundColor: "#FFFFFF",
+      borderRadius: "24px",
+      border: `4px solid ${THEME_GREEN}`,
+      boxShadow: "0 8px 32px rgba(0, 0, 0, 0.15)",
+      padding: { xs: "32px 24px", sm: "48px 64px" },
+      width: "calc(100% - 32px)",
+      maxWidth: "420px",
+      boxSizing: "border-box",
+      textAlign: "center",
+      animation: "cardPop 0.4s ease-out",
+      "@keyframes cardPop": {
+        "0%": { transform: "scale(0.8)", opacity: 0 },
+        "100%": { transform: "scale(1)", opacity: 1 },
+      },
+    }}
+  >
+    {children}
+  </Box>
+);
+
 const Overlay: React.FC<OverlayProps> = ({
   children,
   startCountdown = false,
@@ -80,28 +105,6 @@ const Overlay: React.FC<OverlayProps> = ({
     };
   }, [overlayState, countdownNumber, onCountdownComplete]);
 
-  // Card component for overlay content
-  const OverlayCard: React.FC<{ children: ReactNode }> = ({ children }) => (
-    <Box
-      sx={{
-        backgroundColor: "#FFFFFF",
-        borderRadius: "24px",
-        border: `4px solid ${THEME_GREEN}`,
-        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.15)",
-        padding: { xs: "32px 40px", sm: "48px 64px" },
-        minWidth: { xs: "280px", sm: "320px" },
-        textAlign: "center",
-        animation: "cardPop 0.4s ease-out",
-        "@keyframes cardPop": {
-          "0%": { transform: "scale(0.8)", opacity: 0 },
-          "100%": { transform: "scale(1)", opacity: 1 },
-        },
-      }}
-    >
-      {children}
-    </Box>
-  );
-
   const getOverlayContent = () => {
     switch (overlayState) {
       case "paused":
@@ -126,7 +129,7 @@ const Overlay: React.FC<OverlayProps> = ({
                 fontSize: { xs: "1.75rem", sm: "2.25rem" },
               }}
             >
-              The Game is Paused !
+              The game is paused!
             </Typography>
             <Typography
               variant="body1"
@@ -169,7 +172,7 @@ const Overlay: React.FC<OverlayProps> = ({
                 },
               }}
             >
-              Ready !
+              Ready!
             </Typography>
             <Typography
               variant="body1"
@@ -281,7 +284,9 @@ const Overlay: React.FC<OverlayProps> = ({
           }}
         >
           <Fade in={true} timeout={500} key={overlayState}>
-            <Box>{getOverlayContent()}</Box>
+            <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
+              {getOverlayContent()}
+            </Box>
           </Fade>
         </Box>
       </Fade>

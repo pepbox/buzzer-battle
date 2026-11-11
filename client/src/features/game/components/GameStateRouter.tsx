@@ -44,11 +44,13 @@ const GameStateRouter = () => {
     (currentGameState as any)?.gameMode ||
     (gameStateData?.data as any)?.gameMode;
 
-  const isSpinWheel =
-    gameMode === "SPIN_WHEEL" ||
-    Boolean(currentGameState?.currentCategory) ||
-    Boolean((currentGameState as any)?.spinWheelState) ||
-    Boolean((currentGameState as any)?.spinWheel);
+  // The session's gameMode is authoritative. Only fall back to game-state hints when it
+  // hasn't loaded yet. Note: `spinWheelState` always exists on the game state (Mongoose
+  // sub-document defaults), so its mere presence must NOT be treated as spin-wheel mode.
+  const isSpinWheel = gameMode
+    ? gameMode === "SPIN_WHEEL"
+    : Boolean(currentGameState?.currentCategory) ||
+      Boolean((currentGameState as any)?.spinWheelState?.selectedTeamId);
 
   const normalizeId = (value: any): string | undefined => {
     if (!value) return undefined;
