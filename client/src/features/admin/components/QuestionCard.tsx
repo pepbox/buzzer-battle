@@ -28,6 +28,8 @@ export interface QuestionCardProps {
   actionButtons?: "select" | "edit-delete" | "all"; // different button sets
   variant?: "default" | "minimal"; // for reuse in different contexts
   loading?: boolean;
+  /** Overrides the logged-in admin id (e.g. "superadmin" in the global library). */
+  currentAdminId?: string;
 }
 
 const QuestionCard: React.FC<QuestionCardProps> = ({
@@ -42,9 +44,10 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
   actionButtons = "select",
   variant = "default",
   loading = false,
+  currentAdminId: currentAdminIdProp,
 }) => {
   const { admin } = useAdminAuth();
-  const currentAdminId = admin?.id || "";
+  const currentAdminId = currentAdminIdProp ?? (admin?.id || "");
   const isOwner = currentAdminId === "superadmin" || question.createdBy === currentAdminId || !question.createdBy;
 
   const showSelectButton =

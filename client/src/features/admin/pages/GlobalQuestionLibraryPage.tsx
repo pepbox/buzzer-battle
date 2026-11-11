@@ -136,6 +136,7 @@ const GlobalQuestionLibraryPage: React.FC = () => {
         showCurrentListButton={false}
         showSaveButton={false}
         selectedQuestionIds={[]}
+        isSuperAdmin
       />
 
       {/* Editor dialog works independently of sessions */}

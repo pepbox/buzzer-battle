@@ -68,6 +68,12 @@ export interface QuestionLibraryManagerProps {
   showBackButton?: boolean;
   showCurrentListButton?: boolean;
   showSaveButton?: boolean;
+  /**
+   * The global library is only reachable via the Super Admin passcode, which sets a
+   * server cookie but no client-side admin identity. Pass true there so the UI grants
+   * superadmin actions (delete/edit/move any question) — the server enforces it too.
+   */
+  isSuperAdmin?: boolean;
 }
 
 const uniqueIds = (questionIds: string[]) => Array.from(new Set(questionIds));
@@ -80,9 +86,10 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
   showBackButton = false,
   showCurrentListButton = false,
   showSaveButton = true,
+  isSuperAdmin = false,
 }) => {
   const { admin } = useAdminAuth();
-  const currentAdminId = admin?.id || "";
+  const currentAdminId = isSuperAdmin ? "superadmin" : admin?.id || "";
 
   const [searchText, setSearchText] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -1027,6 +1034,7 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
                       })
                     }
                     actionButtons="all"
+                    currentAdminId={currentAdminId}
                   />
                 ))}
               </List>

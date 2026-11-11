@@ -609,6 +609,11 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
               </Box>
             </Box>
 
+            {/*
+              Hint Settings — temporarily hidden from the editor (not shown to users for now).
+              The hint state/handlers above are kept, so existing questions keep their saved
+              hint & penalty when edited. To re-enable, simply uncomment this block.
+
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: 1 }}>
               Hint Settings
             </Typography>
@@ -661,6 +666,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
                 </Button>
               </Box>
             </Box>
+            */}
 
             <FormControlLabel
               control={
