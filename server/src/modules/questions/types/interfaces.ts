@@ -27,6 +27,7 @@ export interface IQuestion extends Document {
   correctAnswer?: string; // This should be the optionId of the correct option (e.g., 'a', 'b', 'c', 'd')
   score: number;
   folder?: string;
+  category?: string;
   keepBuzzer?: boolean;
   hideFromUsers?: boolean;
   questionContent?: IQuestionContent;

@@ -86,6 +86,7 @@ export interface QuestionBankItem {
   correctAnswer?: string;
   score: number;
   folder?: string;
+  category?: string;
   keepBuzzer?: boolean;
   hideFromUsers?: boolean;
   options: Array<{
@@ -141,6 +142,7 @@ export interface CreateQuestionPayload {
   correctAnswer?: string;
   score?: number;
   folder?: string;
+  category?: string;
   keepBuzzer?: boolean;
   hideFromUsers?: boolean;
   questionContent?: {

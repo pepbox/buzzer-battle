@@ -75,6 +75,7 @@ export default class QuestionService {
     correctAnswer?: string;
     score?: number;
     folder?: string;
+    category?: string;
     keepBuzzer?: boolean;
     hideFromUsers?: boolean;
     questionContent?: any;
@@ -85,6 +86,7 @@ export default class QuestionService {
     createdBy?: string;
   }): Promise<IQuestion> {
     const normalizedFolder = (input.folder || "General").trim();
+    const normalizedCategory = (input.category !== undefined ? input.category : normalizedFolder).trim();
     const creatorId = input.createdBy || "superadmin";
 
     // Verify folder write access: other admins cannot add questions to folders they don't own
@@ -109,6 +111,7 @@ export default class QuestionService {
       correctAnswer: input.correctAnswer,
       score: input.score ?? 0,
       folder: normalizedFolder,
+      category: normalizedCategory,
       keepBuzzer: input.keepBuzzer ?? true,
       hideFromUsers: input.hideFromUsers ?? false,
       questionContent: input.questionContent,
@@ -138,6 +141,7 @@ export default class QuestionService {
       correctAnswer?: string;
       score?: number;
       folder?: string;
+      category?: string;
       keepBuzzer?: boolean;
       hideFromUsers?: boolean;
       questionContent?: any;
@@ -219,6 +223,10 @@ export default class QuestionService {
         { upsert: true, new: true, session: this.session },
       );
       question.folder = normalizedFolder;
+    }
+
+    if (input.category !== undefined) {
+      question.category = input.category.trim();
     }
 
     question.questionText =

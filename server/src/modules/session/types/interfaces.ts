@@ -1,5 +1,5 @@
 import mongoose, { Document } from "mongoose";
-import { SessionStatus } from "./enums";
+import { SessionStatus, GameMode } from "./enums";
 
 export interface ISession extends Document {
     _id: mongoose.Types.ObjectId;
@@ -10,6 +10,7 @@ export interface ISession extends Document {
     teamMode: 'NUMBER' | 'COLOR';
     colorTeams: number[];
     questions: string[];
+    gameMode?: GameMode | null;
     status: SessionStatus;
     questionTimeLimit: number;
     answerTimeLimit: number;

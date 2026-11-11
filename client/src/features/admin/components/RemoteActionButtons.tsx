@@ -9,7 +9,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 
 interface RemoteActionButtonsProps {
-  gameStatus: "paused" | "buzzer_round" | "answering" | "idle";
+  gameStatus: "paused" | "buzzer_round" | "answering" | "idle" | "spin_round";
   currentQuestionIndex: number;
   totalQuestions: number;
   onNextQuestion: () => void;
@@ -28,6 +28,7 @@ interface RemoteActionButtonsProps {
   isAnswerShown?: boolean;
   isLoading?: boolean;
   lastAnswerWasWrong?: boolean;
+  isSpinWheelMode?: boolean;
 }
 
 const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
@@ -50,6 +51,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
   isAnswerShown = false,
   isLoading = false,
   lastAnswerWasWrong = false,
+  isSpinWheelMode = false,
 }) => {
   const hasQuestions = totalQuestions > 0;
   const buttonBaseStyles = {
@@ -147,32 +149,34 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
         </Box>
       )}
 
-      {/* Start Game / Next Question Button */}
-      <Button
-        variant="contained"
-        startIcon={
-          isLoading ? (
-            <CircularProgress size={20} />
-          ) : currentQuestionIndex === -1 ? (
-            <PlayArrowIcon />
-          ) : (
-            <SkipNextIcon />
-          )
-        }
-        onClick={onNextQuestion}
-        disabled={isLoading || !hasQuestions}
-        sx={{
-          ...buttonBaseStyles,
-          backgroundColor: currentQuestionIndex === -1 ? "#10B981" : "#3B82F6",
-          "&:hover": {
-            backgroundColor:
-              currentQuestionIndex === -1 ? "#059669" : "#2563EB",
-            ...buttonBaseStyles["&:hover"],
-          },
-        }}
-      >
-        {currentQuestionIndex === -1 ? " Start Game" : " Next Question"}
-      </Button>
+      {/* Start Game / Next Question Button - Only for buzzer battle flow */}
+      {!isSpinWheelMode && (
+        <Button
+          variant="contained"
+          startIcon={
+            isLoading ? (
+              <CircularProgress size={20} />
+            ) : currentQuestionIndex === -1 ? (
+              <PlayArrowIcon />
+            ) : (
+              <SkipNextIcon />
+            )
+          }
+          onClick={onNextQuestion}
+          disabled={isLoading || !hasQuestions}
+          sx={{
+            ...buttonBaseStyles,
+            backgroundColor: currentQuestionIndex === -1 ? "#10B981" : "#3B82F6",
+            "&:hover": {
+              backgroundColor:
+                currentQuestionIndex === -1 ? "#059669" : "#2563EB",
+              ...buttonBaseStyles["&:hover"],
+            },
+          }}
+        >
+          {currentQuestionIndex === -1 ? " Start Game" : " Next Question"}
+        </Button>
+      )}
 
       {/* Show Answer Button */}
       <Button
@@ -282,8 +286,8 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
         </Button>
       )}
 
-      {/* Pass to Second Team Button - Conditional (now shows after admin marks wrong) */}
-      {(gameStatus === "answering" || gameStatus === "idle") && (
+      {/* Pass to Second Team Button - Only for buzzer battle flow */}
+      {!isSpinWheelMode && (gameStatus === "answering" || gameStatus === "idle") && (
         <Button
           variant="contained"
           startIcon={
@@ -325,7 +329,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
       )}
 
       {/* Helper Text for Pass Button */}
-      {gameStatus === "answering" && !canPassToSecondTeam && (
+      {!isSpinWheelMode && gameStatus === "answering" && !canPassToSecondTeam && (
         <Box
           sx={{
             padding: "8px",

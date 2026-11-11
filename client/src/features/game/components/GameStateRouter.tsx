@@ -4,6 +4,7 @@ import { useAppSelector, useAppDispatch } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
 import { useFetchGameStateQuery } from "../services/gameStateApi";
 import { useFetchBuzzerLeaderboardQuery } from "../services/buzzerApi";
+import { useFetchSessionQuery } from "../../session/services/session.api";
 import { api } from "../../../app/api";
 import { resetBuzzer } from "../services/buzzerSlice";
 import { clearResponseResult } from "../../question/services/questions.slice";
@@ -26,6 +27,10 @@ const GameStateRouter = () => {
   // Fetch buzzer leaderboard to check if current team has pressed
   const { data: buzzerData } = useFetchBuzzerLeaderboardQuery();
 
+  // Fetch current session to check gameMode
+  const { data: sessionData } = useFetchSessionQuery();
+  const { session } = useAppSelector((state: RootState) => state.session);
+
   // Get current team and game state from Redux
   const { team } = useAppSelector((state: RootState) => state.team);
   const { gameState } = useAppSelector((state: RootState) => state.gameState);
@@ -33,17 +38,45 @@ const GameStateRouter = () => {
   // Use gameState from Redux (which is updated by WebSocket) or fallback to API data
   const currentGameState = gameState || gameStateData?.data?.gameState;
 
+  const gameMode =
+    sessionData?.data?.gameMode ||
+    session?.gameMode ||
+    (currentGameState as any)?.gameMode ||
+    (gameStateData?.data as any)?.gameMode;
+
+  const isSpinWheel =
+    gameMode === "SPIN_WHEEL" ||
+    Boolean(currentGameState?.currentCategory) ||
+    Boolean((currentGameState as any)?.spinWheelState) ||
+    Boolean((currentGameState as any)?.spinWheel);
+
   const normalizeId = (value: any): string | undefined => {
     if (!value) return undefined;
-    if (typeof value === "string") return value;
+    if (typeof value === "string") return value.trim();
     if (typeof value === "object") {
-      if (typeof value._id === "string") return value._id;
-      if (value._id) return String(value._id);
-      if (value.id) return String(value.id);
-      return String(value);
+      if (typeof value._id === "string") return value._id.trim();
+      if (value._id) return String(value._id).trim();
+      if (typeof value.id === "string") return value.id.trim();
+      if (value.id) return String(value.id).trim();
+      if (typeof value.teamId === "string") return value.teamId.trim();
+      if (value.teamId) return String(value.teamId).trim();
+      if (value.toString && typeof value.toString === "function") {
+        const str = value.toString();
+        if (str !== "[object Object]") return str.trim();
+      }
     }
-    return String(value);
+    return String(value).trim();
   };
+
+  const isSameTeam = (id1: any, id2: any): boolean => {
+    const norm1 = normalizeId(id1);
+    const norm2 = normalizeId(id2);
+    return Boolean(norm1 && norm2 && norm1 === norm2);
+  };
+
+  // Keep live reference to team to avoid stale closures in socket events
+  const teamRef = useRef(team);
+  teamRef.current = team;
 
   // Track previous question index to detect question changes
   const previousQuestionIndexRef = useRef<number | null>(null);
@@ -54,7 +87,26 @@ const GameStateRouter = () => {
   // Global force state for Answer Reveal
   const [isDelayingAnswer, setIsDelayingAnswer] = useState(false);
   const [answeredWrong, setAnsweredWrong] = useState(false);
+  const [wasAnswerMarkedCorrect, setWasAnswerMarkedCorrect] = useState<boolean>(
+    () => {
+      if (typeof window !== "undefined" && sessionId) {
+        return (
+          sessionStorage.getItem(`revealedAnswerForMe_${sessionId}`) === "true"
+        );
+      }
+      return false;
+    },
+  );
   const [forceAnswerReveal, setForceAnswerReveal] = useState(false);
+  const [isGameEnded, setIsGameEnded] = useState(false);
+
+  // Sync state if sessionId changes
+  useEffect(() => {
+    if (sessionId) {
+      const saved = sessionStorage.getItem(`revealedAnswerForMe_${sessionId}`);
+      setWasAnswerMarkedCorrect(saved === "true");
+    }
+  }, [sessionId]);
 
   // Invalidate caches and reset slices when question changes
   useEffect(() => {
@@ -67,10 +119,6 @@ const GameStateRouter = () => {
       previousQuestionIndexRef.current !== null &&
       previousQuestionIndexRef.current !== currentQuestionIndex
     ) {
-      // console.log(
-      //   `🧹 Question changed from ${previousQuestionIndexRef.current} to ${currentQuestionIndex}, cleaning up caches and slices`
-      // );
-
       // Invalidate all relevant RTK Query caches to force refetch
       dispatch(
         api.util.invalidateTags([
@@ -120,7 +168,11 @@ const GameStateRouter = () => {
       // Clear answer reveal delay and tracking for new question
       setIsDelayingAnswer(false);
       setAnsweredWrong(false);
+      setWasAnswerMarkedCorrect(false);
       setForceAnswerReveal(false);
+      if (sessionId) {
+        sessionStorage.removeItem(`revealedAnswerForMe_${sessionId}`);
+      }
 
       // Clean up session storage for old questions
       try {
@@ -142,24 +194,49 @@ const GameStateRouter = () => {
 
     // Update the ref
     previousQuestionIndexRef.current = currentQuestionIndex;
-  }, [currentGameState?.currentQuestionIndex, dispatch]);
+  }, [currentGameState?.currentQuestionIndex, dispatch, sessionId]);
 
   // Handle global Answer Reveal timing
   useEffect(() => {
-    const handleAnswerMarkedCorrect = () => {
-      // Wait 2 seconds (during which answering team sees NailedIt status card)
+    const handleAnswerMarkedCorrect = (data: any) => {
+      const myId = teamRef.current?._id || (teamRef.current as any)?.id;
+      const isMyTeam = isSameTeam(data?.teamId, myId);
+      console.log("🎯 Router handleAnswerMarkedCorrect:", {
+        dataTeamId: data?.teamId,
+        myId,
+        isMyTeam,
+      });
+
+      if (isMyTeam) {
+        setWasAnswerMarkedCorrect(true);
+        if (sessionId) {
+          sessionStorage.setItem(`revealedAnswerForMe_${sessionId}`, "true");
+        }
+      } else {
+        setWasAnswerMarkedCorrect(false);
+        if (sessionId) {
+          sessionStorage.removeItem(`revealedAnswerForMe_${sessionId}`);
+        }
+      }
+      setAnsweredWrong(false);
+      // Wait 4.5 seconds (during which answering team sees NailedIt status card)
       setIsDelayingAnswer(true);
       setTimeout(() => {
         setIsDelayingAnswer(false);
-      }, 2000);
+      }, 4500);
     };
 
     const handleAnswerMarkedWrong = (data: any) => {
-      // Wait 2 seconds (during which answering team sees CloseCall status card)
+      // Do not show answer reveal on wrong answer
+      setWasAnswerMarkedCorrect(false);
+      if (sessionId) {
+        sessionStorage.removeItem(`revealedAnswerForMe_${sessionId}`);
+      }
+      // Wait 4.5 seconds (during which answering team sees CloseCall status card)
       setIsDelayingAnswer(true);
 
-      // If it's this team, mark that we got it wrong so router stops forcing us to question page
-      if (normalizeId(data?.teamId) === normalizeId(team?._id)) {
+      const myId = teamRef.current?._id || (teamRef.current as any)?.id;
+      if (isSameTeam(data?.teamId, myId)) {
         setAnsweredWrong(true);
 
         // Also save to sessionStorage immediately if we have question index
@@ -175,7 +252,7 @@ const GameStateRouter = () => {
 
       setTimeout(() => {
         setIsDelayingAnswer(false);
-      }, 2000);
+      }, 4500);
     };
 
     const handleShowAnswer = () => {
@@ -187,9 +264,22 @@ const GameStateRouter = () => {
       if (data?.forceAnswerReveal) {
         setForceAnswerReveal(true);
       }
-      if (data?.gameStatus === "buzzer_round") {
-        setForceAnswerReveal(false);
+      if (data?.gameEnded) {
+        setIsGameEnded(true);
       }
+      if (data?.gameStatus === "buzzer_round" || data?.gameStatus === "spin_round") {
+        setForceAnswerReveal(false);
+        setWasAnswerMarkedCorrect(false);
+        setAnsweredWrong(false);
+        setIsGameEnded(false);
+        if (sessionId) {
+          sessionStorage.removeItem(`revealedAnswerForMe_${sessionId}`);
+        }
+      }
+    };
+
+    const handleGameEnded = () => {
+      setIsGameEnded(true);
     };
 
     websocketService.on(
@@ -199,6 +289,7 @@ const GameStateRouter = () => {
     websocketService.on(Events.ANSWER_MARKED_WRONG, handleAnswerMarkedWrong);
     websocketService.on(Events.SHOW_ANSWER, handleShowAnswer);
     websocketService.on(Events.GAME_STATE_CHANGED, handleGameStateChanged);
+    websocketService.on(Events.GAME_ENDED, handleGameEnded);
 
     return () => {
       websocketService.off(
@@ -208,8 +299,9 @@ const GameStateRouter = () => {
       websocketService.off(Events.ANSWER_MARKED_WRONG, handleAnswerMarkedWrong);
       websocketService.off(Events.SHOW_ANSWER, handleShowAnswer);
       websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChanged);
+      websocketService.off(Events.GAME_ENDED, handleGameEnded);
     };
-  }, [team?._id]);
+  }, [sessionId, currentGameState?.currentQuestionIndex]);
 
   useEffect(() => {
     if (!currentGameState || !team?._id) return;
@@ -227,7 +319,7 @@ const GameStateRouter = () => {
     // We intentionally force this to false if transitioning to prevent the router 
     // from acting on stale data from the previous question before the cache clears.
     const teamInBuzzerQueue = !isTransitioning && buzzerData?.data?.leaderboard?.some(
-      (entry) => normalizeId(entry.teamId) === currentTeamId,
+      (entry) => isSameTeam(entry.teamId, currentTeamId),
     );
 
     // console.log("🎮 Game State Router:", {
@@ -271,13 +363,16 @@ const GameStateRouter = () => {
         }
         break;
 
-      case "answering":
-        // Check if this is a no-buzzer question
+      case "spin_round":
+        safeNavigate("/spin-wheel");
+        break;
+
+      case "answering": {
         const isNoBuzzerQuestion = (currentGameState as any)
           ?.isNoBuzzerQuestion;
 
-        if (isNoBuzzerQuestion) {
-          // For no-buzzer questions, everyone sees the question
+        if (isSpinWheel || isNoBuzzerQuestion) {
+          // For spin wheel and no-buzzer questions, show question to all
           safeNavigate("/question");
         } else {
           // For buzzer questions, only answering team sees question
@@ -286,17 +381,38 @@ const GameStateRouter = () => {
           // Only keep the team on the question page if THEY are still the one answering.
           // If the admin passes to another team (answeringTeamId !== currentTeamId), 
           // all other teams should go back to the buzzer leaderboard.
-          if (answeringTeamId === currentTeamId) {
+          if (isSameTeam(answeringTeamId, currentTeamId)) {
             safeNavigate("/question");
           } else {
             safeNavigate("/buzzer-leaderboard");
           }
         }
         break;
+      }
 
       case "idle":
+        // If game explicitly ended, show leaderboard
+        if (isGameEnded || (currentGameState as any)?.gameEnded) {
+          safeNavigate("/leaderboard");
+          break;
+        }
+
+        // On correct answer, show answer reveal to the answering team ONLY!
+        if (wasAnswerMarkedCorrect) {
+          safeNavigate("/answer-reveal");
+          break;
+        }
+
+        // Only show answer reveal to everyone if explicitly forced by host (Show Answer)
         if (forceAnswerReveal) {
           safeNavigate("/answer-reveal");
+          break;
+        }
+
+        // For Spin Wheel mode: stay on the question screen between turns!
+        // Do NOT navigate to leaderboard when turn ends or answer is marked.
+        if (isSpinWheel) {
+          safeNavigate("/question");
           break;
         }
 
@@ -308,8 +424,8 @@ const GameStateRouter = () => {
           // For no-buzzer questions, show question page until admin selects a team
           safeNavigate("/question");
         } else {
-          // Normal IDLE state - show answer reveal screen
-          safeNavigate("/answer-reveal");
+          // Normal IDLE state after wrong answer or turn end - show leaderboard, NEVER reveal answer!
+          safeNavigate("/leaderboard");
         }
         break;
 
@@ -324,7 +440,10 @@ const GameStateRouter = () => {
     buzzerData,
     isDelayingAnswer,
     answeredWrong,
+    wasAnswerMarkedCorrect,
     forceAnswerReveal,
+    isGameEnded,
+    isSpinWheel,
   ]);
 
   // Render child routes

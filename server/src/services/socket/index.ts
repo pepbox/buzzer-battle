@@ -6,6 +6,7 @@ import { redisPresence } from "../redis/redisPresence";
 import { redisRooms } from "../redis/redisRooms";
 import { socketAuthMiddleware } from "../../middlewares/socketAuthMiddleware";
 import { handlePressBuzzer } from "./handelers/buzzerHandler";
+import { handleSpinWheel } from "./handelers/spinHandler";
 import { handleTimeSync } from "./handelers/syncHandler";
 import { Events } from "./enums/Events";
 
@@ -58,6 +59,11 @@ export async function initializeSocket(server: HTTPServer): Promise<Server> {
     // Handle press-buzzer event
     socket.on("press-buzzer", async (payload) => {
       await handlePressBuzzer(socket, payload);
+    });
+
+    // Handle spin-wheel event
+    socket.on("spin-wheel", async () => {
+      await handleSpinWheel(socket);
     });
 
     // Handle time-sync event

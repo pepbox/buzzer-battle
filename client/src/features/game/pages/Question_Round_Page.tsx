@@ -9,6 +9,8 @@ import Loader from "../../../components/ui/Loader";
 import Error from "../../../components/ui/Error";
 import { Box, CircularProgress, Typography } from "@mui/material";
 import { NailedIt, CloseCall } from "../../question/components/StatusCard";
+import { useFetchOverallLeaderboardQuery } from "../services/teamApi";
+import { useFetchSessionQuery } from "../../session/services/session.api";
 
 import { websocketService } from "../../../services/websocket/websocketService";
 import { Events } from "../../../services/websocket/enums/Events";
@@ -22,14 +24,26 @@ const QuestionRoundPage: React.FC = () => {
 
   const normalizeId = (value: any): string | undefined => {
     if (!value) return undefined;
-    if (typeof value === "string") return value;
+    if (typeof value === "string") return value.trim();
     if (typeof value === "object") {
-      if (typeof value._id === "string") return value._id;
-      if (value._id) return String(value._id);
-      if (value.id) return String(value.id);
-      return String(value);
+      if (typeof value._id === "string") return value._id.trim();
+      if (value._id) return String(value._id).trim();
+      if (typeof value.id === "string") return value.id.trim();
+      if (value.id) return String(value.id).trim();
+      if (typeof value.teamId === "string") return value.teamId.trim();
+      if (value.teamId) return String(value.teamId).trim();
+      if (value.toString && typeof value.toString === "function") {
+        const str = value.toString();
+        if (str !== "[object Object]") return str.trim();
+      }
     }
-    return String(value);
+    return String(value).trim();
+  };
+
+  const isSameTeam = (id1: any, id2: any): boolean => {
+    const norm1 = normalizeId(id1);
+    const norm2 = normalizeId(id2);
+    return Boolean(norm1 && norm2 && norm1 === norm2);
   };
 
   // Answer flow state management for verbal answer flow
@@ -41,10 +55,16 @@ const QuestionRoundPage: React.FC = () => {
   const [answerResult, setAnswerResult] = useState<{
     isCorrect: boolean;
     pointsAwarded: number;
+    teamId?: string;
+    teamName?: string;
+    isMyTeam?: boolean;
   } | null>(null);
 
   // Get team and game state from Redux
   const team = useAppSelector((state: RootState) => state.team?.team);
+  const teamRef = useRef(team);
+  teamRef.current = team;
+
   const gameState = useAppSelector(
     (state: RootState) => state.gameState.gameState,
   );
@@ -69,7 +89,32 @@ const QuestionRoundPage: React.FC = () => {
 
   // Check if current team is the answering team
   const isAnsweringTeam =
-    normalizeId(gameState?.currentAnsweringTeam) === normalizeId(team?._id);
+    isSameTeam(gameState?.currentAnsweringTeam, team?._id) ||
+    Boolean(answerResult?.isMyTeam && answerStatus === "result");
+
+  // Fetch leaderboard and session data to resolve team names and mode
+  const { data: leaderboardData } = useFetchOverallLeaderboardQuery();
+  const { data: sessionData } = useFetchSessionQuery();
+  const isSpinWheel =
+    sessionData?.data?.gameMode === "SPIN_WHEEL" ||
+    (gameState as any)?.gameMode === "SPIN_WHEEL" ||
+    Boolean(gameState?.currentCategory) ||
+    Boolean((gameState as any)?.spinWheelState);
+
+  const answeringTeamObj =
+    typeof gameState?.currentAnsweringTeam === "object" &&
+    gameState?.currentAnsweringTeam !== null
+      ? (gameState.currentAnsweringTeam as any)
+      : leaderboardData?.data?.leaderboard?.find(
+          (t: any) =>
+            isSameTeam(t._id || t.teamId, gameState?.currentAnsweringTeam || answerResult?.teamId)
+        );
+
+  const answeringTeamName =
+    answeringTeamObj?.teamName ||
+    (answeringTeamObj?.teamNumber
+      ? `Team ${answeringTeamObj.teamNumber}`
+      : "Another team");
 
   // Track current question index to detect changes
   const previousQuestionIndexRef = useRef<number | undefined>(undefined);
@@ -93,21 +138,19 @@ const QuestionRoundPage: React.FC = () => {
     }
   }, [isWaitingAfterWrong, sessionId, currentQuestionIndex]);
 
-
-
   // Load from session storage to avoid losing state on refresh
   useEffect(() => {
     if (currentQuestionIndex === undefined || !sessionId) return;
-    
+
     const statusKey = `answerStatus_${sessionId}_${currentQuestionIndex}`;
     const resultKey = `answerResult_${sessionId}_${currentQuestionIndex}`;
-    
+
     // Only hydrate if we are currently null
     if (answerStatus === null) {
       const savedStatus = sessionStorage.getItem(statusKey);
       if (savedStatus) setAnswerStatus(JSON.parse(savedStatus));
     }
-    
+
     if (answerResult === null) {
       const savedResult = sessionStorage.getItem(resultKey);
       if (savedResult) setAnswerResult(JSON.parse(savedResult));
@@ -117,14 +160,14 @@ const QuestionRoundPage: React.FC = () => {
   // Save to session storage when status/result updates
   useEffect(() => {
     if (currentQuestionIndex === undefined || !sessionId) return;
-    
+
     const statusKey = `answerStatus_${sessionId}_${currentQuestionIndex}`;
     const resultKey = `answerResult_${sessionId}_${currentQuestionIndex}`;
-    
+
     if (answerStatus !== null) {
       sessionStorage.setItem(statusKey, JSON.stringify(answerStatus));
     }
-    
+
     if (answerResult !== null) {
       sessionStorage.setItem(resultKey, JSON.stringify(answerResult));
     }
@@ -148,16 +191,22 @@ const QuestionRoundPage: React.FC = () => {
     const handleAnswerMarkedCorrect = (data: any) => {
       console.log("✅ Answer marked correct by admin:", data);
 
-      // Only process if this is for the current team
-      if (normalizeId(data?.teamId) === normalizeId(team?._id)) {
-        setAnswerResult({
-          isCorrect: true,
-          pointsAwarded: data.pointsAwarded || 0,
-        });
-        setAnswerStatus("status");
+      const myId = teamRef.current?._id || (teamRef.current as any)?.id;
+      const isMyTeam = isSameTeam(data?.teamId, myId);
+      const targetTeamName =
+        data?.teamName ||
+        (isMyTeam ? teamRef.current?.teamName : answeringTeamName);
 
-        // We show NailedIt for 2 seconds.
-        // GameStateRouter automatically navigates us to /answer-reveal after 2 seconds!
+      setAnswerResult({
+        isCorrect: true,
+        pointsAwarded: data.pointsAwarded || 0,
+        teamId: data?.teamId,
+        teamName: targetTeamName,
+        isMyTeam,
+      });
+
+      if (isMyTeam) {
+        setAnswerStatus("status");
       }
     };
 
@@ -165,16 +214,22 @@ const QuestionRoundPage: React.FC = () => {
       console.log("❌ Answer marked wrong by admin:", data);
 
       setIsWaitingAfterWrong(true);
+      const myId = teamRef.current?._id || (teamRef.current as any)?.id;
+      const isMyTeam = isSameTeam(data?.teamId, myId);
+      const targetTeamName =
+        data?.teamName ||
+        (isMyTeam ? teamRef.current?.teamName : answeringTeamName);
 
-      // Only process if this is for the current team
-      if (normalizeId(data?.teamId) === normalizeId(team?._id)) {
-        setAnswerResult({
-          isCorrect: false,
-          pointsAwarded: 0,
-        });
+      setAnswerResult({
+        isCorrect: false,
+        pointsAwarded: 0,
+        teamId: data?.teamId,
+        teamName: targetTeamName,
+        isMyTeam,
+      });
+
+      if (isMyTeam) {
         setAnswerStatus("status");
-
-        // GameStateRouter automatically navigates us after 2 seconds because it watches the same socket event!
       }
     };
 
@@ -196,10 +251,18 @@ const QuestionRoundPage: React.FC = () => {
         setAnswerStatus("waiting");
       }
 
-      // If game transitions to buzzer_round (new question), navigate accordingly
+      // If game transitions to buzzer_round or spin_round (new question/turn), navigate and reset status
       if (data.gameStatus === "buzzer_round") {
         setIsWaitingAfterWrong(false);
+        setAnswerStatus(null);
+        setAnswerResult(null);
         navigate(`/game/${sessionId}/buzzer`);
+      }
+      if (data.gameStatus === "spin_round") {
+        setIsWaitingAfterWrong(false);
+        setAnswerStatus(null);
+        setAnswerResult(null);
+        navigate(`/game/${sessionId}/spin-wheel`);
       }
     };
 
@@ -207,7 +270,8 @@ const QuestionRoundPage: React.FC = () => {
       console.log("🔄 Question passed to next team:", data);
 
       // If current team was passed (they answered wrong), navigate to waiting
-      if (normalizeId(data?.previousTeamId) === normalizeId(team?._id)) {
+      const myId = teamRef.current?._id || (teamRef.current as any)?.id;
+      if (isSameTeam(data?.previousTeamId, myId)) {
         navigate(`/game/${sessionId}/buzzer-leaderboard`);
       }
     };
@@ -238,32 +302,28 @@ const QuestionRoundPage: React.FC = () => {
       websocketService.off(Events.TEAM_SELECTED, handleTeamSelected);
       websocketService.off(Events.HINT_REVEALED, handleHintRevealed);
     };
-  }, [team?._id, sessionId, navigate, answerStatus, isAnsweringTeam]);
+  }, [team?._id, sessionId, navigate, answerStatus, isAnsweringTeam, answeringTeamName]);
 
-  // If not the answering team AND this is a buzzer question, redirect to leaderboard
-  // For no-buzzer questions, everyone stays on the question page
-  useEffect(() => {
-    const isNoBuzzerQuestion = (gameState as any)?.isNoBuzzerQuestion;
-    const isShowingCloseCall =
-      answerStatus === "status" && answerResult?.isCorrect === false;
-
-    if (
-      gameState &&
-      !isAnsweringTeam &&
-      gameState.gameStatus === "answering" &&
-      !isNoBuzzerQuestion &&
-      !isShowingCloseCall
-    ) {
-      navigate(`/game/${sessionId}/leaderboard`);
-    }
-  }, [
-    gameState,
-    isAnsweringTeam,
-    navigate,
-    sessionId,
-    answerStatus,
-    answerResult?.isCorrect,
-  ]);
+  // Priority 1: When an answer is evaluated, show NailedIt or CloseCall status screen ONLY to the answering team
+  if (answerStatus === "status" && answerResult && answerResult.isMyTeam) {
+    return (
+      <>
+        {answerResult.isCorrect ? (
+          <NailedIt
+            isMyTeam={true}
+            teamName={team?.teamName}
+            setAnswerStatus={setAnswerStatus}
+          />
+        ) : (
+          <CloseCall
+            isMyTeam={true}
+            teamName={team?.teamName}
+            setAnswerStatus={setAnswerStatus}
+          />
+        )}
+      </>
+    );
+  }
 
   if (isLoading && !activeQuestion) {
     return <Loader />;
@@ -295,11 +355,8 @@ const QuestionRoundPage: React.FC = () => {
   const isNoBuzzerQuestion = (gameState as any)?.isNoBuzzerQuestion;
   const isHiddenQuestion = activeQuestion.hideFromUsers === true;
 
-  const isShowingCloseCall =
-    answerStatus === "status" && answerResult?.isCorrect === false;
-
-  if (!isAnsweringTeam && !isNoBuzzerQuestion && !isShowingCloseCall) {
-    // For buzzer questions, non-answering teams see waiting screen
+  if (!isAnsweringTeam && !isNoBuzzerQuestion) {
+    // For non-answering teams in buzzer and spin questions, show answering screen instead of question
     return (
       <Box
         sx={{
@@ -312,8 +369,25 @@ const QuestionRoundPage: React.FC = () => {
           gap: 2,
         }}
       >
-        <CircularProgress />
-        <Typography>Waiting for the answering team...</Typography>
+        <Typography
+          variant="h5"
+          sx={{
+            color: "#FFD700",
+            fontWeight: "bold",
+            textAlign: "center",
+            textShadow: "2px 2px 4px rgba(0,0,0,0.5)",
+            backgroundColor: "rgba(0, 0, 0, 0.4)",
+            padding: "16px 32px",
+            borderRadius: "16px",
+            border: "1px solid rgba(255, 215, 0, 0.3)",
+          }}
+        >
+          {gameState?.gameStatus === "idle"
+            ? (isSpinWheel
+                ? "Turn ended. Waiting for host to select next team..."
+                : "Waiting for next question...")
+            : `🎯 ${answeringTeamName} is answering...`}
+        </Typography>
       </Box>
     );
   }
@@ -348,7 +422,7 @@ const QuestionRoundPage: React.FC = () => {
     <>
       {/* <Typography color="#000">{JSON.stringify(answerStatus)}</Typography> */}
       {/* Phase 1: Question Phase - Show question without options (verbal answer flow) */}
-      {(!answerStatus || answerStatus === "waiting") && (
+      {(!answerStatus || answerStatus === "waiting" || answerStatus === "result") && (
         <Box
           sx={{
             position: "relative",
@@ -380,45 +454,42 @@ const QuestionRoundPage: React.FC = () => {
           >
             <Box
               sx={{
-                backgroundColor: "rgba(0, 0, 0, 0.8)",
+                backgroundColor: isAnsweringTeam
+                  ? "rgba(0, 0, 0, 0.85)"
+                  : "rgba(20, 20, 30, 0.9)",
                 color: "white",
-                padding: "12px 24px",
-                borderRadius: "12px",
+                padding: "14px 28px",
+                borderRadius: "16px",
                 display: "flex",
                 alignItems: "center",
                 gap: 2,
-                boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+                border: isAnsweringTeam
+                  ? "1px solid rgba(255,255,255,0.2)"
+                  : "2px solid #FFD700",
+                backdropFilter: "blur(12px)",
               }}
             >
-              {/* <CircularProgress size={20} sx={{ color: "white" }} /> */}
-              <Typography sx={{ fontWeight: 600, color: "#FFF" }}>
-                {isAnsweringTeam
-                  ? "Waiting for admin to mark your answer..."
-                  : gameState?.currentAnsweringTeam
-                    ? `🎯 ${typeof gameState?.currentAnsweringTeam === "object"
-                      ? gameState.currentAnsweringTeam?.teamName
-                      : "Another team"
-                    } is answering...`
-                    : "Waiting for admin to select a team..."
-                }
+              <Typography
+                sx={{
+                  fontWeight: 700,
+                  fontSize: { xs: "1rem", sm: "1.15rem" },
+                  color: isAnsweringTeam ? "#FFF" : "#FFD700",
+                  textAlign: "center",
+                }}
+              >
+                {gameState?.gameStatus === "idle"
+                  ? (isSpinWheel
+                      ? "Turn ended. Waiting for host to select next team..."
+                      : "Waiting for next question...")
+                  : isAnsweringTeam
+                    ? "Waiting for admin to mark your answer..."
+                    : `🎯 ${answeringTeamName} is answering...`}
               </Typography>
             </Box>
           </Box>
         </Box>
       )}
-
-      {/* Phase 2: Status Screen - Show result feedback */}
-      {answerStatus === "status" && (
-        <>
-          {answerResult?.isCorrect && (
-            <NailedIt setAnswerStatus={setAnswerStatus} />
-          )}
-          {answerResult && !answerResult.isCorrect && <CloseCall />}
-        </>
-      )}
-
-      {/* Phase 3: Correct Answer Screen - Only for correct answers */}
-      {/* We no longer show CorrectAnswer here since the unified AnswerRevealPage takes over after 2s */}
     </>
   );
 };

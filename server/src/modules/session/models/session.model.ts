@@ -17,6 +17,7 @@ const sessionSchema = new Schema<ISession>({
     numberOfTeams: { type: Number, default: null },
     teamMode: { type: String, enum: ['NUMBER', 'COLOR'], default: 'NUMBER' },
     colorTeams: [{ type: Number }],
+    gameMode: { type: String, enum: ['BUZZER_BATTLE', 'SPIN_WHEEL'], default: null },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
 }, {

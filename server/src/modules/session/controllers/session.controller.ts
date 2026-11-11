@@ -37,6 +37,13 @@ export const updateSession = async (
             return next(new AppError("Invalid session status.", 400));
         }
 
+        if (updateData.gameMode) {
+            const currentSession = await sessionService.fetchSessionById(sessionId);
+            if (currentSession?.gameMode && currentSession.gameMode !== updateData.gameMode) {
+                return next(new AppError("Game mode is already locked for this session and cannot be changed.", 400));
+            }
+        }
+
         // Assuming you have imported the service as sessionService
         updateData.updatedAt = new Date();
         const updatedSession = await sessionService.updateSessionById(sessionId, updateData);

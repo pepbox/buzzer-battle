@@ -5,7 +5,8 @@ import {
     // updateGameStatus, 
     moveToNextQuestion,
     validateTimerExpiration,
-    markAnswer
+    markAnswer,
+    fetchAvailableCategories,
 } from '../controllers/gameState.controller';
 import { authenticateUser, authorizeRoles } from '../../../middlewares/authMiddleware';
 
@@ -13,6 +14,9 @@ const router = express.Router();
 
 // Team and Admin can fetch game state
 router.get('/current', authenticateUser, fetchGameState);
+
+// Fetch available categories for spin wheel
+router.get('/categories', authenticateUser, fetchAvailableCategories);
 
 // Validate timer expiration (Team and Admin can check)
 router.get('/validate-timer', authenticateUser, validateTimerExpiration);

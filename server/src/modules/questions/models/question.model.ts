@@ -48,6 +48,12 @@ const questionSchema = new Schema<IQuestion>(
       trim: true,
       default: "General",
     },
+    category: {
+      type: String,
+      required: false,
+      trim: true,
+      default: "",
+    },
     keepBuzzer: {
       type: Boolean,
       default: true,

@@ -4,6 +4,7 @@ import { useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
 import WaitingAnimation from "./WaitingAnimation";
 import PresenterBuzzerRound from "../../game/pages/PresenterBuzzerRound";
+import PresenterSpinWheelRound from "../../game/pages/PresenterSpinWheelRound";
 import { presenterAudio } from "../../../utils/presenterAudio";
 import { Session } from "../../session/services/session.api";
 import questionBg from "../../../assets/background/normal_bg.webp";
@@ -188,6 +189,9 @@ const PresenterGameView: React.FC<PresenterGameViewProps> = ({ session }) => {
     case "buzzer_round":
       return <PresenterBuzzerRound />;
 
+    case "spin_round":
+      return <PresenterSpinWheelRound />;
+
     case "answering":
       // Keep showing the question while a team is answering.
       return <PresenterBuzzerRound />;
@@ -198,6 +202,17 @@ const PresenterGameView: React.FC<PresenterGameViewProps> = ({ session }) => {
           <WaitingAnimation
             sessionName={session?.sessionName}
             customMessage="Waiting for game to start..."
+          />
+        );
+      }
+
+      if (session?.gameMode === "SPIN_WHEEL") {
+        return shouldRevealAnswer ? (
+          <AnswerRevealPage presenterMode />
+        ) : (
+          <WaitingAnimation
+            sessionName={session?.sessionName}
+            customMessage="Turn ended! Host is selecting the next team..."
           />
         );
       }

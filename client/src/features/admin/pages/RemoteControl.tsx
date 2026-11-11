@@ -38,16 +38,22 @@ import {
   useAutoSelectFastestTeam,
   useSetAnsweringTeam,
   useShowHint,
+  useStartSpinRound,
+  useTriggerSpinWheel,
 } from "../services/adminRemoteApi";
 import {
   useFetchTeamDashboardQuery,
   useUpdateSessionQuestionsMutation,
   useUpdateQuestionMutation,
 } from "../services/admin.Api";
-import { useFetchSessionQuestionsStatusQuery } from "../../session/services/session.api";
+import {
+  useFetchSessionQuery,
+  useFetchSessionQuestionsStatusQuery,
+} from "../../session/services/session.api";
 import {
   useFetchGameStateQuery,
   useMarkAnswerMutation,
+  useFetchAvailableCategoriesQuery,
 } from "../../game/services/gameStateApi";
 import {
   useFetchBuzzerLeaderboardQuery,
@@ -71,9 +77,9 @@ const RemoteControl: React.FC = () => {
   const [lastAnswerWasWrong, setLastAnswerWasWrong] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarSeverity, setSnackbarSeverity] = useState<"success" | "error">(
-    "success",
-  );
+  const [snackbarSeverity, setSnackbarSeverity] = useState<
+    "success" | "error" | "info"
+  >("success");
   const [showAnswerModalOpen, setShowAnswerModalOpen] = useState(false);
   const [isAnswerShown, setIsAnswerShown] = useState(false);
   const [teamListModalType, setTeamListModalType] = useState<
@@ -131,6 +137,19 @@ const RemoteControl: React.FC = () => {
   const { autoSelectFastestTeam } = useAutoSelectFastestTeam();
   const { setAnsweringTeam, isLoading: setTeamLoading } = useSetAnsweringTeam();
   const { showHint, isLoading: showHintLoading } = useShowHint();
+  const { startSpinRound, isLoading: startSpinLoading } = useStartSpinRound();
+  const { triggerSpinWheel, isLoading: triggerSpinLoading } = useTriggerSpinWheel();
+
+  const { data: sessionQueryData } = useFetchSessionQuery();
+  const gameMode =
+    sessionQueryData?.data?.gameMode || session?.gameMode || "BUZZER_BATTLE";
+  const isSpinWheelMode = gameMode === "SPIN_WHEEL";
+
+  const { data: categoriesData, refetch: refetchCategories } =
+    useFetchAvailableCategoriesQuery(undefined, { skip: !isSpinWheelMode });
+
+  const [selectedSpinTeamId, setSelectedSpinTeamId] = useState("");
+
   const [markAnswer, { isLoading: markAnswerLoading }] =
     useMarkAnswerMutation();
   const [updateSessionQuestions] = useUpdateSessionQuestionsMutation();
@@ -208,7 +227,9 @@ const RemoteControl: React.FC = () => {
     passLoading ||
     markAnswerLoading ||
     setTeamLoading ||
-    showHintLoading;
+    showHintLoading ||
+    startSpinLoading ||
+    triggerSpinLoading;
 
   const currentAnsweringTeamRaw = gameState?.currentAnsweringTeam;
 
@@ -391,6 +412,20 @@ const RemoteControl: React.FC = () => {
       }
     };
 
+    const handleWheelSpinTriggered = () => {
+      showSnackbar("🎡 Wheel is spinning...", "info");
+    };
+
+    const handleWheelLanded = (data: any) => {
+      showSnackbar(`🎯 Wheel landed on: ${data.targetCategory || 'selected category'}!`, "success");
+      if (refetchCategories) refetchCategories();
+    };
+
+    const handleCategoryExhausted = (data: any) => {
+      showSnackbar(`Category '${data.category}' has been completed!`, "info");
+      if (refetchCategories) refetchCategories();
+    };
+
     websocketService.on(Events.ANSWER_SUBMITTED, handleAnswerSubmitted);
     websocketService.on(
       Events.ANSWER_MARKED_CORRECT,
@@ -400,6 +435,9 @@ const RemoteControl: React.FC = () => {
     websocketService.on(Events.GAME_STATE_CHANGED, handleGameStateChanged);
     websocketService.on(Events.BUZZER_PRESSED, handleBuzzerPressed);
     websocketService.on(Events.SHOW_ANSWER, handleShowAnswerEvent);
+    websocketService.on(Events.WHEEL_SPIN_TRIGGERED, handleWheelSpinTriggered);
+    websocketService.on(Events.WHEEL_LANDED, handleWheelLanded);
+    websocketService.on(Events.CATEGORY_EXHAUSTED, handleCategoryExhausted);
 
     return () => {
       websocketService.off(Events.ANSWER_SUBMITTED, handleAnswerSubmitted);
@@ -411,8 +449,11 @@ const RemoteControl: React.FC = () => {
       websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChanged);
       websocketService.off(Events.BUZZER_PRESSED, handleBuzzerPressed);
       websocketService.off(Events.SHOW_ANSWER, handleShowAnswerEvent);
+      websocketService.off(Events.WHEEL_SPIN_TRIGGERED, handleWheelSpinTriggered);
+      websocketService.off(Events.WHEEL_LANDED, handleWheelLanded);
+      websocketService.off(Events.CATEGORY_EXHAUSTED, handleCategoryExhausted);
     };
-  }, [gameStatus, refetchBuzzerStats, refetchCurrentQuestion]);
+  }, [gameStatus, refetchBuzzerStats, refetchCurrentQuestion, refetchCategories]);
 
   // Handlers
   const handlePauseGame = async () => {
@@ -593,7 +634,33 @@ const RemoteControl: React.FC = () => {
     }
   };
 
-  const showSnackbar = (message: string, severity: "success" | "error") => {
+  const handleStartSpinTurn = async () => {
+    if (!selectedSpinTeamId) {
+      showSnackbar("Please select a team to spin the wheel", "error");
+      return;
+    }
+    try {
+      await startSpinRound(selectedSpinTeamId).unwrap();
+      showSnackbar("Spin round started! Selected team can now spin.", "success");
+      setLastAnswerWasWrong(false);
+    } catch (error: any) {
+      showSnackbar(error?.data?.message || "Failed to start spin turn", "error");
+    }
+  };
+
+  const handleTriggerSpin = async () => {
+    try {
+      await triggerSpinWheel(selectedSpinTeamId || undefined).unwrap();
+      showSnackbar("Spin triggered!", "info");
+    } catch (error: any) {
+      showSnackbar(error?.data?.message || "Failed to trigger spin", "error");
+    }
+  };
+
+  const showSnackbar = (
+    message: string,
+    severity: "success" | "error" | "info" = "success",
+  ) => {
     setSnackbarMessage(message);
     setSnackbarSeverity(severity);
     setSnackbarOpen(true);
@@ -698,6 +765,21 @@ const RemoteControl: React.FC = () => {
               {session?.sessionName || "Session"}
             </Typography>
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+              {isSpinWheelMode ? (
+                <Chip
+                  label="🎡 Mode: Spin Wheel"
+                  color="warning"
+                  variant="filled"
+                  sx={{ fontWeight: "bold" }}
+                />
+              ) : (
+                <Chip
+                  label="⚡ Mode: Buzzer Battle"
+                  color="primary"
+                  variant="filled"
+                  sx={{ fontWeight: "bold" }}
+                />
+              )}
               <Chip
                 label={`Status: ${displayGameStatus}`}
                 color="primary"
@@ -711,17 +793,29 @@ const RemoteControl: React.FC = () => {
                 color="secondary"
                 variant="outlined"
               />
-              <Chip
-                label={`Question: ${displayQuestionNumber}/${totalQuestions}`}
-                variant="outlined"
-                clickable
-                onClick={() => setQuestionsListOpen(true)}
-              />
-              <Chip
-                label={`Buzzer: ${currentQuestionKeepBuzzer === false ? "Off" : "On"}`}
-                variant="outlined"
-                color={currentQuestionKeepBuzzer === false ? "warning" : "success"}
-              />
+              {!isSpinWheelMode && (
+                <Chip
+                  label={`Question: ${displayQuestionNumber}/${totalQuestions}`}
+                  variant="outlined"
+                  clickable
+                  onClick={() => setQuestionsListOpen(true)}
+                />
+              )}
+              {isSpinWheelMode && gameState?.currentCategory && (
+                <Chip
+                  label={`Category: ${gameState.currentCategory}`}
+                  color="secondary"
+                  variant="filled"
+                  sx={{ fontWeight: "bold" }}
+                />
+              )}
+              {!isSpinWheelMode && (
+                <Chip
+                  label={`Buzzer: ${currentQuestionKeepBuzzer === false ? "Off" : "On"}`}
+                  variant="outlined"
+                  color={currentQuestionKeepBuzzer === false ? "warning" : "success"}
+                />
+              )}
               <Chip
                 label="Question Preview"
                 clickable
@@ -732,8 +826,165 @@ const RemoteControl: React.FC = () => {
             </Box>
           </Box>
 
-          {/* No-Buzzer Team Selection or Current Team Info */}
-          {isNoBuzzerMode ? (
+          {/* Spin Wheel Available Categories & Controls */}
+          {isSpinWheelMode && (
+            <Box
+              sx={{
+                mx: 2,
+                mt: 2,
+                p: 1.5,
+                bgcolor: "rgba(245, 158, 11, 0.08)",
+                borderRadius: "10px",
+                border: "1px solid rgba(245, 158, 11, 0.3)",
+              }}
+            >
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mb: 1,
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  fontWeight="bold"
+                  sx={{ color: "#b45309" }}
+                >
+                  ACTIVE CATEGORIES ({categoriesData?.data?.categories?.length || 0})
+                </Typography>
+                <Typography variant="caption" sx={{ color: "#b45309" }}>
+                  {categoriesData?.data?.remainingQuestions || 0} questions left
+                </Typography>
+              </Box>
+              <Box sx={{ display: "flex", gap: 0.8, flexWrap: "wrap" }}>
+                {(categoriesData?.data?.categories || []).map((cat: string) => {
+                  const count = categoriesData?.data?.categoryCounts?.[cat] ?? 0;
+                  const isCurrent = gameState?.currentCategory === cat;
+                  return (
+                    <Chip
+                      key={cat}
+                      label={`${cat} (${count})`}
+                      size="small"
+                      color={isCurrent ? "warning" : "default"}
+                      variant={isCurrent ? "filled" : "outlined"}
+                      sx={{ fontWeight: 600 }}
+                    />
+                  );
+                })}
+                {(categoriesData?.data?.categories || []).length === 0 && (
+                  <Typography variant="caption" color="error">
+                    All categories exhausted!
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          )}
+
+          {/* Spin Wheel Turn Selector */}
+          {isSpinWheelMode && gameStatus !== "answering" && (
+            <Paper
+              variant="outlined"
+              sx={{
+                mx: 2,
+                mt: 2,
+                p: 2,
+                borderRadius: "12px",
+                backgroundColor: "#fffdf5",
+                borderColor: "#f59e0b",
+              }}
+            >
+              <Typography
+                variant="subtitle2"
+                sx={{ mb: 1.5, fontWeight: 700, color: "#92400e" }}
+              >
+                🎡 Select Team to Spin Wheel
+              </Typography>
+              <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
+                <InputLabel id="spin-team-label">Team</InputLabel>
+                <Select
+                  labelId="spin-team-label"
+                  value={selectedSpinTeamId}
+                  label="Team"
+                  onChange={(e) => setSelectedSpinTeamId(e.target.value)}
+                  disabled={
+                    gameStatus === "spin_round" &&
+                    Boolean(gameState?.spinWheelState?.isSpinning)
+                  }
+                >
+                  {teams.map((team) => (
+                    <MenuItem key={team._id} value={team._id}>
+                      Team {team.teamNumber} - {team.teamName} (Score:{" "}
+                      {team.teamScore})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  disabled={
+                    !selectedSpinTeamId ||
+                    startSpinLoading ||
+                    (gameStatus === "spin_round" &&
+                      Boolean(gameState?.spinWheelState?.isSpinning))
+                  }
+                  onClick={handleStartSpinTurn}
+                  sx={{
+                    bgcolor: "#f59e0b",
+                    fontWeight: 700,
+                    "&:hover": { bgcolor: "#d97706" },
+                  }}
+                >
+                  {gameStatus === "spin_round"
+                    ? "Re-assign Team"
+                    : "Start Spin Turn"}
+                </Button>
+
+                {gameStatus === "spin_round" && (
+                  <Button
+                    variant="outlined"
+                    color="warning"
+                    disabled={
+                      Boolean(gameState?.spinWheelState?.isSpinning) ||
+                      triggerSpinLoading
+                    }
+                    onClick={handleTriggerSpin}
+                    sx={{ fontWeight: 700, whiteSpace: "nowrap" }}
+                  >
+                    {gameState?.spinWheelState?.isSpinning
+                      ? "Spinning..."
+                      : "Spin Now"}
+                  </Button>
+                )}
+              </Box>
+
+              {gameStatus === "spin_round" && (
+                <Box
+                  sx={{
+                    mt: 1.5,
+                    p: 1,
+                    bgcolor: "rgba(245, 158, 11, 0.12)",
+                    borderRadius: "8px",
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    sx={{ color: "#92400e", fontWeight: 600 }}
+                  >
+                    {gameState?.spinWheelState?.isSpinning
+                      ? "🎡 Wheel is spinning on screen..."
+                      : `⏳ Waiting for Team Captain to spin the wheel on their mobile screen.`}
+                  </Typography>
+                </Box>
+              )}
+            </Paper>
+          )}
+
+          {/* Buzzer Battle / No-Buzzer Team Selection or Current Team Info */}
+          {!isSpinWheelMode && isNoBuzzerMode ? (
             <Paper
               variant="outlined"
               sx={{
@@ -767,7 +1018,7 @@ const RemoteControl: React.FC = () => {
                 </Select>
               </FormControl>
             </Paper>
-          ) : (
+          ) : (!isSpinWheelMode || gameStatus === "answering") ? (
             <RemoteTeamInfo
               currentAnsweringTeam={currentAnsweringTeam}
               answeringTeamRank={currentAnsweringTeamRank}
@@ -782,9 +1033,10 @@ const RemoteControl: React.FC = () => {
               }
               buzzerRoundStartTime={gameState?.buzzerRoundStartTime}
             />
-          )}
-          {/* Buzzer Stats - Only show during buzzer round */}
-          {gameStatus === "buzzer_round" && buzzerStats && (
+          ) : null}
+
+          {/* Buzzer Stats - Only show during buzzer round in Buzzer Battle mode */}
+          {!isSpinWheelMode && gameStatus === "buzzer_round" && buzzerStats && (
             <RemoteBuzzerStats
               fastestTeam={buzzerStats.fastestTeam}
               teamsPressed={buzzerStats.teamsPressed}
@@ -815,11 +1067,12 @@ const RemoteControl: React.FC = () => {
               !!currentQuestionData?.data?.question?.hint?.media?.length
             }
             hintRevealed={!!gameState?.hintRevealed}
-            canPassToSecondTeam={canPassToSecondTeam}
-            hasFastestTeam={!!buzzerStats?.fastestTeam}
+            canPassToSecondTeam={!isSpinWheelMode && canPassToSecondTeam}
+            hasFastestTeam={!isSpinWheelMode && !!buzzerStats?.fastestTeam}
             isAnswerShown={isAnswerShown}
             isLoading={isAnyLoading}
             lastAnswerWasWrong={lastAnswerWasWrong}
+            isSpinWheelMode={isSpinWheelMode}
           />
         </Box>
       </Box>

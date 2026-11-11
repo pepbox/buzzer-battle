@@ -7,6 +7,8 @@ import { SessionStatus } from "../../session/types/enums";
 import BuzzerQueueService from "../../buzzerQueue/services/buzzerQueue.service";
 import QuestionService from "../../questions/services/question.service";
 import { IBuzzerQueue } from "../../buzzerQueue/types/buzzerQueue.interface";
+import { Question } from "../../questions/models/question.model";
+import { IQuestion } from "../../questions/types/interfaces";
 
 export default class GameStateService {
   private session?: mongoose.ClientSession;
@@ -570,6 +572,7 @@ export default class GameStateService {
     gameState.idleStartTime = Date.now();
     gameState.buzzerRoundStartTime = undefined;
     gameState.answeringRoundStartTime = undefined;
+    gameState.currentCategory = "";
 
     const options: any = {};
     if (this.session) {
@@ -579,6 +582,241 @@ export default class GameStateService {
     await gameState.save(options);
     console.log(`✅ Transitioned to IDLE for session ${sessionId}`);
 
+    return gameState;
+  }
+
+  /**
+   * Get available categories for Spin Wheel mode with unattempted questions
+   */
+  async getAvailableCategories(
+    sessionId: Types.ObjectId | string,
+  ): Promise<{
+    categories: string[];
+    categoryCounts: Record<string, number>;
+    remainingQuestions: number;
+    unattemptedQuestions: IQuestion[];
+  }> {
+    const session = await Session.findById(sessionId).populate("questions");
+    if (!session) {
+      throw new Error("Session not found");
+    }
+
+    const gameState = await GameState.findOne({ sessionId });
+    const completedIds = new Set(
+      (gameState?.completedQuestionIds || []).map((id) => id.toString()),
+    );
+
+    const questions = (session.questions as unknown as IQuestion[]).filter(
+      (q) => q && !completedIds.has(q._id.toString()),
+    );
+
+    const categoryCounts: Record<string, number> = {};
+    for (const q of questions) {
+      const cat =
+        (q.category && q.category.trim()) ||
+        (q.folder && q.folder.trim()) ||
+        "General";
+      categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+    }
+
+    const categories = Object.keys(categoryCounts).filter(
+      (cat) => categoryCounts[cat] > 0,
+    );
+
+    return {
+      categories,
+      categoryCounts,
+      remainingQuestions: questions.length,
+      unattemptedQuestions: questions,
+    };
+  }
+
+  /**
+   * Start a spin round for a specific team
+   */
+  async startSpinRound(
+    sessionId: Types.ObjectId | string,
+    teamId: Types.ObjectId | string,
+  ): Promise<IGameState> {
+    const query = GameState.findOne({ sessionId });
+    if (this.session) {
+      query.session(this.session);
+    }
+
+    const gameState = await query;
+    if (!gameState) {
+      throw new Error("Game state not found");
+    }
+
+    gameState.gameStatus = GameStatus.SPIN_ROUND;
+    gameState.currentAnsweringTeam = teamId as Types.ObjectId;
+    gameState.currentQuestionIndex = -1;
+    gameState.currentCategory = "";
+    gameState.spinWheelState = {
+      selectedTeamId: String(teamId),
+      isSpinning: false,
+    };
+
+    const options: any = {};
+    if (this.session) {
+      options.session = this.session;
+    }
+
+    await gameState.save(options);
+
+    // Also mark session as PLAYING
+    await Session.findByIdAndUpdate(sessionId, {
+      status: SessionStatus.PLAYING,
+    });
+
+    return gameState;
+  }
+
+  /**
+   * Trigger the spin wheel: selects target category & random unattempted question
+   */
+  async triggerSpinWheel(
+    sessionId: Types.ObjectId | string,
+    teamId: Types.ObjectId | string,
+  ): Promise<{
+    gameState: IGameState;
+    targetCategory: string;
+    winningIndex: number;
+    durationMs: number;
+    targetQuestion: IQuestion;
+    availableCategories: string[];
+  }> {
+    const { categories, unattemptedQuestions } =
+      await this.getAvailableCategories(sessionId);
+
+    if (categories.length === 0) {
+      throw new Error("No categories with unattempted questions available");
+    }
+
+    const winningIndex = Math.floor(Math.random() * categories.length);
+    const targetCategory = categories[winningIndex];
+
+    const matchingQuestions = unattemptedQuestions.filter((q) => {
+      const cat =
+        (q.category && q.category.trim()) ||
+        (q.folder && q.folder.trim()) ||
+        "General";
+      return cat === targetCategory;
+    });
+
+    if (matchingQuestions.length === 0) {
+      throw new Error(`No unattempted questions for category ${targetCategory}`);
+    }
+
+    const targetQuestion =
+      matchingQuestions[Math.floor(Math.random() * matchingQuestions.length)];
+
+    const session = await Session.findById(sessionId);
+    const questionIndex =
+      session?.questions.findIndex(
+        (qId) => qId.toString() === targetQuestion._id.toString(),
+      ) ?? -1;
+
+    const query = GameState.findOne({ sessionId });
+    if (this.session) {
+      query.session(this.session);
+    }
+    const gameState = await query;
+    if (!gameState) {
+      throw new Error("Game state not found");
+    }
+
+    const durationMs = 5000;
+    // Keep currentCategory empty while spinning so it is not shown prematurely
+    gameState.currentCategory = "";
+    gameState.currentQuestionIndex = questionIndex;
+    gameState.spinWheelState = {
+      selectedTeamId: String(teamId),
+      isSpinning: true,
+      targetCategory,
+      winningIndex,
+      durationMs,
+      startTime: Date.now(),
+      targetQuestionId: targetQuestion._id.toString(),
+    };
+
+    const options: any = {};
+    if (this.session) {
+      options.session = this.session;
+    }
+    await gameState.save(options);
+
+    return {
+      gameState,
+      targetCategory,
+      winningIndex,
+      durationMs,
+      targetQuestion,
+      availableCategories: categories,
+    };
+  }
+
+  /**
+   * Wheel landed: transition to ANSWERING phase
+   */
+  async landSpinWheel(
+    sessionId: Types.ObjectId | string,
+  ): Promise<IGameState> {
+    const query = GameState.findOne({ sessionId });
+    if (this.session) {
+      query.session(this.session);
+    }
+    const gameState = await query;
+    if (!gameState) {
+      throw new Error("Game state not found");
+    }
+
+    gameState.gameStatus = GameStatus.ANSWERING;
+    gameState.answeringRoundStartTime = Date.now();
+    if (gameState.spinWheelState?.targetCategory) {
+      gameState.currentCategory = gameState.spinWheelState.targetCategory;
+    }
+    if (gameState.spinWheelState) {
+      gameState.spinWheelState.isSpinning = false;
+    }
+
+    const options: any = {};
+    if (this.session) {
+      options.session = this.session;
+    }
+    await gameState.save(options);
+    return gameState;
+  }
+
+  /**
+   * Mark a question as completed (for correct answers in Spin Wheel mode)
+   */
+  async markQuestionCompleted(
+    sessionId: Types.ObjectId | string,
+    questionId: Types.ObjectId | string,
+  ): Promise<IGameState> {
+    const query = GameState.findOne({ sessionId });
+    if (this.session) {
+      query.session(this.session);
+    }
+    const gameState = await query;
+    if (!gameState) {
+      throw new Error("Game state not found");
+    }
+
+    const qIdStr = questionId.toString();
+    const alreadyCompleted = gameState.completedQuestionIds.some(
+      (id) => id.toString() === qIdStr,
+    );
+    if (!alreadyCompleted) {
+      gameState.completedQuestionIds.push(questionId as Types.ObjectId);
+    }
+
+    const options: any = {};
+    if (this.session) {
+      options.session = this.session;
+    }
+    await gameState.save(options);
     return gameState;
   }
 }

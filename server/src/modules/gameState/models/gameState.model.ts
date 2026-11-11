@@ -50,6 +50,24 @@ const gameStateSchema = new Schema<IGameState>(
       type: Boolean,
       default: false,
     },
+    completedQuestionIds: {
+      type: [Schema.Types.ObjectId],
+      ref: "Question",
+      default: [],
+    },
+    currentCategory: {
+      type: String,
+      default: "",
+    },
+    spinWheelState: {
+      selectedTeamId: { type: String },
+      isSpinning: { type: Boolean, default: false },
+      targetCategory: { type: String },
+      winningIndex: { type: Number },
+      durationMs: { type: Number },
+      startTime: { type: Number },
+      targetQuestionId: { type: String },
+    },
   },
   {
     timestamps: true,

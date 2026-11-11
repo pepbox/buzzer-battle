@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Box, IconButton, Tooltip } from "@mui/material";
+import { Box, Chip, IconButton, Tooltip } from "@mui/material";
 import { VolumeUp, VolumeOff } from "@mui/icons-material";
 import { useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../../app/hooks";
@@ -7,7 +7,10 @@ import { RootState } from "../../../app/store";
 import { useFetchSessionQuery } from "../../session/services/session.api";
 import { useFetchOverallLeaderboardQuery } from "../../game/services/teamApi";
 import { useFetchBuzzerLeaderboardQuery } from "../../game/services/buzzerApi";
-import { useFetchGameStateQuery } from "../../game/services/gameStateApi";
+import {
+  useFetchGameStateQuery,
+  useFetchAvailableCategoriesQuery,
+} from "../../game/services/gameStateApi";
 import { setSessionId } from "../../session/services/sessionSlice";
 import PresenterGameView from "../components/PresenterGameView";
 import Loader from "../../../components/ui/Loader";
@@ -50,6 +53,10 @@ const PresenterView: React.FC = () => {
 
   // Fetch game state to ensure it's loaded on mount and refresh
   const { isLoading: gameStateLoading } = useFetchGameStateQuery();
+  const isSpinWheel = session?.data?.gameMode === "SPIN_WHEEL";
+  const { data: categoriesData } = useFetchAvailableCategoriesQuery(undefined, {
+    skip: !isSpinWheel,
+  });
 
   const buzzerLeaderboard = buzzerLeaderboardData?.data?.leaderboard || [];
   const buzzerRoundStartTime = gameState?.buzzerRoundStartTime;
@@ -230,6 +237,56 @@ const PresenterView: React.FC = () => {
               {isBuzzerRound ? "⏱️ BUZZER QUEUE ⏱️" : "🏆 LEADERBOARD 🏆"}
             </Box>
           </Box>
+
+          {/* Spin Wheel Category Tracker */}
+          {isSpinWheel && (
+            <Box
+              sx={{
+                mb: 3,
+                p: 2,
+                borderRadius: 2,
+                bgcolor: "rgba(245, 158, 11, 0.1)",
+                border: "1px solid rgba(245, 158, 11, 0.3)",
+              }}
+            >
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mb: 1,
+                }}
+              >
+                <Box sx={{ fontSize: 13, fontWeight: "bold", color: "#f59e0b" }}>
+                  REMAINING CATEGORIES
+                </Box>
+                <Box sx={{ fontSize: 13, color: "#f59e0b" }}>
+                  {categoriesData?.data?.remainingQuestions ?? 0} questions
+                </Box>
+              </Box>
+              <Box sx={{ display: "flex", gap: 0.8, flexWrap: "wrap" }}>
+                {(categoriesData?.data?.categories || []).map((cat: string) => {
+                  const count = categoriesData?.data?.categoryCounts?.[cat] ?? 0;
+                  const isCurrent = gameState?.currentCategory === cat;
+                  return (
+                    <Chip
+                      key={cat}
+                      label={`${cat} (${count})`}
+                      size="small"
+                      sx={{
+                        bgcolor: isCurrent ? "#f59e0b" : "rgba(255,255,255,0.08)",
+                        color: isCurrent ? "#000" : "#fff",
+                        fontWeight: "bold",
+                        border: isCurrent
+                          ? "2px solid #fff"
+                          : "1px solid rgba(255,255,255,0.15)",
+                      }}
+                    />
+                  );
+                })}
+              </Box>
+            </Box>
+          )}
 
           {/* Conditional Content: Buzzer Queue or Leaderboard */}
           {isBuzzerRound ? (

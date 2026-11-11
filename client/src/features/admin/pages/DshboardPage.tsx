@@ -179,6 +179,7 @@ const DashboardPage: React.FC = () => {
     colorTeams: data.data.session.colorTeams,
     currentQuestion: data.data.statistics.currentQuestion,
     totalQuestions: data.data.statistics.totalQuestions,
+    gameMode: sessionData?.data?.gameMode || (data.data.session as any)?.gameMode,
   };
 
   return (

@@ -8,8 +8,11 @@ export interface Session {
     questionTimeLimit: number;
     answerTimeLimit: number;
     questions: string[];
+    gameMode?: 'BUZZER_BATTLE' | 'SPIN_WHEEL' | null;
     status: 'not_started' | 'playing' | 'ended';
     numberOfTeams: number | null;
+    teamMode?: 'NUMBER' | 'COLOR';
+    colorTeams?: number[];
     createdAt: string;
     updatedAt: string;
 }
@@ -26,8 +29,11 @@ export interface UpdateSessionRequest {
     questionTimeLimit?: number;
     answerTimeLimit?: number;
     questions?: string[];
+    gameMode?: 'BUZZER_BATTLE' | 'SPIN_WHEEL';
     status?: 'not_started' | 'playing' | 'ended';
     numberOfTeams?: number;
+    teamMode?: 'NUMBER' | 'COLOR';
+    colorTeams?: number[];
 }
 
 export const sessionApi = api.injectEndpoints({

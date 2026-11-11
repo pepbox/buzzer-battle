@@ -3,3 +3,8 @@ export enum SessionStatus {
     PLAYING = 'playing',
     ENDED = 'ended'
 }
+
+export enum GameMode {
+    BUZZER_BATTLE = 'BUZZER_BATTLE',
+    SPIN_WHEEL = 'SPIN_WHEEL'
+}

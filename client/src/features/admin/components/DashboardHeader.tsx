@@ -29,10 +29,14 @@ import EditIcon from "@mui/icons-material/Edit";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import ListIcon from "@mui/icons-material/List";
 import BrandingWatermarkIcon from "@mui/icons-material/BrandingWatermark";
+import LockIcon from "@mui/icons-material/Lock";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 import {
   useAdminLogoutMutation,
   useUpdateNumberOfTeamsMutation,
 } from "../services/admin.Api";
+import { useUpdateSessionMutation } from "../../session/services/session.api";
 import GlobalButton from "../../../components/ui/button";
 import { useAppDispatch, useAppSelector } from "../../../app/rootReducer";
 import { RootState } from "../../../app/store";
@@ -96,6 +100,32 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     mode: "NUMBER",
     colors: [],
   });
+
+  const [updateSession, { isLoading: isUpdatingSession }] =
+    useUpdateSessionMutation();
+
+  const [confirmModeModal, setConfirmModeModal] = useState<{
+    open: boolean;
+    mode: "BUZZER_BATTLE" | "SPIN_WHEEL" | null;
+  }>({
+    open: false,
+    mode: null,
+  });
+
+  const handleInitiateModeSelect = (mode: "BUZZER_BATTLE" | "SPIN_WHEEL") => {
+    if (data?.gameMode) return; // already locked
+    setConfirmModeModal({ open: true, mode });
+  };
+
+  const handleConfirmMode = async () => {
+    if (!confirmModeModal.mode) return;
+    try {
+      await updateSession({ gameMode: confirmModeModal.mode }).unwrap();
+      setConfirmModeModal({ open: false, mode: null });
+    } catch (err) {
+      console.error("Failed to set game mode:", err);
+    }
+  };
 
   // State for current questions modal
   const [currentQuestionsModalOpen, setCurrentQuestionsModalOpen] =
@@ -469,6 +499,142 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           </>
         )}
 
+        {/* Game Mode Selection / Status Section */}
+        <Box sx={{ mb: 3 }}>
+          {!data?.gameMode ? (
+            <Box
+              sx={{
+                p: { xs: 2, sm: 2.5 },
+                borderRadius: "12px",
+                border: "1px dashed rgba(245, 158, 11, 0.6)",
+                backgroundColor: "rgba(245, 158, 11, 0.05)",
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                <SportsEsportsIcon color="primary" />
+                <Typography variant="h6" fontWeight="bold">
+                  Select Game Mode (Required to Start)
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Choose the gameplay format for this session. <strong>Important:</strong> Once a mode is confirmed, it is locked and cannot be changed back to the other flow.
+              </Typography>
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                  gap: 2,
+                }}
+              >
+                {/* Buzzer Battle Card */}
+                <Paper
+                  elevation={1}
+                  onClick={() => handleInitiateModeSelect("BUZZER_BATTLE")}
+                  sx={{
+                    p: 2,
+                    borderRadius: "10px",
+                    cursor: "pointer",
+                    border: "2px solid",
+                    borderColor: "primary.main",
+                    backgroundColor: "background.paper",
+                    transition: "all 0.2s ease",
+                    "&:hover": {
+                      transform: "translateY(-2px)",
+                      boxShadow: 3,
+                      backgroundColor: "rgba(25, 118, 210, 0.04)",
+                    },
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                    <Typography variant="h6">⚡</Typography>
+                    <Typography variant="subtitle1" fontWeight="bold">
+                      Buzzer Battle
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Classic buzzer race. Teams compete to press their buzzer first. Fast & high-energy round.
+                  </Typography>
+                </Paper>
+
+                {/* Spin Wheel Card */}
+                <Paper
+                  elevation={1}
+                  onClick={() => handleInitiateModeSelect("SPIN_WHEEL")}
+                  sx={{
+                    p: 2,
+                    borderRadius: "10px",
+                    cursor: "pointer",
+                    border: "2px solid",
+                    borderColor: "#f59e0b",
+                    backgroundColor: "background.paper",
+                    transition: "all 0.2s ease",
+                    "&:hover": {
+                      transform: "translateY(-2px)",
+                      boxShadow: 3,
+                      backgroundColor: "rgba(245, 158, 11, 0.04)",
+                    },
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                    <Typography variant="h6">🎡</Typography>
+                    <Typography variant="subtitle1" fontWeight="bold">
+                      Spin Wheel
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Turn-based category wheel. Selected team captain spins the wheel to land on an available question category.
+                  </Typography>
+                </Paper>
+              </Box>
+            </Box>
+          ) : (
+            <Box
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 1.5,
+                px: 2,
+                py: 1,
+                borderRadius: "20px",
+                backgroundColor:
+                  data.gameMode === "SPIN_WHEEL"
+                    ? "rgba(245, 158, 11, 0.12)"
+                    : "rgba(25, 118, 210, 0.12)",
+                border: "1px solid",
+                borderColor:
+                  data.gameMode === "SPIN_WHEEL" ? "#f59e0b" : "primary.main",
+              }}
+            >
+              <LockIcon
+                sx={{
+                  fontSize: 18,
+                  color:
+                    data.gameMode === "SPIN_WHEEL" ? "#d97706" : "primary.main",
+                }}
+              />
+              <Typography
+                variant="body2"
+                fontWeight="bold"
+                sx={{
+                  color:
+                    data.gameMode === "SPIN_WHEEL" ? "#b45309" : "primary.dark",
+                }}
+              >
+                Round Mode:{" "}
+                {data.gameMode === "SPIN_WHEEL"
+                  ? "🎡 Spin Wheel Round Selected"
+                  : "⚡ Buzzer Battle Round Selected"}
+              </Typography>
+              <CheckCircleIcon sx={{ fontSize: 18, color: "success.main" }} />
+              <Typography variant="caption" color="text.secondary">
+                (Locked for this session)
+              </Typography>
+            </Box>
+          )}
+        </Box>
+
         {/* Action Buttons */}
         <Box
           sx={{
@@ -483,15 +649,20 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             <Box>
               <GlobalButton
                 fullWidth={isMobile}
-                disabled={!hasQuestions}
+                disabled={!hasQuestions || !data?.gameMode}
                 onClick={() => {
                   if (onGameStatusChange) onGameStatusChange();
                 }}
               >
                 Start Game
               </GlobalButton>
+              {!data?.gameMode && (
+                <Typography variant="body2" color="warning.main" sx={{ mt: 0.5, fontWeight: 500 }}>
+                  ⚠️ Select a game mode above before starting.
+                </Typography>
+              )}
               {!hasQuestions && (
-                <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+                <Typography variant="body2" color="error" sx={{ mt: 0.5 }}>
                   Add questions to this session before starting the game.
                 </Typography>
               )}
@@ -617,6 +788,61 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         initialCompanyName={sessionData?.companyName || ""}
         initialCompanyLogo={sessionData?.companyLogo || ""}
       />
+
+      {/* Confirmation Dialog for Locking Game Mode */}
+      <Dialog
+        open={confirmModeModal.open}
+        onClose={() => setConfirmModeModal({ open: false, mode: null })}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: "bold" }}>
+          Confirm Game Mode:{" "}
+          {confirmModeModal.mode === "SPIN_WHEEL"
+            ? "🎡 Spin Wheel"
+            : "⚡ Buzzer Battle"}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Are you sure you want to select{" "}
+            <strong>
+              {confirmModeModal.mode === "SPIN_WHEEL"
+                ? "Spin Wheel"
+                : "Buzzer Battle"}
+            </strong>{" "}
+            for this session?
+          </Typography>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 1.5,
+              borderRadius: "8px",
+              backgroundColor: "rgba(239, 68, 68, 0.08)",
+              border: "1px solid rgba(239, 68, 68, 0.3)",
+            }}
+          >
+            <Typography variant="caption" color="error.main" fontWeight="bold">
+              ⚠️ Warning: Once confirmed, the game mode is PERMANENTLY LOCKED
+              for this session and cannot be reverted back to the other flow.
+            </Typography>
+          </Paper>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button
+            onClick={() => setConfirmModeModal({ open: false, mode: null })}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            disabled={isUpdatingSession}
+            onClick={handleConfirmMode}
+          >
+            {isUpdatingSession ? "Locking..." : "Confirm & Lock Mode"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

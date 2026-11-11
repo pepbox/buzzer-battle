@@ -12,6 +12,7 @@ import BuzzerLeaderboard from "../features/game/pages/BuzzerLeaderboard";
 import QuestionRoundPage from "../features/game/pages/Question_Round_Page";
 import LeaderBoardPage from "../features/game/pages/LeaderBoard_Page";
 import AnswerRevealPage from "../features/game/pages/AnswerRevealPage";
+import SpinWheelPage from "../features/game/pages/SpinWheelPage";
 import GameLayout from "../features/game/components/GameLayout";
 import { useEffect, useState } from "react";
 import { setSessionId } from "../features/session/services/sessionSlice";
@@ -140,6 +141,7 @@ const GameMain = () => {
             <Route path="/buzzer" element={<BuzzerRound />} />
             <Route path="/buzzer-leaderboard" element={<BuzzerLeaderboard />} />
             <Route path="/question" element={<QuestionRoundPage />} />
+            <Route path="/spin-wheel" element={<SpinWheelPage />} />
             <Route path="/leaderboard" element={<LeaderBoardPage />} />
             <Route path="/answer-reveal" element={<AnswerRevealPage />} />
           </Route>

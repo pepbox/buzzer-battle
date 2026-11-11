@@ -132,6 +132,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
   const [keepBuzzer, setKeepBuzzer] = useState(true);
   const [hideFromUsers, setHideFromUsers] = useState(false);
   const [folder, setFolder] = useState(defaultFolder || "General");
+  const [category, setCategory] = useState(defaultFolder || "General");
   const [newFolderName, setNewFolderName] = useState("");
   const [questionLinkInput, setQuestionLinkInput] = useState("");
   const [answerLinkInput, setAnswerLinkInput] = useState("");
@@ -173,6 +174,12 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
       setKeepBuzzer(initialQuestion.keepBuzzer ?? true);
       setHideFromUsers(initialQuestion.hideFromUsers ?? false);
       setFolder(initialQuestion.folder || defaultFolder || "General");
+      setCategory(
+        initialQuestion.category ||
+          initialQuestion.folder ||
+          defaultFolder ||
+          "General",
+      );
       setOptions(
         (initialQuestion.options || []).map((opt) => ({
           optionText: opt.optionText,
@@ -216,6 +223,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
     setKeepBuzzer(true);
     setHideFromUsers(false);
     setFolder(defaultFolder || "General");
+    setCategory(defaultFolder || "General");
     setQuestionLinkInput("");
     setAnswerLinkInput("");
     setHintLinkInput("");
@@ -440,6 +448,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
       questionText: questionText.trim(),
       score: Number.isFinite(Number(score)) ? Number(score) : 0,
       folder,
+      category: category.trim() || folder || "General",
       keepBuzzer,
       hideFromUsers,
       questionContent: {
@@ -717,7 +726,12 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
               select
               label="Folder"
               value={folder}
-              onChange={(e) => setFolder(e.target.value)}
+              onChange={(e) => {
+                setFolder(e.target.value);
+                if (!category || category === folder) {
+                  setCategory(e.target.value);
+                }
+              }}
             >
               {folders.map((folderName) => (
                 <MenuItem key={folderName} value={folderName}>
@@ -725,6 +739,14 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
                 </MenuItem>
               ))}
             </TextField>
+
+            <TextField
+              label="Category (Used for Spin Wheel)"
+              placeholder="e.g. Science, Movies, History..."
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              helperText="Questions in the Spin Wheel round are organized and selected by category."
+            />
 
             <Box sx={{ display: "flex", gap: 1 }}>
               <TextField

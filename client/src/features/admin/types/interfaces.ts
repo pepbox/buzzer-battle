@@ -75,6 +75,7 @@ export interface QuestionBankItem {
   correctAnswer?: string;
   score: number;
   folder?: string;
+  category?: string;
   keepBuzzer?: boolean;
   hideFromUsers?: boolean;
   options: Array<{
@@ -138,6 +139,7 @@ export interface HeaderData {
   colorTeams?: number[];
   currentQuestion?: number;
   totalQuestions?: number;
+  gameMode?: "BUZZER_BATTLE" | "SPIN_WHEEL" | null;
 }
 
 export interface Player {

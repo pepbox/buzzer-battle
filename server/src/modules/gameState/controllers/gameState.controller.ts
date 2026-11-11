@@ -9,6 +9,8 @@ import { SessionEmitters } from "../../../services/socket/sessionEmitters";
 import { Events } from "../../../services/socket/enums/Events";
 import { timerManager } from "../../../services/timerManager";
 import { Session } from "../../session/models/session.model";
+import { SessionStatus } from "../../session/types/enums";
+import { GameState } from "../models/gameState.model";
 
 const gameStateService = new GameStateService();
 const questionService = new QuestionService();
@@ -38,10 +40,15 @@ export const fetchGameState = async (
       gameState = await gameStateService.createGameState(sessionId);
     }
 
+    const session = await Session.findById(sessionId).select("gameMode");
+
     res.status(200).json({
       message: "Game state fetched successfully.",
       data: {
-        gameState,
+        gameState: {
+          ...gameState.toObject(),
+          gameMode: session?.gameMode || null,
+        },
       },
     });
   } catch (error) {
@@ -116,6 +123,35 @@ export const updateGameStateUnified = async (
       case "NEXT_QUESTION":
         // Cancel any active timers for this session
         timerManager.cancelSessionTimers(sessionId);
+
+        const currentSessionForNext = await Session.findById(sessionId);
+        if (currentSessionForNext?.gameMode === "SPIN_WHEEL") {
+          if (existingGameState.currentQuestionIndex < 0) {
+            gameState = await gameStateService.updateGameState(sessionId, {
+              gameStatus: GameStatus.IDLE,
+              currentAnsweringTeam: null,
+            });
+            await Session.findByIdAndUpdate(sessionId, {
+              status: SessionStatus.PLAYING,
+            });
+          } else {
+            gameState = existingGameState;
+          }
+
+          const categoriesData = await gameStateService.getAvailableCategories(sessionId);
+          additionalData.availableCategories = categoriesData.categories;
+          additionalData.categoryCounts = categoriesData.categoryCounts;
+          additionalData.remainingQuestions = categoriesData.remainingQuestions;
+
+          SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+            gameStatus: gameState.gameStatus,
+            currentQuestionIndex: gameState.currentQuestionIndex,
+            currentAnsweringTeam: gameState.currentAnsweringTeam,
+            availableCategories: categoriesData.categories,
+            categoryCounts: categoriesData.categoryCounts,
+          });
+          break;
+        }
 
         if (existingGameState.currentQuestionIndex < 0) {
           const joinedTeams = await teamService.fetchTeamsBySession(sessionId);
@@ -479,6 +515,125 @@ export const updateGameStateUnified = async (
         }
         break;
 
+      case "START_SPIN_ROUND": {
+        if (!payload?.teamId) {
+          return next(
+            new AppError("Team ID is required for START_SPIN_ROUND action.", 400),
+          );
+        }
+
+        gameState = await gameStateService.startSpinRound(sessionId, payload.teamId);
+        const categoriesData = await gameStateService.getAvailableCategories(sessionId);
+        additionalData.availableCategories = categoriesData.categories;
+        additionalData.categoryCounts = categoriesData.categoryCounts;
+        additionalData.remainingQuestions = categoriesData.remainingQuestions;
+
+        SessionEmitters.toSession(sessionId, Events.SPIN_ROUND_STARTED, {
+          teamId: gameState.currentAnsweringTeam,
+          availableCategories: categoriesData.categories,
+          categoryCounts: categoriesData.categoryCounts,
+          remainingQuestions: categoriesData.remainingQuestions,
+        });
+
+        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+          gameStatus: gameState.gameStatus,
+          currentQuestionIndex: gameState.currentQuestionIndex,
+          currentAnsweringTeam: gameState.currentAnsweringTeam,
+          availableCategories: categoriesData.categories,
+          categoryCounts: categoriesData.categoryCounts,
+          spinWheelState: gameState.spinWheelState,
+        });
+        break;
+      }
+
+      case "TRIGGER_SPIN_WHEEL": {
+        const targetTeamId = payload?.teamId || existingGameState.currentAnsweringTeam;
+        if (!targetTeamId) {
+          return next(
+            new AppError("No team currently assigned to spin.", 400),
+          );
+        }
+
+        const spinResult = await gameStateService.triggerSpinWheel(
+          sessionId,
+          targetTeamId,
+        );
+        gameState = spinResult.gameState;
+        additionalData.targetCategory = spinResult.targetCategory;
+        additionalData.winningIndex = spinResult.winningIndex;
+        additionalData.durationMs = spinResult.durationMs;
+        additionalData.availableCategories = spinResult.availableCategories;
+
+        // Broadcast spin event to session (Presenter and all teams)
+        SessionEmitters.toSession(sessionId, Events.WHEEL_SPIN_TRIGGERED, {
+          teamId: targetTeamId,
+          targetCategory: spinResult.targetCategory,
+          winningIndex: spinResult.winningIndex,
+          durationMs: spinResult.durationMs,
+          availableCategories: spinResult.availableCategories,
+          startTime: gameState.spinWheelState?.startTime,
+        });
+
+        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+          gameStatus: gameState.gameStatus,
+          currentQuestionIndex: gameState.currentQuestionIndex,
+          currentAnsweringTeam: gameState.currentAnsweringTeam,
+          spinWheelState: gameState.spinWheelState,
+        });
+
+        // When the spinner stops (at durationMs): broadcast WHEEL_LANDED so clients show the category chip
+        setTimeout(async () => {
+          try {
+            await GameState.updateOne(
+              { sessionId },
+              { $set: { "spinWheelState.isSpinning": false } }
+            );
+          } catch (err) {
+            console.error("Error setting isSpinning to false in trigger spin:", err);
+          }
+          SessionEmitters.toSession(sessionId, Events.WHEEL_LANDED, {
+            targetCategory: spinResult.targetCategory,
+            questionIndex: spinResult.gameState.currentQuestionIndex,
+          });
+        }, spinResult.durationMs);
+
+        // After displaying the landed category chip for 2.5 seconds, transition to ANSWERING to show the question
+        setTimeout(async () => {
+          try {
+            const landedState = await gameStateService.landSpinWheel(sessionId);
+            SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+              gameStatus: landedState.gameStatus,
+              currentQuestionIndex: landedState.currentQuestionIndex,
+              currentAnsweringTeam: landedState.currentAnsweringTeam,
+              currentCategory: landedState.currentCategory,
+              spinWheelState: landedState.spinWheelState,
+            });
+          } catch (autoLandError) {
+            console.error("Auto land spin wheel error:", autoLandError);
+          }
+        }, spinResult.durationMs + 2500);
+
+        break;
+      }
+
+      case "WHEEL_LANDED": {
+        gameState = await gameStateService.landSpinWheel(sessionId);
+
+        SessionEmitters.toSession(sessionId, Events.WHEEL_LANDED, {
+          targetCategory: gameState.currentCategory,
+          questionIndex: gameState.currentQuestionIndex,
+        });
+
+        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+          gameStatus: gameState.gameStatus,
+          currentQuestionIndex: gameState.currentQuestionIndex,
+          currentAnsweringTeam: gameState.currentAnsweringTeam,
+          currentCategory: gameState.currentCategory,
+          spinWheelState: gameState.spinWheelState,
+        });
+        break;
+      }
+
       default:
         return next(new AppError(`Invalid action: ${action}`, 400));
     }
@@ -714,7 +869,8 @@ export const validateTimerExpiration = async (
         const teamId =
           typeof gameState.currentAnsweringTeam === "string"
             ? gameState.currentAnsweringTeam
-            : gameState.currentAnsweringTeam._id.toString();
+            : (gameState.currentAnsweringTeam as any)?._id?.toString() ||
+              gameState.currentAnsweringTeam.toString();
 
         // Cancel existing timers first
         timerManager.cancelTimer(`answering-${sessionId.toString()}-${teamId}`);
@@ -795,7 +951,9 @@ export const markAnswer = async (
 
     const currentTeam = gameState.currentAnsweringTeam;
     const teamId =
-      typeof currentTeam === "string" ? currentTeam : currentTeam._id;
+      typeof currentTeam === "string"
+        ? currentTeam
+        : (currentTeam as any)?._id?.toString() || currentTeam.toString();
 
     // Cancel the answering timer since admin has made a decision
     timerManager.cancelTimer(
@@ -819,14 +977,57 @@ export const markAnswer = async (
       isCorrect,
     );
 
+    let teamName = "A team";
+    try {
+      const answeringTeamDoc = await teamService.fetchTeamById(teamId);
+      if (answeringTeamDoc?.teamName) {
+        teamName = answeringTeamDoc.teamName;
+      }
+    } catch (e) {
+      // ignore
+    }
+
     if (isCorrect) {
       pointsAwarded = currentQuestion.score || 100;
       // Update team score
       await teamService.updateTeamScore(teamId, pointsAwarded);
 
+      const session = await Session.findById(sessionId);
+      let categoryExhausted = false;
+      let gameEnded = false;
+      let finalLeaderboard: any = null;
+
+      if (session?.gameMode === "SPIN_WHEEL") {
+        await gameStateService.markQuestionCompleted(
+          sessionId,
+          currentQuestion._id,
+        );
+        const remainingData =
+          await gameStateService.getAvailableCategories(sessionId);
+
+        const currentCat = gameState.currentCategory;
+        if (currentCat && !remainingData.categories.includes(currentCat)) {
+          categoryExhausted = true;
+          SessionEmitters.toSession(sessionId, Events.CATEGORY_EXHAUSTED, {
+            category: currentCat,
+            remainingCategories: remainingData.categories,
+          });
+        }
+
+        if (remainingData.remainingQuestions === 0) {
+          gameEnded = true;
+          finalLeaderboard =
+            await teamService.fetchOverallLeaderboard(sessionId);
+          SessionEmitters.toSession(sessionId, Events.GAME_ENDED, {
+            finalLeaderboard,
+          });
+        }
+      }
+
       // Emit ANSWER_MARKED_CORRECT to the session
       SessionEmitters.toSession(sessionId, Events.ANSWER_MARKED_CORRECT, {
         teamId,
+        teamName,
         isCorrect: true,
         pointsAwarded,
         timestamp: Date.now(),
@@ -841,6 +1042,7 @@ export const markAnswer = async (
         currentQuestionIndex: idleGameState.currentQuestionIndex,
         currentAnsweringTeam: idleGameState.currentAnsweringTeam,
         idleStartTime: idleGameState.idleStartTime,
+        gameEnded,
       });
 
       res.status(200).json({
@@ -850,18 +1052,45 @@ export const markAnswer = async (
           isCorrect: true,
           pointsAwarded,
           teamId,
+          teamName,
+          gameEnded,
+          categoryExhausted,
+          finalLeaderboard,
         },
       });
     } else {
       // Emit ANSWER_MARKED_WRONG to the session
-      // For no-buzzer questions, return to IDLE so admin can manually select next team.
-      // For buzzer questions, stay in ANSWERING so admin can pass to second team.
       SessionEmitters.toSession(sessionId, Events.ANSWER_MARKED_WRONG, {
         teamId,
+        teamName,
         isCorrect: false,
         pointsAwarded: 0,
         timestamp: Date.now(),
       });
+
+      const session = await Session.findById(sessionId);
+      if (session?.gameMode === "SPIN_WHEEL") {
+        // In Spin Wheel mode, turn ends immediately and question remains in pool!
+        const idleGameState = await gameStateService.transitionToIdle(sessionId);
+
+        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+          gameStatus: idleGameState.gameStatus,
+          currentQuestionIndex: idleGameState.currentQuestionIndex,
+          currentAnsweringTeam: idleGameState.currentAnsweringTeam,
+          idleStartTime: idleGameState.idleStartTime,
+        });
+
+        return res.status(200).json({
+          message:
+            "Answer marked as wrong. Turn ended. Question remains in unattempted pool for future spins.",
+          data: {
+            gameState: idleGameState,
+            isCorrect: false,
+            pointsAwarded: 0,
+            teamId,
+          },
+        });
+      }
 
       if (currentQuestion?.keepBuzzer === false) {
         const updatedState = await gameStateService.updateGameState(sessionId, {
@@ -909,5 +1138,31 @@ export const markAnswer = async (
       return next(new AppError(error.message, 404));
     }
     next(new AppError("Failed to mark answer.", 500));
+  }
+};
+
+/**
+ * Fetch available categories for Spin Wheel mode
+ * GET /api/v1/game-state/categories
+ */
+export const fetchAvailableCategories = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const sessionId = req.user?.sessionId;
+    if (!sessionId) {
+      return next(new AppError("Session ID not found in token.", 401));
+    }
+
+    const categoriesData = await gameStateService.getAvailableCategories(sessionId);
+    res.status(200).json({
+      message: "Available categories fetched successfully.",
+      data: categoriesData,
+    });
+  } catch (error: any) {
+    console.error("Error fetching available categories:", error);
+    next(new AppError("Failed to fetch available categories.", 500));
   }
 };

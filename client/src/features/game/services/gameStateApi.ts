@@ -1,6 +1,16 @@
 import { api } from '../../../app/api';
 
-export type GameStatus = 'paused' | 'buzzer_round' | 'answering' | 'idle';
+export type GameStatus = 'paused' | 'buzzer_round' | 'spin_round' | 'answering' | 'idle';
+
+export interface ISpinWheelState {
+  selectedTeamId?: string;
+  isSpinning?: boolean;
+  targetCategory?: string;
+  winningIndex?: number;
+  durationMs?: number;
+  startTime?: number;
+  targetQuestionId?: string;
+}
 
 export interface GameState {
   _id: string;
@@ -17,6 +27,11 @@ export interface GameState {
   answeringRoundStartTime?: number;
   idleStartTime?: number;
   hintRevealed?: boolean;
+  completedQuestionIds?: string[];
+  currentCategory?: string;
+  spinWheelState?: ISpinWheelState;
+  availableCategories?: string[];
+  categoryCounts?: Record<string, number>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,6 +40,15 @@ export interface GameStateResponse {
   message: string;
   data: {
     gameState: GameState;
+  };
+}
+
+export interface AvailableCategoriesResponse {
+  message: string;
+  data: {
+    categories: string[];
+    categoryCounts: Record<string, number>;
+    remainingQuestions: number;
   };
 }
 
@@ -39,6 +63,9 @@ export interface MarkAnswerResponse {
     isCorrect: boolean;
     pointsAwarded: number;
     teamId: string;
+    gameEnded?: boolean;
+    categoryExhausted?: boolean;
+    finalLeaderboard?: any;
   };
 }
 
@@ -47,6 +74,14 @@ export const gameStateApi = api.injectEndpoints({
     fetchGameState: builder.query<GameStateResponse, void>({
       query: () => ({
         url: '/game-state/current',
+        method: 'GET',
+      }),
+      providesTags: ['GameState'],
+    }),
+
+    fetchAvailableCategories: builder.query<AvailableCategoriesResponse, void>({
+      query: () => ({
+        url: '/game-state/categories',
         method: 'GET',
       }),
       providesTags: ['GameState'],
@@ -66,6 +101,8 @@ export const gameStateApi = api.injectEndpoints({
 export const {
   useFetchGameStateQuery,
   useLazyFetchGameStateQuery,
+  useFetchAvailableCategoriesQuery,
+  useLazyFetchAvailableCategoriesQuery,
   useMarkAnswerMutation,
 } = gameStateApi;
 

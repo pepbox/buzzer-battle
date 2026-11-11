@@ -10,7 +10,10 @@ export type GameStateAction =
   | "PASS_TO_SECOND_TEAM"
   | "SET_ANSWERING_TEAM"
   | "AUTO_SELECT_FASTEST_TEAM"
-  | "SHOW_HINT";
+  | "SHOW_HINT"
+  | "START_SPIN_ROUND"
+  | "TRIGGER_SPIN_WHEEL"
+  | "WHEEL_LANDED";
 
 export interface UpdateGameStateRequest {
   action: GameStateAction;
@@ -27,17 +30,27 @@ export interface UpdateGameStateResponse {
       _id: string;
       sessionId: string;
       currentQuestionIndex: number;
-      gameStatus: "paused" | "buzzer_round" | "answering";
+      gameStatus: "paused" | "buzzer_round" | "answering" | "spin_round" | "idle";
       currentAnsweringTeam?: {
         _id: string;
         teamNumber: number;
         teamName: string;
         teamScore: number;
       };
+      spinWheelState?: {
+        teamId?: string;
+        isSpinning?: boolean;
+        targetCategory?: string;
+        winningIndex?: number;
+        durationMs?: number;
+      };
     };
     gameEnded?: boolean;
     finalLeaderboard?: any[];
     leaderboard?: any[];
+    availableCategories?: string[];
+    categoryCounts?: Record<string, number>;
+    remainingQuestions?: number;
   };
 }
 
@@ -124,6 +137,24 @@ export const useShowHint = () => {
   const [update, result] = useUpdateGameStateMutation();
   return {
     showHint: () => update({ action: "SHOW_HINT" }),
+    ...result,
+  };
+};
+
+export const useStartSpinRound = () => {
+  const [update, result] = useUpdateGameStateMutation();
+  return {
+    startSpinRound: (teamId: string) =>
+      update({ action: "START_SPIN_ROUND", payload: { teamId } }),
+    ...result,
+  };
+};
+
+export const useTriggerSpinWheel = () => {
+  const [update, result] = useUpdateGameStateMutation();
+  return {
+    triggerSpinWheel: (teamId?: string) =>
+      update({ action: "TRIGGER_SPIN_WHEEL", payload: { teamId } }),
     ...result,
   };
 };
