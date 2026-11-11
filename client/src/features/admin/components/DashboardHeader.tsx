@@ -6,7 +6,6 @@ import {
   Switch,
   FormControlLabel,
   Button,
-  Chip,
   useTheme,
   useMediaQuery,
   Dialog,
@@ -35,7 +34,6 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import EventNoteIcon from "@mui/icons-material/EventNote";
-import TimelineIcon from "@mui/icons-material/Timeline";
 import {
   useAdminLogoutMutation,
   useUpdateNumberOfTeamsMutation,
@@ -47,33 +45,6 @@ import { RootState } from "../../../app/store";
 import { clearAdmin } from "../services/adminSlice";
 import CurrentQuestionsModal from "./CurrentQuestionsModal";
 import SessionBrandingModal from "./SessionBrandingModal";
-
-// Human-readable label for a raw game status ("buzzer_round" -> "Buzzer Round")
-const formatStatus = (raw?: string) =>
-  (raw || "idle")
-    .replace(/[_-]/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .split(" ")
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-
-const statusChipColor = (
-  raw?: string,
-): "success" | "warning" | "primary" | "default" => {
-  switch (raw) {
-    case "buzzer_round":
-    case "answering":
-    case "spin_round":
-      return "success";
-    case "paused":
-      return "warning";
-    case "idle":
-      return "primary";
-    default:
-      return "default";
-  }
-};
 
 // Compact stat tile used in the header summary grid
 const StatCard: React.FC<{
@@ -438,7 +409,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               gridTemplateColumns: {
                 xs: "1fr",
                 sm: "repeat(2, 1fr)",
-                md: "repeat(4, 1fr)",
+                md: "repeat(3, 1fr)",
               },
               gap: 2,
               mb: 3,
@@ -513,15 +484,6 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               </StatCard>
             )}
 
-            {/* Game Status */}
-            <StatCard label="Status" icon={<TimelineIcon />}>
-              <Chip
-                label={formatStatus(data?.gameStatus)}
-                color={statusChipColor(data?.gameStatus)}
-                size="small"
-                sx={{ fontWeight: 700, fontSize: "0.85rem", px: 0.5 }}
-              />
-            </StatCard>
           </Box>
         )}
 
