@@ -246,7 +246,7 @@ const BuzzerRound: React.FC = () => {
                   gap: 1.5,
                 }}
               >
-                <span>⏳</span> Waiting for your team's Buzzer Person to buzz...
+                <span>⏳</span> Waiting for your Team Captain to buzz...
               </Typography>
             </Box>
           )}

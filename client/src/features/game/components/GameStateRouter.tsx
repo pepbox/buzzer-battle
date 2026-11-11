@@ -52,6 +52,10 @@ const GameStateRouter = () => {
     : Boolean(currentGameState?.currentCategory) ||
       Boolean((currentGameState as any)?.spinWheelState?.selectedTeamId);
 
+  // Live ref so long-lived socket handlers see the current mode.
+  const isSpinWheelRef = useRef(isSpinWheel);
+  isSpinWheelRef.current = isSpinWheel;
+
   const normalizeId = (value: any): string | undefined => {
     if (!value) return undefined;
     if (typeof value === "string") return value.trim();
@@ -174,6 +178,7 @@ const GameStateRouter = () => {
       setForceAnswerReveal(false);
       if (sessionId) {
         sessionStorage.removeItem(`revealedAnswerForMe_${sessionId}`);
+        sessionStorage.removeItem(`lastCorrectTeam_${sessionId}`);
       }
 
       // Clean up session storage for old questions
@@ -209,7 +214,20 @@ const GameStateRouter = () => {
         isMyTeam,
       });
 
-      if (isMyTeam) {
+      // Buzzer Battle: once any team answers correctly, EVERY team sees the correct
+      // answer (the answering team after its "Nailed it" card). Spin Wheel keeps its
+      // own flow (everyone stays on the question screen between turns), so there only
+      // the answering team is sent to the reveal.
+      const showRevealToMe = isMyTeam || !isSpinWheelRef.current;
+      if (sessionId) {
+        if (data?.teamName) {
+          sessionStorage.setItem(
+            `lastCorrectTeam_${sessionId}`,
+            JSON.stringify({ teamName: data.teamName, isMyTeam }),
+          );
+        }
+      }
+      if (showRevealToMe) {
         setWasAnswerMarkedCorrect(true);
         if (sessionId) {
           sessionStorage.setItem(`revealedAnswerForMe_${sessionId}`, "true");
@@ -276,6 +294,7 @@ const GameStateRouter = () => {
         setIsGameEnded(false);
         if (sessionId) {
           sessionStorage.removeItem(`revealedAnswerForMe_${sessionId}`);
+          sessionStorage.removeItem(`lastCorrectTeam_${sessionId}`);
         }
       }
     };
@@ -399,7 +418,8 @@ const GameStateRouter = () => {
           break;
         }
 
-        // On correct answer, show answer reveal to the answering team ONLY!
+        // On a correct answer, show the answer reveal (to all teams in Buzzer Battle;
+        // only to the answering team in Spin Wheel — see handleAnswerMarkedCorrect).
         if (wasAnswerMarkedCorrect) {
           safeNavigate("/answer-reveal");
           break;

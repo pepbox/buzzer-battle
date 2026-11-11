@@ -85,14 +85,14 @@ const TeamMembersModal: React.FC<TeamMembersModalProps> = ({
 
       <DialogContent sx={{ p: 3, backgroundColor: "#f9f9f9" }}>
         <Stack spacing={3} sx={{ mt: 1 }}>
-          {/* Buzzer Person Section */}
+          {/* Team Captain Section */}
           <Paper elevation={1} sx={{ p: 2, borderRadius: "12px" }}>
             <Typography
               variant="subtitle2"
               color="text.secondary"
               sx={{ fontWeight: "bold", mb: 1, textTransform: "uppercase" }}
             >
-              🚨 Buzzer Person
+              🚨 Team Captain
             </Typography>
             {buzzerPerson ? (
               <List disablePadding>
@@ -114,7 +114,7 @@ const TeamMembersModal: React.FC<TeamMembersModalProps> = ({
               </List>
             ) : (
               <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic", py: 1 }}>
-                No Buzzer Person has joined yet.
+                No Team Captain has joined yet.
               </Typography>
             )}
           </Paper>

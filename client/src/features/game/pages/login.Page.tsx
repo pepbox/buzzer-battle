@@ -381,33 +381,12 @@ const LoginPage: React.FC = () => {
             }}
           />
 
-          {/* Role Dropdown */}
-          <FormControl variant="outlined" fullWidth>
-            <Select
-              value={playerRole}
-              onChange={(e) => setPlayerRole(e.target.value as any)}
-              displayEmpty
-              sx={{
-                borderRadius: 1,
-                backgroundColor: "white",
-                "& .MuiInputBase-input": {
-                  color: theme.palette.primary.main,
-                },
-              }}
-            >
-              <MenuItem value="BUZZER_PERSON" disabled={selectedTeamHasBuzzer}>
-                {selectedTeamHasBuzzer ? "Buzzer Person (Already taken)" : "Buzzer Person"}
-              </MenuItem>
-              <MenuItem value="TEAM_MEMBER">Team Member</MenuItem>
-            </Select>
-          </FormControl>
-
           {/* Team Dropdown Selection */}
           <FormControl variant="outlined" fullWidth>
             <Select
               value={selectedTeamNumber}
               onChange={(e) => setSelectedTeamNumber(e.target.value as number)}
-              inputProps={{ "aria-label": "Without label" }}
+              inputProps={{ "aria-label": "Select your team" }}
               displayEmpty
               sx={{
                 borderRadius: 1,
@@ -440,6 +419,28 @@ const LoginPage: React.FC = () => {
               ) : (
                 <MenuItem disabled>No teams configured</MenuItem>
               )}
+            </Select>
+          </FormControl>
+
+          {/* Role Dropdown */}
+          <FormControl variant="outlined" fullWidth>
+            <Select
+              value={playerRole}
+              onChange={(e) => setPlayerRole(e.target.value as any)}
+              displayEmpty
+              inputProps={{ "aria-label": "Select your role" }}
+              sx={{
+                borderRadius: 1,
+                backgroundColor: "white",
+                "& .MuiInputBase-input": {
+                  color: theme.palette.primary.main,
+                },
+              }}
+            >
+              <MenuItem value="BUZZER_PERSON" disabled={selectedTeamHasBuzzer}>
+                {selectedTeamHasBuzzer ? "Team Captain (Already taken)" : "Team Captain"}
+              </MenuItem>
+              <MenuItem value="TEAM_MEMBER">Team Member</MenuItem>
             </Select>
           </FormControl>
 

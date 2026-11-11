@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { Box, Typography } from "@mui/material";
+import { useParams } from "react-router-dom";
 import { useFetchCurrentQuestionQuery } from "../../question/services/questions.api";
 import Loader from "../../../components/ui/Loader";
 import { GameBackground } from "../../../components/ui/GameScreen";
@@ -21,6 +22,18 @@ const AnswerRevealPage: React.FC<AnswerRevealPageProps> = ({
     refetch,
   } = useFetchCurrentQuestionQuery();
   const question = questionData?.data?.question;
+  const { sessionId } = useParams<{ sessionId: string }>();
+
+  // Who answered correctly (stored by GameStateRouter when the answer was marked).
+  let correctTeam: { teamName?: string; isMyTeam?: boolean } | null = null;
+  if (!presenterMode && sessionId) {
+    try {
+      const raw = sessionStorage.getItem(`lastCorrectTeam_${sessionId}`);
+      correctTeam = raw ? JSON.parse(raw) : null;
+    } catch {
+      correctTeam = null;
+    }
+  }
 
   // Since this page only renders when the game is IDLE, force a refetch
   // to grab the newly un-hidden answer assets from the backend
@@ -127,6 +140,25 @@ const AnswerRevealPage: React.FC<AnswerRevealPageProps> = ({
           mt: presenterMode ? 0 : 4,
         }}
       >
+        {correctTeam?.teamName && (
+          <Typography
+            sx={{
+              display: "inline-block",
+              backgroundColor: correctTeam.isMyTeam ? "#DCFCE7" : "#FEF9C3",
+              color: correctTeam.isMyTeam ? "#15803D" : "#A16207",
+              fontWeight: 700,
+              fontSize: "14px",
+              borderRadius: "999px",
+              px: 2,
+              py: 0.75,
+              mb: 2,
+            }}
+          >
+            {correctTeam.isMyTeam
+              ? "🎉 Your team got it right!"
+              : `🎉 ${correctTeam.teamName} got it right!`}
+          </Typography>
+        )}
         <Typography
           variant="h5"
           sx={{

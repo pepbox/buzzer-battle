@@ -14,8 +14,6 @@ import {
 import { RootState } from "../../../app/store";
 import { useAppSelector } from "../../../app/hooks";
 import { selectSessionId } from "../../session/services/sessionSlice";
-import ControlCameraIcon from "@mui/icons-material/ControlCamera";
-import SlideshowIcon from "@mui/icons-material/Slideshow";
 
 const AdminLogin: React.FC = () => {
   const [pin, setPin] = useState<string[]>(["", "", "", ""]);
@@ -134,24 +132,6 @@ const AdminLogin: React.FC = () => {
         inputRefs.current[0].focus();
       }
     }
-  };
-
-  const handleRemoteControl = () => {
-    if (!sessionId) {
-      setLocalError("Session ID is required to access Remote Control");
-      return;
-    }
-    // Navigate to remote control without authentication
-    navigate(`/admin/remote-control/${sessionId}`);
-  };
-
-  const handlePresenterMode = () => {
-    if (!sessionId) {
-      setLocalError("Session ID is required to access Presenter Mode");
-      return;
-    }
-    // Navigate to presenter view - requires admin authentication
-    navigate(`/admin/${sessionId}/presenter`);
   };
 
   if (isAuthenticated) {
@@ -285,94 +265,6 @@ const AdminLogin: React.FC = () => {
             >
               {isLoading ? "Logging in..." : "Login"}
             </GlobalButton>
-            {/* Divider */}
-            <Box sx={{ my: 3, display: "flex", alignItems: "center" }}>
-              <Box sx={{ flex: 1, height: "1px", bgcolor: "#e0e0e0" }} />
-              <Typography
-                sx={{
-                  px: 2,
-                  color: "#666",
-                  fontSize: "0.875rem",
-                  fontWeight: 500,
-                }}
-              >
-                OR
-              </Typography>
-              <Box sx={{ flex: 1, height: "1px", bgcolor: "#e0e0e0" }} />
-            </Box>
-            {/* Remote Control Button */}
-            <GlobalButton
-              onClick={handleRemoteControl}
-              disabled={!sessionId}
-              sx={{
-                py: { xs: 1.25, sm: 1.5 },
-                fontSize: { xs: "0.9rem", sm: "1rem" },
-                fontWeight: 600,
-                borderRadius: 2,
-                minHeight: { xs: "44px", sm: "48px" },
-                border: "2px solid #007bff",
-                color: "#007bff",
-                bgcolor: "white",
-                "&:hover": {
-                  bgcolor: "rgba(0, 123, 255, 0.04)",
-                  borderColor: "#0056b3",
-                },
-                "&.Mui-disabled": {
-                  borderColor: "#e0e0e0",
-                  color: "#999",
-                  border: "2px solid #e0e0e0",
-                },
-                display: "flex",
-                gap: 1,
-                alignItems: "center",
-              }}
-            >
-              <ControlCameraIcon sx={{ fontSize: "1.2rem" }} />
-              Enter as Remote Control
-            </GlobalButton>
-            {/* Presenter Mode Button */}
-            <GlobalButton
-              onClick={handlePresenterMode}
-              disabled={!sessionId}
-              sx={{
-                mt: 2,
-                py: { xs: 1.25, sm: 1.5 },
-                fontSize: { xs: "0.9rem", sm: "1rem" },
-                fontWeight: 600,
-                borderRadius: 2,
-                minHeight: { xs: "44px", sm: "48px" },
-                border: "2px solid #9c27b0",
-                color: "#9c27b0",
-                bgcolor: "white",
-                "&:hover": {
-                  bgcolor: "rgba(156, 39, 176, 0.04)",
-                  borderColor: "#7b1fa2",
-                },
-                "&.Mui-disabled": {
-                  borderColor: "#e0e0e0",
-                  color: "#999",
-                  border: "2px solid #e0e0e0",
-                },
-                display: "flex",
-                gap: 1,
-                alignItems: "center",
-              }}
-            >
-              <SlideshowIcon sx={{ fontSize: "1.2rem" }} />
-              Enter as Presenter
-            </GlobalButton>
-            {!sessionId && (
-              <Typography
-                sx={{
-                  mt: 1,
-                  fontSize: "0.75rem",
-                  color: "#999",
-                  textAlign: "center",
-                }}
-              >
-                Session ID required for Remote Control
-              </Typography>
-            )}
           </Box>
         </Box>
       </Container>
