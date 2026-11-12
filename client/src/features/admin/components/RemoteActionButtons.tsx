@@ -27,6 +27,8 @@ interface RemoteActionButtonsProps {
   hasFastestTeam: boolean;
   isAnswerShown?: boolean;
   isLoading?: boolean;
+  /** Current team's answer already marked (server game state); blocks re-marking. */
+  answerMarked?: boolean;
   lastAnswerWasWrong?: boolean;
   isSpinWheelMode?: boolean;
 }
@@ -50,6 +52,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
   hasFastestTeam,
   isAnswerShown = false,
   isLoading = false,
+  answerMarked = false,
   lastAnswerWasWrong = false,
   isSpinWheelMode = false,
 }) => {
@@ -96,7 +99,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
                 isLoading ? <CircularProgress size={20} /> : <CheckCircleIcon />
               }
               onClick={onMarkCorrect}
-              disabled={isLoading}
+              disabled={isLoading || answerMarked}
               sx={{
                 ...buttonBaseStyles,
                 flex: 1,
@@ -115,7 +118,7 @@ const RemoteActionButtons: React.FC<RemoteActionButtonsProps> = ({
                 isLoading ? <CircularProgress size={20} /> : <CancelIcon />
               }
               onClick={onMarkWrong}
-              disabled={isLoading}
+              disabled={isLoading || answerMarked}
               sx={{
                 ...buttonBaseStyles,
                 flex: 1,

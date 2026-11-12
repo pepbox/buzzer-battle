@@ -1,276 +1,332 @@
 import { io, Socket } from "socket.io-client";
-import {
-  ComponentListener,
-  GlobalListener,
-  // SocketMessage,
-} from "./types/websocketTypes";
+
+type Handler = (data: any) => void;
+
+// Time sync tuning
+const TIME_SYNC_SAMPLES = 5;
+const TIME_SYNC_SPACING_MS = 300;
+const TIME_SYNC_REPLY_TIMEOUT_MS = 3000;
+const TIME_SYNC_MAX_RETRIES = 3;
+
+// Handshake rejected by server middleware (socket.io does not auto-retry those)
+const HANDSHAKE_RETRY_BASE_MS = 1000;
+const HANDSHAKE_MAX_RETRIES = 5;
+
+const INITIAL_CONNECT_TIMEOUT_MS = 10000;
 
 class SocketService {
   private socket: Socket | null = null;
   public url: string = "";
-  private globalListeners: Map<string, GlobalListener[]> = new Map();
-  private componentListeners: Map<string, ComponentListener[]> = new Map();
+  private connectionKey: string | null = null;
+  private connectPromise: Promise<void> | null = null;
   private isConnected: boolean = false;
-  private reconnectAttempts: number = 0;
-  private maxReconnectAttempts: number = 5;
-  private serverTimeOffset: number = 0; // The calculated difference between server and client clock
 
-  // Initialize Socket.IO connection
+  /**
+   * Every listener registered through this service, keyed by event.
+   * This registry outlives individual socket instances: handlers registered
+   * before the socket exists are attached when it is created, and all of them
+   * are re-attached if the socket is recreated (e.g. session switch).
+   * A Set per event guarantees a given handler is never attached twice.
+   */
+  private listeners: Map<string, Set<Handler>> = new Map();
+  /** componentId -> registered (event, handler) pairs */
+  private componentListeners: Map<string, Array<{ event: string; handler: Handler }>> =
+    new Map();
+  private reconnectCallbacks: Set<() => void> = new Set();
+
+  // Handshake retry state
+  private handshakeRetries = 0;
+  private handshakeRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Time sync state
+  private serverTimeOffset: number = 0; // server clock - client clock
+  private bestSyncRtt = Infinity;
+  private syncSampleCount = 0;
+  private pendingSyncClientTimes: Set<number> = new Set();
+  private syncTimers: ReturnType<typeof setTimeout>[] = [];
+
+  // Initialize Socket.IO connection. Calling it again with the same url/options
+  // reuses the existing socket; different options replace it.
   connect(url: string, options: any = {}): Promise<void> {
-    return new Promise((resolve, reject) => {
-      try {
-        this.url = url;
+    const key = JSON.stringify({ url, auth: options?.auth ?? null });
+    if (this.socket && this.connectionKey === key && this.connectPromise) {
+      return this.connectPromise;
+    }
 
-        const defaultOptions = {
-          transports: ["websocket", "polling"],
-          upgrade: true,
-          rememberUpgrade: true,
-          timeout: 20000,
-          forceNew: true,
-          withCredentials: true,
-          ...options,
-        };
+    this.teardownSocket();
+    this.url = url;
+    this.connectionKey = key;
 
-        this.socket = io(url, defaultOptions);
+    const socket = io(url, {
+      transports: ["websocket", "polling"],
+      upgrade: true,
+      rememberUpgrade: true,
+      timeout: 20000,
+      forceNew: true,
+      withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
+      ...options,
+    });
+    this.socket = socket;
 
-        this.socket.on("connect", () => {
-          console.log("Socket.IO connected:", this.socket?.id);
-          this.isConnected = true;
-          this.reconnectAttempts = 0;
-          
-          // Request time synchronization upon connection
-          if (this.socket) {
-            this.socket.emit("time-sync", { clientTime: Date.now() });
-            
-            // Listen for time sync response from server
-            this.socket.on("time-sync", (data: { clientTime: number, serverTime: number }) => {
-                const now = Date.now();
-                const latency = (now - data.clientTime) / 2;
-                this.serverTimeOffset = data.serverTime - (data.clientTime + latency);
-            });
-          }
-          
-          resolve();
-        });
+    // Attach every registered listener (global + component + direct) right
+    // away, independent of whether the first connect succeeds.
+    this.listeners.forEach((handlers, event) => {
+      handlers.forEach((handler) => socket.on(event, handler));
+    });
+    socket.on("time-sync", this.handleTimeSyncReply);
 
-        this.socket.on("disconnect", (reason) => {
-          console.log("Socket.IO disconnected:", reason);
-          this.isConnected = false;
-          if (reason === "io server disconnect") {
-            console.log("Server initiated disconnect");
-          } else {
-            console.log("Will attempt to reconnect...");
-          }
-        });
+    let hasConnected = false;
 
-        this.socket.on("connect_error", (error) => {
-          console.error("Socket.IO connection error:", error);
-          this.isConnected = false;
-          reject(error);
-        });
+    this.connectPromise = new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const settle = (err?: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        if (err) reject(err);
+        else resolve();
+      };
+      const timeoutId = setTimeout(() => {
+        settle(new Error("Connection timeout"));
+      }, INITIAL_CONNECT_TIMEOUT_MS);
 
-        this.socket.on("reconnect", (attemptNumber) => {
-          console.log("Socket.IO reconnected after", attemptNumber, "attempts");
-          this.isConnected = true;
-        });
+      socket.on("connect", () => {
+        if (this.socket !== socket) return;
+        console.log("Socket.IO connected:", socket.id);
+        this.isConnected = true;
+        this.handshakeRetries = 0;
+        this.startTimeSync();
 
-        this.socket.on("reconnect_error", (error) => {
-          console.error("Socket.IO reconnection error:", error);
-          this.reconnectAttempts++;
+        if (hasConnected) {
+          // Re-connect: refetch whatever may have changed while offline.
+          this.reconnectCallbacks.forEach((cb) => {
+            try {
+              cb();
+            } catch (error) {
+              console.error("Error in socket reconnect callback:", error);
+            }
+          });
+        }
+        hasConnected = true;
+        settle();
+      });
 
-          if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            console.error(
-              "Max reconnection attempts reached. Stopping reconnection."
-            );
-            this.socket?.disconnect();
-          }
-        });
+      socket.on("disconnect", (reason) => {
+        if (this.socket !== socket) return;
+        console.log("Socket.IO disconnected:", reason);
+        this.isConnected = false;
+        this.clearSyncTimers();
+        if (reason === "io server disconnect") {
+          // Server kicked us; socket.io won't reconnect on its own.
+          this.scheduleHandshakeRetry(socket);
+        }
+      });
 
-        this.socket.on("reconnect_failed", () => {
-          console.error("Socket.IO failed to reconnect");
-          this.isConnected = false;
-        });
+      socket.on("connect_error", (error) => {
+        if (this.socket !== socket) return;
+        this.isConnected = false;
+        if (!socket.active) {
+          // Handshake rejected by server middleware (ended session, unknown
+          // team, bad token...). socket.io stops retrying in this case.
+          console.warn("Socket.IO handshake rejected:", error?.message);
+          this.scheduleHandshakeRetry(socket);
+        } else {
+          console.warn("Socket.IO connection error (will retry):", error?.message);
+        }
+        settle(error);
+      });
+    });
+    // The caller may ignore the rejection; the socket keeps retrying anyway.
+    this.connectPromise.catch(() => {});
 
-        // Set up timeout for initial connection
-        setTimeout(() => {
-          if (!this.isConnected) {
-            reject(new Error("Connection timeout"));
-          }
-        }, 10000);
-      } catch (error) {
-        reject(error);
+    // Manager-level events (these live on socket.io in v4, not on the socket)
+    socket.io.on("reconnect_attempt", (attempt) => {
+      if (this.socket !== socket) return;
+      if (attempt === 1 || attempt % 5 === 0) {
+        console.log("Socket.IO reconnect attempt", attempt);
       }
     });
+    socket.io.on("reconnect", (attempt) => {
+      if (this.socket !== socket) return;
+      console.log("Socket.IO reconnected after", attempt, "attempts");
+    });
+
+    return this.connectPromise;
   }
 
-  // Set up message listener to handle custom message format
-  // private setupMessageListener() {
-  //   if (!this.socket) return;
+  private scheduleHandshakeRetry(socket: Socket) {
+    if (this.handshakeRetryTimer) return;
+    if (this.handshakeRetries >= HANDSHAKE_MAX_RETRIES) {
+      console.error(
+        "Socket.IO: server refused the connection repeatedly; giving up until next login/session change.",
+      );
+      return;
+    }
+    const delay = HANDSHAKE_RETRY_BASE_MS * 2 ** this.handshakeRetries;
+    this.handshakeRetries++;
+    this.handshakeRetryTimer = setTimeout(() => {
+      this.handshakeRetryTimer = null;
+      if (this.socket !== socket || socket.connected) return;
+      socket.connect();
+    }, delay);
+  }
 
-  //   // Listen for custom message events if you're using a specific format
-  //   this.socket.on("message", (data: SocketMessage) => {
-  //     this.handleMessage(data);
-  //   });
-  // }
+  private teardownSocket() {
+    if (this.handshakeRetryTimer) {
+      clearTimeout(this.handshakeRetryTimer);
+      this.handshakeRetryTimer = null;
+    }
+    this.handshakeRetries = 0;
+    this.clearSyncTimers();
+    const old = this.socket;
+    this.socket = null;
+    this.connectionKey = null;
+    this.connectPromise = null;
+    this.isConnected = false;
+    if (old) {
+      old.io.removeAllListeners();
+      old.removeAllListeners();
+      old.disconnect();
+    }
+  }
 
-  // Handle incoming messages (if using custom message format)
-  // private handleMessage(message: SocketMessage) {
-  //   try {
-  //     const { type, payload } = message;
+  // ---- Time synchronization ----
 
-  //     // Handle global listeners
-  //     this.handleGlobalListeners(type, payload);
+  private clearSyncTimers() {
+    this.syncTimers.forEach((t) => clearTimeout(t));
+    this.syncTimers = [];
+    this.pendingSyncClientTimes.clear();
+  }
 
-  //     // Handle component listeners
-  //     this.handleComponentListeners(type, payload);
-  //   } catch (error) {
-  //     console.error("Error handling Socket.IO message:", error);
-  //   }
-  // }
+  private startTimeSync(attempt = 0) {
+    const socket = this.socket;
+    if (!socket) return;
+    this.clearSyncTimers();
+    this.bestSyncRtt = Infinity;
+    this.syncSampleCount = 0;
 
-  // Handle global listeners (Redux/API)
-  // private handleGlobalListeners(eventType: string, payload: any) {
-  //   const listeners = this.globalListeners.get(eventType);
-  //   if (listeners) {
-  //     listeners.forEach((listener) => {
-  //       try {
-  //         listener.handler(payload);
-  //       } catch (error) {
-  //         console.error(`Error in global listener for ${eventType}:`, error);
-  //       }
-  //     });
-  //   }
-  // }
+    for (let i = 0; i < TIME_SYNC_SAMPLES; i++) {
+      this.syncTimers.push(
+        setTimeout(() => {
+          if (this.socket !== socket || !socket.connected) return;
+          let clientTime = Date.now();
+          while (this.pendingSyncClientTimes.has(clientTime)) clientTime++;
+          this.pendingSyncClientTimes.add(clientTime);
+          socket.emit("time-sync", { clientTime });
+        }, i * TIME_SYNC_SPACING_MS),
+      );
+    }
 
-  // // Handle component-specific listeners
-  // private handleComponentListeners(eventType: string, payload: any) {
-  //   const listeners = this.componentListeners.get(eventType);
-  //   if (listeners) {
-  //     listeners.forEach((listener) => {
-  //       try {
-  //         listener.handler(payload);
-  //       } catch (error) {
-  //         console.error(`Error in component listener for ${eventType}:`, error);
-  //       }
-  //     });
-  //   }
-  // }
+    this.syncTimers.push(
+      setTimeout(
+        () => {
+          this.pendingSyncClientTimes.clear();
+          if (this.socket !== socket || !socket.connected) return;
+          if (this.syncSampleCount === 0) {
+            if (attempt < TIME_SYNC_MAX_RETRIES) {
+              console.warn("Time sync: no reply, retrying");
+              this.startTimeSync(attempt + 1);
+            } else {
+              console.warn("Time sync failed; using local clock offset", this.serverTimeOffset);
+            }
+          }
+        },
+        (TIME_SYNC_SAMPLES - 1) * TIME_SYNC_SPACING_MS + TIME_SYNC_REPLY_TIMEOUT_MS,
+      ),
+    );
+  }
+
+  private handleTimeSyncReply = (data: { clientTime: number; serverTime: number }) => {
+    if (!data || !this.pendingSyncClientTimes.has(data.clientTime)) return;
+    this.pendingSyncClientTimes.delete(data.clientTime);
+    const now = Date.now();
+    const rtt = now - data.clientTime;
+    if (rtt < 0) return;
+    this.syncSampleCount++;
+    // Keep the sample with the lowest round-trip time (least asymmetric delay).
+    if (rtt < this.bestSyncRtt) {
+      this.bestSyncRtt = rtt;
+      this.serverTimeOffset = data.serverTime - (data.clientTime + rtt / 2);
+    }
+  };
+
+  /** Re-run time sync manually (also runs automatically on every connect). */
+  resyncTime() {
+    if (this.socket?.connected) this.startTimeSync();
+  }
+
+  // ---- Listener registry ----
+
+  private attach(event: string, handler: Handler) {
+    let set = this.listeners.get(event);
+    if (!set) {
+      set = new Set();
+      this.listeners.set(event, set);
+    }
+    if (set.has(handler)) return;
+    set.add(handler);
+    this.socket?.on(event, handler);
+  }
+
+  private detach(event: string, handler?: Handler) {
+    const set = this.listeners.get(event);
+    if (handler) {
+      set?.delete(handler);
+      this.socket?.off(event, handler);
+    } else {
+      set?.forEach((h) => this.socket?.off(event, h));
+      set?.clear();
+    }
+    if (set && set.size === 0) this.listeners.delete(event);
+  }
+
+  /** Called on every successful re-connect (not the first connect of a socket). */
+  onReconnect(callback: () => void) {
+    this.reconnectCallbacks.add(callback);
+    return () => {
+      this.reconnectCallbacks.delete(callback);
+    };
+  }
 
   // Add global listener (Redux action or API call)
   addGlobalListener(
     event: string,
-    handler: (data: any) => void,
-    type: "redux" | "api"
+    handler: Handler,
+    type: "redux" | "api",
   ) {
-    if (!this.globalListeners.has(event)) {
-      this.globalListeners.set(event, []);
-    }
-
-    const listener: GlobalListener = { event, handler, type };
-    this.globalListeners.get(event)!.push(listener);
-
-    // Also register with Socket.IO directly
-    if (this.socket) {
-      this.socket.on(event, handler);
-    }
-
-    // Return cleanup function
-    return () => this.removeGlobalListener(event, handler);
-  }
-
-  // Remove global listener
-  private removeGlobalListener(event: string, handler: (data: any) => void) {
-    const listeners = this.globalListeners.get(event);
-    if (listeners) {
-      const index = listeners.findIndex((l) => l.handler === handler);
-      if (index > -1) {
-        listeners.splice(index, 1);
-      }
-      if (listeners.length === 0) {
-        this.globalListeners.delete(event);
-      }
-    }
-
-    // Also remove from Socket.IO
-    if (this.socket) {
-      this.socket.off(event, handler);
-    }
+    void type; // kept for API compatibility / readability at call sites
+    this.attach(event, handler);
+    return () => this.detach(event, handler);
   }
 
   // Add component listener
-  addComponentListener(
-    event: string,
-    componentId: string,
-    handler: (data: any) => void
-  ) {
-    if (!this.componentListeners.has(event)) {
-      this.componentListeners.set(event, []);
-    }
-
-    const listener: ComponentListener = { event, componentId, handler };
-    this.componentListeners.get(event)!.push(listener);
-
-    // Also register with Socket.IO directly
-    if (this.socket) {
-      this.socket.on(event, handler);
-    }
-
-    // Return cleanup function
+  addComponentListener(event: string, componentId: string, handler: Handler) {
+    const list = this.componentListeners.get(componentId) ?? [];
+    list.push({ event, handler });
+    this.componentListeners.set(componentId, list);
+    this.attach(event, handler);
     return () => this.removeComponentListener(event, componentId, handler);
   }
 
-  // Remove component listener
-  private removeComponentListener(
-    event: string,
-    componentId: string,
-    handler?: (data: any) => void
-  ) {
-    const listeners = this.componentListeners.get(event);
-    if (listeners) {
-      const index = listeners.findIndex(
-        (l) =>
-          l.componentId === componentId &&
-          (handler ? l.handler === handler : true)
-      );
-      if (index > -1) {
-        const listener = listeners[index];
-        listeners.splice(index, 1);
-
-        // Remove from Socket.IO
-        if (this.socket) {
-          this.socket.off(event, listener.handler);
-        }
-      }
-      if (listeners.length === 0) {
-        this.componentListeners.delete(event);
-      }
+  private removeComponentListener(event: string, componentId: string, handler: Handler) {
+    const list = this.componentListeners.get(componentId);
+    if (list) {
+      const remaining = list.filter((l) => !(l.event === event && l.handler === handler));
+      if (remaining.length) this.componentListeners.set(componentId, remaining);
+      else this.componentListeners.delete(componentId);
     }
+    this.detach(event, handler);
   }
 
   // Remove all listeners for a component (useful for cleanup)
   removeAllComponentListeners(componentId: string) {
-    this.componentListeners.forEach((listeners, event) => {
-      const listenersToRemove = listeners.filter(
-        (l) => l.componentId === componentId
-      );
-
-      // Remove from Socket.IO
-      listenersToRemove.forEach((listener) => {
-        if (this.socket) {
-          this.socket.off(event, listener.handler);
-        }
-      });
-
-      // Remove from internal tracking
-      const filteredListeners = listeners.filter(
-        (l) => l.componentId !== componentId
-      );
-      if (filteredListeners.length === 0) {
-        this.componentListeners.delete(event);
-      } else {
-        this.componentListeners.set(event, filteredListeners);
-      }
-    });
+    const list = this.componentListeners.get(componentId) ?? [];
+    this.componentListeners.delete(componentId);
+    list.forEach(({ event, handler }) => this.detach(event, handler));
   }
 
   // Emit event
@@ -282,17 +338,14 @@ class SocketService {
     }
   }
 
-  // Direct Socket.IO methods for advanced usage
-  on(event: string, handler: (data: any) => void) {
-    if (this.socket) {
-      this.socket.on(event, handler);
-    }
+  // Direct listener registration. Works before the socket exists (queued) and
+  // survives socket recreation.
+  on(event: string, handler: Handler) {
+    this.attach(event, handler);
   }
 
-  off(event: string, handler?: (data: any) => void) {
-    if (this.socket) {
-      this.socket.off(event, handler);
-    }
+  off(event: string, handler?: Handler) {
+    this.detach(event, handler);
   }
 
   // Join room
@@ -305,15 +358,10 @@ class SocketService {
     this.emit("leave_room", { roomId });
   }
 
-  // Disconnect
+  // Disconnect the socket. Registered listeners are kept so they are attached
+  // again to the next socket (components remove their own on unmount).
   disconnect() {
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
-    }
-    this.isConnected = false;
-    this.globalListeners.clear();
-    this.componentListeners.clear();
+    this.teardownSocket();
   }
 
   // Get connection status

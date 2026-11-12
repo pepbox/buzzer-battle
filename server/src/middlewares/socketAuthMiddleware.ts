@@ -1,6 +1,10 @@
 import { Socket } from "socket.io";
 import { verifyAccessToken } from "../utils/jwtUtils";
 import { getAccessTokenCookieName } from "../utils/cookieOptions";
+import { Session } from "../modules/session/models/session.model";
+import { SessionStatus } from "../modules/session/types/enums";
+import { Team } from "../modules/teams/models/team.model";
+import { isValidObjectId } from "../modules/gameState/utils/sessionScope";
 
 export const socketAuthMiddleware = (
   socket: Socket,
@@ -29,19 +33,56 @@ export const socketAuthMiddleware = (
     return next(new Error("Token missing"));
   }
 
+  let payload: any;
   try {
-    const payload = verifyAccessToken(token);
-
-    if (typeof payload === "object" && payload.role) {
-      (socket as any).user = payload;
-      return next();
-    }
-
-    next(new Error("Invalid payload structure"));
+    payload = verifyAccessToken(token);
   } catch {
-    next(new Error("Invalid token"));
+    return next(new Error("Invalid token"));
   }
+
+  if (typeof payload !== "object" || !payload.role) {
+    return next(new Error("Invalid payload structure"));
+  }
+
+  // Only allow sockets for a real, live session (and, for teams, a team of it).
+  verifySessionMembership(payload)
+    .then((error) => {
+      if (error) return next(new Error(error));
+      (socket as any).user = payload;
+      next();
+    })
+    .catch((err) => {
+      console.error("Socket auth lookup failed:", err);
+      next(new Error("Authentication failed"));
+    });
 };
+
+async function verifySessionMembership(payload: any): Promise<string | null> {
+  const sessionId = payload.sessionId;
+  if (!isValidObjectId(sessionId)) {
+    return "Invalid session";
+  }
+
+  const session = await Session.findById(sessionId).select("status").lean();
+  if (!session) {
+    return "Session not found";
+  }
+  if (session.status === SessionStatus.ENDED) {
+    return "Session has ended";
+  }
+
+  if (payload.role === "TEAM") {
+    if (!isValidObjectId(payload.id)) {
+      return "Invalid team";
+    }
+    const team = await Team.exists({ _id: payload.id, session: sessionId });
+    if (!team) {
+      return "Team not found in this session";
+    }
+  }
+
+  return null;
+}
 
 function parseCookieValue(cookies: string, cookieName: string): string | null {
   const match = cookies.match(new RegExp(`(^| )${cookieName}=([^;]+)`));

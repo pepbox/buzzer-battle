@@ -48,10 +48,12 @@ export default class BuzzerQueueService {
 
     // Check if team has already pressed the buzzer for a question
     async checkIfTeamPressed(
+        sessionId: Types.ObjectId | string,
         questionId: Types.ObjectId | string,
         teamId: Types.ObjectId | string
     ): Promise<boolean> {
         const query = BuzzerQueue.findOne({
+            sessionId,
             questionId,
             teamId,
         });
@@ -117,11 +119,13 @@ export default class BuzzerQueueService {
         return await query;
     }
 
-    // Clear buzzer queue for a question (for cleanup or reset)
+    // Clear buzzer queue for a question within one session (for cleanup or reset).
+    // Scoped by session: the same question can be used by several sessions at once.
     async clearBuzzerQueueForQuestion(
+        sessionId: Types.ObjectId | string,
         questionId: Types.ObjectId | string
     ): Promise<number> {
-        const query = BuzzerQueue.deleteMany({ questionId });
+        const query = BuzzerQueue.deleteMany({ sessionId, questionId });
         
         if (this.session) {
             query.session(this.session);
@@ -133,9 +137,10 @@ export default class BuzzerQueueService {
 
     // Get count of teams that pressed buzzer for a question
     async getTeamCountForQuestion(
+        sessionId: Types.ObjectId | string,
         questionId: Types.ObjectId | string
     ): Promise<number> {
-        const query = BuzzerQueue.countDocuments({ questionId });
+        const query = BuzzerQueue.countDocuments({ sessionId, questionId });
         
         if (this.session) {
             query.session(this.session);

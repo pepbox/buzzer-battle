@@ -250,6 +250,7 @@ const DashboardPage: React.FC = () => {
         defaultFolder={editingQuestion?.folder || "General"}
         mode="edit"
         initialQuestion={editingQuestion}
+        showFolderPicker={false}
         onSaved={() => {
           setSnackbar({
             open: true,

@@ -269,18 +269,12 @@ const QuestionRoundPage: React.FC = () => {
         setAnswerStatus("waiting");
       }
 
-      // If game transitions to buzzer_round or spin_round (new question/turn), navigate and reset status
-      if (data.gameStatus === "buzzer_round") {
+      // New question/turn: reset status. Navigation is left to GameStateRouter
+      // (single source of truth for which screen the player sees).
+      if (data.gameStatus === "buzzer_round" || data.gameStatus === "spin_round") {
         setIsWaitingAfterWrong(false);
         setAnswerStatus(null);
         setAnswerResult(null);
-        navigate(`/game/${sessionId}/buzzer`);
-      }
-      if (data.gameStatus === "spin_round") {
-        setIsWaitingAfterWrong(false);
-        setAnswerStatus(null);
-        setAnswerResult(null);
-        navigate(`/game/${sessionId}/spin-wheel`);
       }
     };
 

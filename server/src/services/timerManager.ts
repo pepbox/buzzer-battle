@@ -80,6 +80,38 @@ class TimerManager {
     }
 
     /**
+     * Schedule a generic one-shot timer under `timerKey` (replacing any timer with that key).
+     * Include the sessionId in the key so cancelSessionTimers() also cancels it.
+     * @param timerKey - Unique key (must contain the sessionId)
+     * @param delayMs - Delay in milliseconds
+     * @param callback - Function to call when timer expires
+     * @returns Timer key for cancellation
+     */
+    schedule(
+        timerKey: string,
+        delayMs: number,
+        callback: () => Promise<void> | void
+    ): string {
+        this.cancelTimer(timerKey);
+
+        const timer = setTimeout(async () => {
+            try {
+                await callback();
+            } catch (error) {
+                console.error(`Error in timer callback (${timerKey}):`, error);
+            } finally {
+                // Only untrack if it wasn't replaced by a newer timer with the same key.
+                if (this.timers.get(timerKey) === timer) {
+                    this.timers.delete(timerKey);
+                }
+            }
+        }, Math.max(0, delayMs));
+
+        this.timers.set(timerKey, timer);
+        return timerKey;
+    }
+
+    /**
      * Cancel a specific timer
      * @param timerKey - The key of the timer to cancel
      */

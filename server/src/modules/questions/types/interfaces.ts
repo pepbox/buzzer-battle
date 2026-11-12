@@ -37,6 +37,8 @@ export interface IQuestion extends Document {
   hint?: IQuestionContent;
   hintPenalty?: number;
   createdBy: string;
+  /** null = global library question; set = private to that session. */
+  session?: Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -27,6 +27,11 @@ const errorHandlerMiddleware = (
         error = new AppError(message, StatusCodes.BAD_REQUEST);
     }
 
+    // Mongoose CastError: a malformed id (or value) in a query -> client error, not 500.
+    if (err.name === 'CastError') {
+        error = new AppError(`Invalid ${err.path || 'value'}.`, StatusCodes.BAD_REQUEST);
+    }
+
     if (err.code && err.code === 11000) {
         error = new AppError(
             `${Object.keys(err.keyValue)} field must be unique`,

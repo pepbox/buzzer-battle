@@ -11,7 +11,34 @@ import {
   DEFAULT_WRONG_PENALTY,
   getCorrectPoints,
   getWrongPenalty,
+  SESSION_QUESTIONS_FOLDER,
 } from "../constants";
+import {
+  QuestionRequester,
+  canEditQuestion,
+  isSuperAdmin,
+  requesterSessionId,
+  EDIT_FORBIDDEN_MESSAGE,
+  QUESTION_IN_RUNNING_GAME_MESSAGE,
+} from "../access";
+import { SessionStatus } from "../../session/types/enums";
+import {
+  QUESTION_LOCK_MESSAGE,
+  isQuestionLocked,
+  loadQuestionLockContext,
+} from "../../session/questionLock";
+
+/** Error carrying an HTTP status for the controller to forward. */
+export class QuestionAccessError extends Error {
+  statusCode: number;
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
+
+const escapeRegex = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export default class QuestionService {
   private session?: mongoose.ClientSession;
@@ -26,6 +53,8 @@ export default class QuestionService {
     sort?: "newest" | "oldest";
     page?: number;
     limit?: number;
+    scope?: "library" | "mine" | "all";
+    requester?: QuestionRequester;
   }): Promise<{
     questions: IQuestion[];
     total: number;
@@ -38,16 +67,28 @@ export default class QuestionService {
     const page = Math.max(1, Number(filters?.page || 1));
     const limit = Math.min(100, Math.max(1, Number(filters?.limit || 50)));
 
+    // Scope: superadmin sees only the global library; a session admin sees the
+    // global library plus their own session's private questions. Never another
+    // session's private questions.
+    const ownSessionId = requesterSessionId(filters?.requester);
+    const scope = filters?.scope || "all";
+    if (isSuperAdmin(filters?.requester) || !ownSessionId) {
+      queryFilter.session = null;
+    } else if (scope === "library") {
+      queryFilter.session = null;
+    } else if (scope === "mine") {
+      queryFilter.session = new Types.ObjectId(ownSessionId);
+    } else {
+      queryFilter.session = { $in: [null, new Types.ObjectId(ownSessionId)] };
+    }
+
     if (filters?.folder && filters.folder !== "all") {
-      const escapedFolder = filters.folder.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        "\\$&",
-      );
+      const escapedFolder = escapeRegex(filters.folder);
       queryFilter.folder = new RegExp(`^${escapedFolder}(?:/|$)`, "i");
     }
 
     if (filters?.search) {
-      const searchRegex = new RegExp(filters.search, "i");
+      const searchRegex = new RegExp(escapeRegex(filters.search), "i");
       queryFilter.$or = [
         { questionText: searchRegex },
         { folder: searchRegex },
@@ -92,24 +133,33 @@ export default class QuestionService {
     hint?: any;
     hintPenalty?: number;
     createdBy?: string;
+    requester?: QuestionRequester;
   }): Promise<IQuestion> {
-    const normalizedFolder = (input.folder || "General").trim();
-    const normalizedCategory = (input.category !== undefined ? input.category : normalizedFolder).trim();
     const creatorId = input.createdBy || "superadmin";
-
-    // Verify folder write access: other admins cannot add questions to folders they don't own
-    if (creatorId !== "superadmin") {
-      const folderDoc = await QuestionFolder.findOne({ name: normalizedFolder });
-      if (folderDoc && folderDoc.createdBy !== creatorId) {
-        throw new Error("You do not have permission to write to this folder");
-      }
+    const superAdmin = input.requester ? isSuperAdmin(input.requester) : true;
+    const privateSessionId = superAdmin
+      ? null
+      : requesterSessionId(input.requester);
+    if (!superAdmin && !privateSessionId) {
+      throw new QuestionAccessError("A valid session is required.", 400);
     }
 
-    await QuestionFolder.findOneAndUpdate(
-      { name: normalizedFolder },
-      { $setOnInsert: { name: normalizedFolder, createdBy: creatorId } },
-      { upsert: true, new: true, session: this.session },
-    );
+    // Session admins' questions are private to their session and always live in
+    // SESSION_QUESTIONS_FOLDER (no QuestionFolder doc: it is not a library folder).
+    const normalizedFolder = privateSessionId
+      ? SESSION_QUESTIONS_FOLDER
+      : (input.folder || "General").trim() || "General";
+    const normalizedCategory = (
+      typeof input.category === "string" ? input.category : normalizedFolder
+    ).trim();
+
+    if (!privateSessionId) {
+      await QuestionFolder.findOneAndUpdate(
+        { name: normalizedFolder },
+        { $setOnInsert: { name: normalizedFolder, createdBy: creatorId } },
+        { upsert: true, new: true, session: this.session },
+      );
+    }
 
     const question = new Question({
       questionText: input.questionText || input.questionContent?.text || "",
@@ -129,6 +179,7 @@ export default class QuestionService {
       hint: input.hint,
       hintPenalty: input.hintPenalty ?? 0,
       createdBy: creatorId,
+      session: privateSessionId ? new Types.ObjectId(privateSessionId) : null,
     });
 
     const options: any = {};
@@ -159,9 +210,7 @@ export default class QuestionService {
       answerContent?: any;
       hint?: any;
       hintPenalty?: number;
-      userId?: string;
-      userRole?: string;
-      sessionId?: string;
+      requester?: QuestionRequester;
     },
   ): Promise<IQuestion> {
     const query = Question.findById(questionId);
@@ -174,59 +223,20 @@ export default class QuestionService {
       throw new Error("Question not found");
     }
 
-    const requesterId = input.userId || "superadmin";
-    const requesterRole = input.userRole;
-
-    console.log("=== DEBUG PERMISSIONS ===");
-    console.log("requesterId:", requesterId);
-    console.log("requesterRole:", requesterRole);
-    console.log("question.createdBy:", question.createdBy);
-    console.log("==========================");
-
-    // Authorization check: 
-    // 1. Superadmin has full access.
-    // 2. The creator of the question has full access.
-    // 3. An ADMIN user can update the question if it is part of their active session.
-    let isAuthorized = requesterId === "superadmin" || question.createdBy === requesterId;
-
-    if (!isAuthorized && requesterRole === "ADMIN" && input.sessionId) {
-      const sessionDoc = await Session.findById(input.sessionId);
-      if (
-        sessionDoc &&
-        sessionDoc.questions.some((qId) => qId.toString() === questionId.toString())
-      ) {
-        isAuthorized = true;
-      }
+    // Global questions: superadmin only. Private questions: their session's admin or superadmin.
+    if (!canEditQuestion(input.requester, question)) {
+      throw new QuestionAccessError(EDIT_FORBIDDEN_MESSAGE, 403);
     }
 
-    if (!isAuthorized) {
-      throw new Error("You do not have permission to update this question");
-    }
-
-    if (input.folder !== undefined) {
-      const normalizedFolder = (input.folder || "General").trim();
-
-      // Verify folder write access: other admins cannot add questions to folders they don't own
-      let hasFolderAccess = requesterId === "superadmin";
-      if (!hasFolderAccess) {
-        const folderDoc = await QuestionFolder.findOne({ name: normalizedFolder });
-        if (!folderDoc || folderDoc.createdBy === requesterId) {
-          hasFolderAccess = true;
-        } else if (requesterRole === "ADMIN" && input.sessionId) {
-          const sessionDoc = await Session.findById(input.sessionId);
-          if (
-            sessionDoc &&
-            sessionDoc.questions.some((qId) => qId.toString() === questionId.toString())
-          ) {
-            hasFolderAccess = true;
-          }
-        }
-      }
-
-      if (!hasFolderAccess) {
-        throw new Error("You do not have permission to write to this folder");
-      }
-
+    // Only the superadmin may move global questions between library folders.
+    // Session admins can't change folder (or session) at all.
+    if (
+      input.folder !== undefined &&
+      isSuperAdmin(input.requester) &&
+      !question.session
+    ) {
+      const requesterId = input.requester?.id || "superadmin";
+      const normalizedFolder = (input.folder || "General").trim() || "General";
       await QuestionFolder.findOneAndUpdate(
         { name: normalizedFolder },
         { $setOnInsert: { name: normalizedFolder, createdBy: requesterId } },
@@ -243,8 +253,14 @@ export default class QuestionService {
       input.questionText ??
       input.questionContent?.text ??
       question.questionText;
-    question.questionImage = input.questionImage;
-    question.quetionVideo = input.quetionVideo;
+    // Legacy media fields: only touch them when the client actually sent them,
+    // otherwise an edit from the new editor would wipe old media.
+    if (input.questionImage !== undefined) {
+      question.questionImage = input.questionImage || undefined;
+    }
+    if (input.quetionVideo !== undefined) {
+      question.quetionVideo = input.quetionVideo || undefined;
+    }
     question.options = input.options || [];
     question.correctAnswer = input.correctAnswer;
     if (input.score !== undefined) {
@@ -274,7 +290,10 @@ export default class QuestionService {
     return question;
   }
 
-  async deleteQuestion(questionId: Types.ObjectId | string, userId?: string): Promise<void> {
+  async deleteQuestion(
+    questionId: Types.ObjectId | string,
+    requester?: QuestionRequester,
+  ): Promise<void> {
     const query = Question.findById(questionId);
     if (this.session) {
       query.session(this.session);
@@ -284,11 +303,40 @@ export default class QuestionService {
       throw new Error("Question not found");
     }
 
-    const requesterId = userId || "superadmin";
+    if (!canEditQuestion(requester, question)) {
+      throw new QuestionAccessError(EDIT_FORBIDDEN_MESSAGE, 403);
+    }
 
-    // Authorization check: Admins can only delete their own questions (unless superadmin)
-    if (requesterId !== "superadmin" && question.createdBy !== requesterId) {
-      throw new Error("You do not have permission to delete this question");
+    const qid = new Types.ObjectId(String(questionId));
+    const privateSessionId = question.session ? String(question.session) : null;
+
+    if (privateSessionId) {
+      // Private question: only its own session can reference it.
+      const ownerSession = await Session.findById(privateSessionId).select(
+        "questions status gameMode",
+      );
+      if (ownerSession) {
+        const ids = (ownerSession.questions || []).map((id) => String(id));
+        const ctx = await loadQuestionLockContext(ownerSession);
+        const locked = ids.some(
+          (id, index) => id === String(qid) && isQuestionLocked(ctx, index, id),
+        );
+        if (locked) {
+          throw new QuestionAccessError(QUESTION_LOCK_MESSAGE, 409);
+        }
+      }
+    } else {
+      // Global question: refuse while any game using it is running.
+      const runningQuery = Session.exists({
+        questions: qid,
+        status: SessionStatus.PLAYING,
+      });
+      if (this.session) {
+        runningQuery.session(this.session);
+      }
+      if (await runningQuery) {
+        throw new QuestionAccessError(QUESTION_IN_RUNNING_GAME_MESSAGE, 409);
+      }
     }
 
     const deleteQuery = Question.findByIdAndDelete(questionId);
@@ -307,12 +355,14 @@ export default class QuestionService {
     }
 
     await Session.updateMany(
-      { questions: questionId },
-      { $pull: { questions: questionId } },
+      privateSessionId
+        ? { _id: privateSessionId, questions: qid }
+        : { questions: qid },
+      { $pull: { questions: qid, questionSettings: { question: qid } } },
       sessionUpdateOptions,
     );
 
-    const responseDeleteQuery = QuestionResponse.deleteMany({ questionId });
+    const responseDeleteQuery = QuestionResponse.deleteMany({ questionId: qid });
     if (this.session) {
       responseDeleteQuery.session(this.session);
     }
@@ -320,6 +370,8 @@ export default class QuestionService {
   }
 
   async fetchFolders(): Promise<string[]> {
+    // Only QuestionFolder docs (global library). Private session questions never
+    // create folder docs, so their folder names can't leak here.
     const query = QuestionFolder.find()
       .sort({ name: 1 })
       .select("name -_id")
@@ -442,7 +494,7 @@ export default class QuestionService {
     const folderRegex = new RegExp(`^${escapedPath}(?:/|$)`);
 
     const folderDocsQuery = QuestionFolder.find({ name: folderRegex });
-    const questionDocsQuery = Question.find({ folder: folderRegex });
+    const questionDocsQuery = Question.find({ folder: folderRegex, session: null });
 
     if (this.session) {
       folderDocsQuery.session(this.session);
@@ -507,7 +559,7 @@ export default class QuestionService {
     const escapedPath = normalizedPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const folderRegex = new RegExp(`^${escapedPath}(?:/|$)`);
 
-    const questionDocsQuery = Question.find({ folder: folderRegex });
+    const questionDocsQuery = Question.find({ folder: folderRegex, session: null });
     if (this.session) {
       questionDocsQuery.session(this.session);
     }
@@ -541,7 +593,10 @@ export default class QuestionService {
     sessionId: Types.ObjectId | string,
     questionIndex: number,
   ): Promise<IQuestion | null> {
-    const sessionQuery = Session.findById(sessionId).populate("questions");
+    // Unpopulated: populate drops deleted questions and would shift indexes.
+    const sessionQuery = Session.findById(sessionId).select(
+      "questions questionSettings",
+    );
     if (this.session) {
       sessionQuery.session(this.session);
     }
@@ -555,11 +610,10 @@ export default class QuestionService {
       return null;
     }
 
-    const questionDoc = sessionData.questions[questionIndex];
-    if (!questionDoc) {
+    const questionId = sessionData.questions[questionIndex];
+    if (!questionId) {
       return null;
     }
-    const questionId = (questionDoc as any)._id || questionDoc;
     const questionQuery = Question.findById(questionId);
     if (this.session) {
       questionQuery.session(this.session);
@@ -787,7 +841,11 @@ export default class QuestionService {
     );
 
     // Find original questions
-    const originals = await Question.find({ _id: { $in: questionIds } });
+    // Only global library questions can be copied (copies stay global).
+    const originals = await Question.find({
+      _id: { $in: questionIds },
+      session: null,
+    });
     
     const copies = originals.map((orig) => {
       const origObj: any = orig.toObject();
@@ -798,6 +856,7 @@ export default class QuestionService {
         ...origObj,
         folder: normalizedFolder,
         createdBy: creatorId,
+        session: null,
       });
     });
 
@@ -830,7 +889,10 @@ export default class QuestionService {
     );
 
     // Find the questions to move
-    const questions = await Question.find({ _id: { $in: questionIds } });
+    const questions = await Question.find({
+      _id: { $in: questionIds },
+      session: null,
+    });
 
     const options: any = {};
     if (this.session) {

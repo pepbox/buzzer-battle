@@ -57,6 +57,8 @@ const emitState = (sessionId: string, gameState: IGameState, extra = {}) => {
     spinPassPickerTeam: gameState.spinPassPickerTeam ?? null,
     teamsWhoAnsweredThisQuestion: (gameState.teamsWhoAnsweredThisQuestion || []).map(idStr),
     answerWithheld: Boolean(gameState.answerWithheld),
+    hintRevealed: Boolean(gameState.hintRevealed),
+    answerMarked: Boolean(gameState.answerMarked),
     ...extra,
   });
 };
@@ -176,6 +178,7 @@ export const passSpinQuestionToTeam = async (
         answeringRoundStartTime: now,
         awaitingTeamSelection: false,
         hintRevealed: false,
+        answerMarked: false,
       },
       $unset: { spinPassPickerTeam: 1 },
     },

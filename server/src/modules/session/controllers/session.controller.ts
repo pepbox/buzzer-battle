@@ -11,13 +11,20 @@ import FileService from "../../files/services/fileService";
 import axios from "axios";
 // import PlayerService from "../../players/services/player.service";
 // import { Player } from "../../players/models/player.model";
-import { GameState } from "../../gameState/models/gameState.model";
 import { QuestionResponse } from "../../questions/models/question.response.model";
 import { Team } from "../../teams/models/team.model";
 import {
     applyQuestionFlags,
     seedSessionQuestionSettings,
 } from "../questionSettings";
+import { Question } from "../../questions/models/question.model";
+import { serializeQuestionForAdmin } from "../../questions/access";
+import {
+    QUESTION_LOCK_MESSAGE,
+    isQuestionLocked,
+    isReorderAllowed,
+    loadQuestionLockContext,
+} from "../questionLock";
 
 
 const sessionService = new SessionService();
@@ -61,9 +68,39 @@ export const updateSession = async (
         if (updateData.questions !== undefined) {
             const valid =
                 Array.isArray(updateData.questions) &&
-                updateData.questions.every((id) => mongoose.isValidObjectId(id));
+                updateData.questions.every(
+                    (id) => typeof id === "string" && mongoose.isValidObjectId(id)
+                );
             if (!valid) {
                 return next(new AppError("questions must be a list of question IDs.", 400));
+            }
+
+            // Dedupe, keeping first occurrence order.
+            const newIds = Array.from(
+                new Set(updateData.questions.map((id) => String(id)))
+            );
+            updateData.questions = newIds;
+
+            // Every question must be global (session null) or private to THIS session.
+            if (newIds.length > 0) {
+                const available = await Question.countDocuments({
+                    _id: { $in: newIds },
+                    session: { $in: [null, new mongoose.Types.ObjectId(sessionId)] },
+                });
+                if (available !== newIds.length) {
+                    return next(new AppError("Some questions are not available to this session.", 400));
+                }
+            }
+
+            // Mid-game lock: played / live questions can't be moved or removed.
+            const currentSession = await Session.findById(sessionId).select("questions status gameMode");
+            if (!currentSession) {
+                return next(new AppError("Session not found.", 404));
+            }
+            const lockCtx = await loadQuestionLockContext(currentSession);
+            const oldIds = (currentSession.questions || []).map((id) => String(id));
+            if (!isReorderAllowed(lockCtx, oldIds, newIds)) {
+                return next(new AppError(QUESTION_LOCK_MESSAGE, 409));
             }
         }
 
@@ -284,32 +321,44 @@ export const getSessionQuestionsStatus = async (
             return next(new AppError("A valid session is required.", 400));
         }
 
-        const session = await Session.findById(sessionId).populate("questions");
+        const session = await Session.findById(sessionId);
         if (!session) {
             return next(new AppError("Session not found.", 404));
         }
 
-        const gameState = await GameState.findOne({ sessionId });
-        const currentQuestionIndex = gameState ? gameState.currentQuestionIndex : -1;
+        // Work from the raw id list so indexes match session.questions (and
+        // GameState.currentQuestionIndex) even if some questions were deleted.
+        const rawIds = (session.questions || []).map((id) => String(id));
+        const questionDocs = rawIds.length
+            ? await Question.find({ _id: { $in: rawIds } })
+            : [];
+        const docsById = new Map(questionDocs.map((q) => [String(q._id), q]));
 
-        const teams = await Team.find({ sessionId });
+        const lockCtx = await loadQuestionLockContext(session);
+        const currentQuestionIndex = lockCtx.currentQuestionIndex;
+
+        // Team schema field is `session` (not `sessionId`).
+        const teams = await Team.find({ session: sessionId }).select("_id");
         const teamIds = teams.map((t) => t._id);
 
-        const questionIds = session.questions.map((q: any) => q._id);
-        const correctResponses = await QuestionResponse.find({
-            questionId: { $in: questionIds },
-            team: { $in: teamIds },
-            isCorrect: true,
-        });
+        const correctResponses = rawIds.length && teamIds.length
+            ? await QuestionResponse.find({
+                questionId: { $in: rawIds },
+                team: { $in: teamIds },
+                isCorrect: true,
+            }).select("questionId")
+            : [];
 
         const completedQuestionIds = new Set(
             correctResponses.map((r) => r.questionId.toString())
         );
 
-        const questionsWithStatus = session.questions.map((q: any, index: number) => {
-            let status: "Completed" | "Skipped" | "Pending" = "Pending";
-            const qIdStr = q._id.toString();
+        const questionsWithStatus: any[] = [];
+        rawIds.forEach((qIdStr, index) => {
+            const doc = docsById.get(qIdStr);
+            if (!doc) return; // deleted question: skip but keep index meaning
 
+            let status: "Completed" | "Skipped" | "Pending" = "Pending";
             if (currentQuestionIndex === -1) {
                 status = "Pending";
             } else if (index < currentQuestionIndex) {
@@ -320,11 +369,15 @@ export const getSessionQuestionsStatus = async (
                 status = "Pending";
             }
 
-            return {
-                ...applyQuestionFlags(session, q.toObject()),
+            questionsWithStatus.push({
+                ...serializeQuestionForAdmin(
+                    req.user,
+                    applyQuestionFlags(session, doc.toObject())
+                ),
                 index,
                 status,
-            };
+                isLocked: isQuestionLocked(lockCtx, index, qIdStr),
+            });
         });
 
         res.status(200).json({
@@ -338,4 +391,45 @@ export const getSessionQuestionsStatus = async (
     }
 };
 
+/**
+ * Public branding for the player login page (no auth).
+ * GET /api/v1/session/:sessionId
+ * Returns ONLY non-sensitive display fields (never questions).
+ */
+export const getPublicSessionInfo = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const { sessionId } = req.params;
+        if (!sessionId || !mongoose.isValidObjectId(sessionId)) {
+            return next(new AppError("Invalid session ID.", 400));
+        }
 
+        const session = await Session.findById(sessionId)
+            .select("sessionName companyName companyLogo teamMode colorTeams numberOfTeams gameMode status")
+            .lean();
+        if (!session) {
+            return next(new AppError("Session not found.", 404));
+        }
+
+        res.status(200).json({
+            message: "Session fetched successfully.",
+            data: {
+                sessionName: session.sessionName,
+                companyName: session.companyName ?? "",
+                companyLogo: session.companyLogo ?? "",
+                teamMode: session.teamMode,
+                colorTeams: session.colorTeams ?? [],
+                numberOfTeams: session.numberOfTeams ?? null,
+                gameMode: session.gameMode ?? null,
+                status: session.status,
+            },
+            success: true,
+        });
+    } catch (error) {
+        console.error("Error fetching public session info:", error);
+        next(new AppError("Failed to fetch session.", 500));
+    }
+};

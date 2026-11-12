@@ -29,8 +29,11 @@ const LeaderBoardPage: React.FC<LeaderBoardPageProps> = ({
   // Fetch overall leaderboard
   const { data, isLoading, error } = useFetchOverallLeaderboardQuery();
 
-  // Listen for game state changes to auto-navigate
+  // Listen for game state changes to auto-navigate (admin only: on the player
+  // side GameStateRouter decides the screen, and this page is also rendered as
+  // an overlay there).
   useEffect(() => {
+    if (navigationBase !== "admin") return;
     const handleGameStateChange = (data: any) => {
       if (data.gameStatus === "buzzer_round") {
         navigate(returnPath);
@@ -42,7 +45,7 @@ const LeaderBoardPage: React.FC<LeaderBoardPageProps> = ({
     return () => {
       websocketService.off(Events.GAME_STATE_CHANGED, handleGameStateChange);
     };
-  }, [navigate, returnPath, sessionId]);
+  }, [navigate, navigationBase, returnPath, sessionId]);
 
   const handleBack = () => {
     navigate(returnPath);

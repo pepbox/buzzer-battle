@@ -27,6 +27,8 @@ export interface GameState {
   answeringRoundStartTime?: number;
   idleStartTime?: number;
   hintRevealed?: boolean;
+  /** Admin already marked the current team's answer; another mark is rejected until a new team answers. */
+  answerMarked?: boolean;
   isNoBuzzerQuestion?: boolean;
   awaitingTeamSelection?: boolean;
   spinHideQuestion?: boolean;

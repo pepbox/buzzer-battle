@@ -8,7 +8,9 @@ import {
   CircularProgress,
   Switch,
   FormControlLabel,
+  Tooltip,
 } from "@mui/material";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -29,6 +31,10 @@ export interface CurrentQuestionListItemProps {
   onToggleHide?: (question: QuestionBankItem, checked: boolean) => void;
   isTogglingHide?: boolean;
   loading?: boolean;
+  /** Already played / live in the running game: can't be moved or removed. */
+  locked?: boolean;
+  /** Whether this admin may edit the question (server `isEditable`). */
+  canEdit?: boolean;
 }
 
 const CurrentQuestionListItem: React.FC<CurrentQuestionListItemProps> = ({
@@ -45,22 +51,31 @@ const CurrentQuestionListItem: React.FC<CurrentQuestionListItemProps> = ({
   onToggleHide,
   isTogglingHide = false,
   loading = false,
+  locked = false,
+  canEdit = true,
 }) => {
   return (
     <Paper
       variant="outlined"
-      draggable
-      onDragStart={() => onDragStart(questionId)}
+      draggable={!locked}
+      onDragStart={(event) => {
+        if (locked) {
+          event.preventDefault();
+          return;
+        }
+        onDragStart(questionId);
+      }}
       onDragOver={onDragOver}
       onDrop={() => onDrop(questionId)}
       sx={{
         p: 1.25,
         borderColor: isDragging ? "primary.main" : "divider",
         opacity: isDragging ? 0.65 : 1,
-        cursor: "grab",
+        cursor: locked ? "default" : "grab",
+        bgcolor: locked ? "action.hover" : undefined,
         transition: "all 150ms ease",
         "&:active": {
-          cursor: "grabbing",
+          cursor: locked ? "default" : "grabbing",
         },
       }}
     >
@@ -71,7 +86,13 @@ const CurrentQuestionListItem: React.FC<CurrentQuestionListItemProps> = ({
           gap: 1,
         }}
       >
-        <DragIndicatorIcon sx={{ color: "text.secondary", flexShrink: 0 }} />
+        {locked ? (
+          <Tooltip title="Already played or live — can't be moved or removed during the game">
+            <LockOutlinedIcon sx={{ color: "text.secondary", flexShrink: 0 }} />
+          </Tooltip>
+        ) : (
+          <DragIndicatorIcon sx={{ color: "text.secondary", flexShrink: 0 }} />
+        )}
         <Typography
           variant="body2"
           sx={{
@@ -124,21 +145,23 @@ const CurrentQuestionListItem: React.FC<CurrentQuestionListItemProps> = ({
               <VisibilityIcon fontSize="small" />
             </IconButton>
           )}
-          <IconButton
-            size="small"
-            onClick={() => onEdit(questionId)}
-            disabled={loading || !question}
-            title="Edit question"
-          >
-            <EditOutlinedIcon fontSize="small" />
-          </IconButton>
+          {canEdit && (
+            <IconButton
+              size="small"
+              onClick={() => onEdit(questionId)}
+              disabled={loading || !question}
+              title="Edit question"
+            >
+              <EditOutlinedIcon fontSize="small" />
+            </IconButton>
+          )}
 
           <IconButton
             size="small"
             color="error"
             onClick={() => onRemove(questionId)}
-            disabled={loading}
-            title="Remove from list"
+            disabled={loading || locked}
+            title={locked ? "Locked during the game" : "Remove from list"}
           >
             <DeleteOutlineIcon fontSize="small" />
           </IconButton>

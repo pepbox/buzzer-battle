@@ -1,22 +1,28 @@
 import { Socket } from "socket.io";
 import { isTeamCaptain } from "../../../modules/teams/captain";
-import GameStateService from "../../../modules/gameState/services/gameState.service";
+import GameStateService, {
+  SPIN_NOT_ALLOWED,
+} from "../../../modules/gameState/services/gameState.service";
 import { GameStatus } from "../../../modules/gameState/types/enums";
-import { SessionEmitters } from "../sessionEmitters";
-import { Events } from "../enums/Events";
-import { GameState } from "../../../modules/gameState/models/gameState.model";
+import { spinWheelForTeam } from "../../../modules/gameState/services/spinTimers";
+import { isValidObjectId } from "../../../modules/gameState/utils/sessionScope";
 
 const gameStateService = new GameStateService();
 
 export const handleSpinWheel = async (socket: Socket) => {
   try {
     const user = (socket as any).user;
-    if (!user || !user.id || !user.sessionId) {
+    if (
+      !user ||
+      user.role !== "TEAM" ||
+      !isValidObjectId(user.id) ||
+      !isValidObjectId(user.sessionId)
+    ) {
       return;
     }
 
-    const sessionId = user.sessionId;
-    const teamId = user.id;
+    const sessionId = String(user.sessionId);
+    const teamId = String(user.id);
 
     const gameState = await gameStateService.fetchGameStateBySessionId(sessionId);
     if (!gameState || gameState.gameStatus !== GameStatus.SPIN_ROUND) {
@@ -38,57 +44,11 @@ export const handleSpinWheel = async (socket: Socket) => {
       return; // Already spinning
     }
 
-    const spinResult = await gameStateService.triggerSpinWheel(sessionId, teamId);
-
-    // Broadcast spin event
-    SessionEmitters.toSession(sessionId, Events.WHEEL_SPIN_TRIGGERED, {
-      teamId,
-      targetCategory: spinResult.targetCategory,
-      winningIndex: spinResult.winningIndex,
-      durationMs: spinResult.durationMs,
-      availableCategories: spinResult.availableCategories,
-      startTime: spinResult.gameState.spinWheelState?.startTime,
-    });
-
-    SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
-      gameStatus: spinResult.gameState.gameStatus,
-      currentQuestionIndex: spinResult.gameState.currentQuestionIndex,
-      currentAnsweringTeam: spinResult.gameState.currentAnsweringTeam,
-      spinWheelState: spinResult.gameState.spinWheelState,
-    });
-
-    // Broadcast WHEEL_LANDED when wheel stops
-    setTimeout(async () => {
-      try {
-        await GameState.updateOne(
-          { sessionId },
-          { $set: { "spinWheelState.isSpinning": false } }
-        );
-      } catch (err) {
-        console.error("Error setting isSpinning to false in spinHandler:", err);
-      }
-      SessionEmitters.toSession(sessionId, Events.WHEEL_LANDED, {
-        targetCategory: spinResult.targetCategory,
-        questionIndex: spinResult.gameState.currentQuestionIndex,
-      });
-    }, spinResult.durationMs);
-
-    // After 2.5s displaying the landed category, transition to ANSWERING to show question
-    setTimeout(async () => {
-      try {
-        const landedState = await gameStateService.landSpinWheel(sessionId);
-        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
-          gameStatus: landedState.gameStatus,
-          currentQuestionIndex: landedState.currentQuestionIndex,
-          currentAnsweringTeam: landedState.currentAnsweringTeam,
-          currentCategory: landedState.currentCategory,
-          spinWheelState: landedState.spinWheelState,
-        });
-      } catch (landError) {
-        console.error("Auto land spin wheel error:", landError);
-      }
-    }, spinResult.durationMs + 2500);
-  } catch (error) {
+    // Atomic claim + broadcast + session-scoped landing timers (shared with the
+    // admin TRIGGER_SPIN_WHEEL action).
+    await spinWheelForTeam(sessionId, teamId);
+  } catch (error: any) {
+    if (error?.message === SPIN_NOT_ALLOWED) return; // Lost a race with another spin.
     console.error("Error in handleSpinWheel:", error);
   }
 };

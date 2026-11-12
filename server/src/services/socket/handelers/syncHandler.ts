@@ -10,8 +10,12 @@ export const handleTimeSync = (
     socket: Socket,
     payload: { clientTime: number }
 ) => {
+    const clientTime = payload?.clientTime;
+    if (typeof clientTime !== "number" || !Number.isFinite(clientTime)) {
+        return; // Ignore malformed requests.
+    }
     socket.emit(Events.TIME_SYNC, {
-        clientTime: payload.clientTime,
+        clientTime,
         serverTime: Date.now()
     });
 };

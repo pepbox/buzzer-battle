@@ -50,6 +50,12 @@ const gameStateSchema = new Schema<IGameState>(
       type: Boolean,
       default: false,
     },
+    // True once the admin has marked the current team's answer (Correct/Wrong).
+    // Reset whenever a new team starts answering or the question changes.
+    answerMarked: {
+      type: Boolean,
+      default: false,
+    },
     // No-buzzer question: admin hasn't picked a team yet, so players must not see the question.
     awaitingTeamSelection: {
       type: Boolean,

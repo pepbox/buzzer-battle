@@ -195,24 +195,18 @@ export default class TeamService {
     teamId: Types.ObjectId | string,
     points: number,
   ): Promise<ITeam> {
-    const query = Team.findById(teamId);
-    if (this.session) {
-      query.session(this.session);
-    }
+    // Atomic increment so concurrent score changes can't overwrite each other.
+    const options = { new: true, session: this.session ?? null };
 
-    const team = await query;
+    const team = await Team.findByIdAndUpdate(
+      teamId,
+      { $inc: { teamScore: points } },
+      options,
+    );
     if (!team) {
       throw new Error("Team not found");
     }
 
-    team.teamScore += points;
-
-    const options: any = {};
-    if (this.session) {
-      options.session = this.session;
-    }
-
-    await team.save(options);
     return team;
   }
 

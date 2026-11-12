@@ -10,6 +10,7 @@ import {
   authenticateUser,
   authorizeRoles,
 } from "../../../middlewares/authMiddleware";
+import { requireSessionScope } from "../../gameState/utils/sessionScope";
 
 const router = express.Router();
 
@@ -20,6 +21,6 @@ router.get("/joined/:sessionId", fetchJoinedTeamNumbers);
 
 // Protected routes - require team authentication
 router.get("/me", authenticateUser, authorizeRoles("TEAM"), fetchTeam);
-router.get("/leaderboard", authenticateUser, fetchOverallLeaderboard);
+router.get("/leaderboard", authenticateUser, requireSessionScope, fetchOverallLeaderboard);
 
 export default router;

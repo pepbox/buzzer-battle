@@ -1,7 +1,14 @@
 import { NextFunction, Request, Response } from "express";
 import { isTeamCaptain } from "../../teams/captain";
 import AppError from "../../../utils/appError";
-import QuestionService from "../services/question.service";
+import QuestionService, {
+  QuestionAccessError,
+} from "../services/question.service";
+import {
+  isSuperAdmin,
+  serializeQuestionForAdmin,
+  SUPERADMIN_ONLY_MESSAGE,
+} from "../access";
 import {
   getCorrectPoints,
   getWrongPenalty,
@@ -18,14 +25,37 @@ import FileService from "../../files/services/fileService";
 const questionService = new QuestionService();
 const gameStateService = new GameStateService();
 
+/** Forward a QuestionAccessError with its status; returns true if handled. */
+const forwardAccessError = (error: any, next: NextFunction): boolean => {
+  if (error instanceof QuestionAccessError) {
+    next(new AppError(error.message, error.statusCode));
+    return true;
+  }
+  return false;
+};
+
+/** Folder management and bulk copy/move are superadmin-only. Returns true if blocked. */
+const blockNonSuperAdmin = (req: Request, next: NextFunction): boolean => {
+  if (!isSuperAdmin(req.user)) {
+    next(new AppError(SUPERADMIN_ONLY_MESSAGE, 403));
+    return true;
+  }
+  return false;
+};
+
+const hasOwn = (obj: unknown, key: string) =>
+  Boolean(obj) && Object.prototype.hasOwnProperty.call(obj, key);
+
 export const fetchAllQuestions = async (
   req: Request,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const { search, folder, sort, page, limit } = req.query;
+    const { search, folder, sort, page, limit, scope } = req.query;
     const result = await questionService.fetchAllQuestions({
+      scope: scope === "library" || scope === "mine" ? scope : "all",
+      requester: req.user,
       search: typeof search === "string" ? search : undefined,
       folder: typeof folder === "string" ? folder : undefined,
       sort: sort === "oldest" ? "oldest" : "newest",
@@ -36,7 +66,9 @@ export const fetchAllQuestions = async (
     res.status(200).json({
       message: "Questions fetched successfully.",
       data: {
-        questions: result.questions,
+        questions: result.questions.map((q) =>
+          serializeQuestionForAdmin(req.user, q),
+        ),
         pagination: {
           total: result.total,
           page: result.page,
@@ -74,6 +106,7 @@ export const createFolder = async (
   next: NextFunction,
 ) => {
   try {
+    if (blockNonSuperAdmin(req, next)) return;
     const { name } = req.body;
     const parentPath =
       typeof req.body?.parentPath === "string" ? req.body.parentPath : undefined;
@@ -112,6 +145,7 @@ export const renameFolder = async (
   next: NextFunction,
 ) => {
   try {
+    if (blockNonSuperAdmin(req, next)) return;
     const { folderPath } = req.params;
     const { name } = req.body;
 
@@ -157,6 +191,7 @@ export const deleteFolder = async (
   next: NextFunction,
 ) => {
   try {
+    if (blockNonSuperAdmin(req, next)) return;
     const { folderPath } = req.params;
 
     if (!folderPath || typeof folderPath !== "string") {
@@ -274,15 +309,17 @@ export const createQuestion = async (
       hint,
       hintPenalty: Number.isFinite(Number(hintPenalty)) ? Number(hintPenalty) : 0,
       createdBy: req.user?.id,
+      requester: req.user,
     });
 
     res.status(201).json({
       message: "Question created successfully.",
       data: {
-        question,
+        question: serializeQuestionForAdmin(req.user, question),
       },
     });
   } catch (error: any) {
+    if (forwardAccessError(error, next)) return;
     if (error.message && error.message.includes("permission")) {
       return next(new AppError(error.message, 403));
     }
@@ -367,8 +404,13 @@ export const updateQuestion = async (
 
     const question = await questionService.updateQuestion(questionId, {
       questionText,
-      questionImage,
-      quetionVideo,
+      // Only overwrite legacy media when the client actually sent the field.
+      questionImage: hasOwn(req.body, "questionImage")
+        ? questionImage ?? ""
+        : undefined,
+      quetionVideo: hasOwn(req.body, "quetionVideo")
+        ? quetionVideo ?? ""
+        : undefined,
       options: normalizedOptions,
       correctAnswer: selectedCorrectAnswer,
       score: parseScoreInput(score),
@@ -382,18 +424,17 @@ export const updateQuestion = async (
       answerContent,
       hint,
       hintPenalty: hintPenalty !== undefined ? Number(hintPenalty) : undefined,
-      userId: req.user?.id,
-      userRole: req.user?.role,
-      sessionId: req.user?.sessionId,
+      requester: req.user,
     });
 
     res.status(200).json({
       message: "Question updated successfully.",
       data: {
-        question,
+        question: serializeQuestionForAdmin(req.user, question),
       },
     });
   } catch (error: any) {
+    if (forwardAccessError(error, next)) return;
     if (error.message && error.message.includes("permission")) {
       return next(new AppError(error.message, 403));
     }
@@ -416,13 +457,14 @@ export const deleteQuestion = async (
       return next(new AppError("Invalid question ID.", 400));
     }
 
-    await questionService.deleteQuestion(questionId, req.user?.id);
+    await questionService.deleteQuestion(questionId, req.user);
 
     res.status(200).json({
       message: "Question deleted successfully.",
       success: true,
     });
   } catch (error: any) {
+    if (forwardAccessError(error, next)) return;
     if (error.message && error.message.includes("permission")) {
       return next(new AppError(error.message, 403));
     }
@@ -762,11 +804,15 @@ export const bulkCopyQuestions = async (
   next: NextFunction,
 ) => {
   try {
+    if (blockNonSuperAdmin(req, next)) return;
     const { questionIds, targetFolder } = req.body;
     const userId = req.user?.id;
 
     if (!Array.isArray(questionIds) || questionIds.length === 0) {
       return next(new AppError("questionIds must be a non-empty array.", 400));
+    }
+    if (!questionIds.every((id: unknown) => mongoose.isValidObjectId(id))) {
+      return next(new AppError("Invalid question ID.", 400));
     }
     if (!targetFolder || typeof targetFolder !== "string") {
       return next(new AppError("targetFolder is required.", 400));
@@ -800,11 +846,15 @@ export const bulkMoveQuestions = async (
   next: NextFunction,
 ) => {
   try {
+    if (blockNonSuperAdmin(req, next)) return;
     const { questionIds, targetFolder } = req.body;
     const userId = req.user?.id;
 
     if (!Array.isArray(questionIds) || questionIds.length === 0) {
       return next(new AppError("questionIds must be a non-empty array.", 400));
+    }
+    if (!questionIds.every((id: unknown) => mongoose.isValidObjectId(id))) {
+      return next(new AppError("Invalid question ID.", 400));
     }
     if (!targetFolder || typeof targetFolder !== "string") {
       return next(new AppError("targetFolder is required.", 400));

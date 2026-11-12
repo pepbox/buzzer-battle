@@ -100,6 +100,12 @@ export interface QuestionBankItem {
   };
   hintPenalty?: number;
   createdBy?: string;
+  /** null = global library question; set = private to that session */
+  session?: string | null;
+  /** whether the current admin may edit/delete this question */
+  isEditable?: boolean;
+  /** from /session/questions-status: can't be moved/removed right now */
+  isLocked?: boolean;
   createdAt: string;
   updatedAt: string;
 }

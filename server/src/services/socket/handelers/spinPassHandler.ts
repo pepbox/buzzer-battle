@@ -2,6 +2,7 @@ import { Socket } from "socket.io";
 import { isTeamCaptain } from "../../../modules/teams/captain";
 import { Events } from "../enums/Events";
 import GameStateService from "../../../modules/gameState/services/gameState.service";
+import { isValidObjectId } from "../../../modules/gameState/utils/sessionScope";
 import {
   SpinPassError,
   passSpinQuestionToTeam,
@@ -22,13 +23,22 @@ export const handleSpinPassSelect = async (
 
   try {
     const user = (socket as any).user;
-    if (!user?.id || !user?.sessionId || user.role !== "TEAM") {
+    if (
+      !user?.id ||
+      user.role !== "TEAM" ||
+      !isValidObjectId(user.sessionId)
+    ) {
       return fail("Only team captains can choose the next team.");
     }
     if (!(await isTeamCaptain(user))) {
       return fail("Only your team captain can choose the next team.");
     }
-    if (!payload?.teamId) {
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      typeof payload.teamId !== "string" ||
+      !isValidObjectId(payload.teamId)
+    ) {
       return fail("Please choose a team.");
     }
 

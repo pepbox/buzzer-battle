@@ -58,7 +58,11 @@ const teamSlice = createSlice({
         }
       )
       .addMatcher(teamApi.endpoints.fetchCurrentTeam.matchPending, (state) => {
-        state.isLoading = true;
+        // Only the initial auth resolution shows the loader; background
+        // refetches (tag invalidations from socket events) must not.
+        if (!state.team) {
+          state.isLoading = true;
+        }
         state.error = null;
       })
       .addMatcher(
@@ -72,10 +76,16 @@ const teamSlice = createSlice({
       )
       .addMatcher(
         teamApi.endpoints.fetchCurrentTeam.matchRejected,
-        (state, { error }) => {
+        (state, action) => {
           state.isLoading = false;
-          state.error = error;
-          state.isAuthenticated = false;
+          state.error = action.error;
+          // Only a real auth failure logs the player out; a network blip or
+          // 5xx during a background refetch keeps the current session.
+          const status = (action.payload as { status?: unknown } | undefined)
+            ?.status;
+          if (status === 401 || status === 403) {
+            state.isAuthenticated = false;
+          }
         }
       );
   },

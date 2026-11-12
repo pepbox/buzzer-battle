@@ -12,6 +12,9 @@ import { Box, CircularProgress, Typography, Paper, Button } from "@mui/material"
 import LockIcon from "@mui/icons-material/Lock";
 import BlockIcon from "@mui/icons-material/Block";
 
+// Stable reference: an inline `[]` is a new array each render.
+const NO_SESSION_QUESTIONS: string[] = [];
+
 const GlobalQuestionLibraryPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -135,7 +138,7 @@ const GlobalQuestionLibraryPage: React.FC = () => {
         showBackButton={false}
         showCurrentListButton={false}
         showSaveButton={false}
-        selectedQuestionIds={[]}
+        selectedQuestionIds={NO_SESSION_QUESTIONS}
         isSuperAdmin
       />
 

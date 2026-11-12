@@ -29,6 +29,25 @@ export interface SessionResponse {
     success: boolean;
 }
 
+/** Public, unauthenticated subset served by GET /session/:sessionId (login branding). */
+export type PublicSessionInfo = Pick<
+    Session,
+    | 'sessionName'
+    | 'companyName'
+    | 'companyLogo'
+    | 'teamMode'
+    | 'colorTeams'
+    | 'numberOfTeams'
+    | 'gameMode'
+    | 'status'
+>;
+
+export interface PublicSessionResponse {
+    message?: string;
+    data: PublicSessionInfo;
+    success?: boolean;
+}
+
 export interface UpdateSessionRequest {
     companyName?: string;
     companyLogo?: string;
@@ -63,7 +82,7 @@ export const sessionApi = api.injectEndpoints({
         }),
 
         // Fetch session by ID (public - no auth required)
-        fetchSessionById: builder.query<SessionResponse, string>({
+        fetchSessionById: builder.query<PublicSessionResponse, string>({
             query: (sessionId) => ({
                 url: `/session/${sessionId}`,
                 method: 'GET',

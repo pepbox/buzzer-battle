@@ -15,7 +15,10 @@ import {
   TextField,
   IconButton,
   Tooltip,
+  Snackbar,
+  Alert,
 } from "@mui/material";
+import { api } from "../../../app/api";
 import { alpha } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
 import { DashboardHeaderProps } from "../types/interfaces";
@@ -186,6 +189,8 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     setConfirmModeModal({ open: true, mode });
   };
 
+  const [headerError, setHeaderError] = useState<string | null>(null);
+
   const handleConfirmMode = async () => {
     if (!confirmModeModal.mode) return;
     try {
@@ -193,6 +198,10 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       setConfirmModeModal({ open: false, mode: null });
     } catch (err) {
       console.error("Failed to set game mode:", err);
+      setHeaderError(
+        (err as { data?: { message?: string } })?.data?.message ||
+          "Failed to lock the game mode",
+      );
     }
   };
 
@@ -210,9 +219,12 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       .then(() => {
         navigate(`/admin/${sessionId}/login`);
         dispatch(clearAdmin());
+        // Drop all cached RTK Query data so another session's data never shows.
+        dispatch(api.util.resetApiState());
       })
-      .catch((error) => {
+      .catch((error: { data?: { message?: string } }) => {
         console.error("Logout failed:", error);
+        setHeaderError(error?.data?.message || "Logout failed. Please try again.");
       });
   };
 
@@ -832,6 +844,21 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={Boolean(headerError)}
+        autoHideDuration={5000}
+        onClose={() => setHeaderError(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setHeaderError(null)}
+          severity="error"
+          sx={{ width: "100%" }}
+        >
+          {headerError}
+        </Alert>
+      </Snackbar>
     </>
   );
 };

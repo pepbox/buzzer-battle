@@ -60,19 +60,21 @@ const App: React.FC = () => {
     window.location.replace("/");
   }, [dispatch, sessionData, sessionId]);
 
+  // (Re)connect whenever auth state or session changes. The socket handshake
+  // carries `auth.sessionId` and the session-scoped cookie, so a login or a
+  // session switch must replace the socket. The cleanup tears the previous
+  // socket down before the next one is created, so there is never more than one.
   useEffect(() => {
-    const initWS = async () => {
-      try {
-        const serverUrl = import.meta.env.VITE_BACKEND_WEBSOCKET_URL;
-        await initializeWebSocket(serverUrl, undefined, sessionId || undefined);
-      } catch (error) {
-        console.error("Failed to connect to Socket.IO:", error);
-      }
-    };
+    if (!(isAdminAuthenticated || isUserAuthenticated)) return;
 
-    if (isAdminAuthenticated || isUserAuthenticated) {
-      initWS();
-    }
+    const serverUrl = import.meta.env.VITE_BACKEND_WEBSOCKET_URL;
+    initializeWebSocket(serverUrl, undefined, sessionId || undefined).catch(
+      (error) => {
+        // socket.io keeps retrying in the background; listeners are already attached.
+        console.warn("Initial Socket.IO connect failed, retrying:", error?.message ?? error);
+      },
+    );
+
     return () => {
       websocketService.disconnect();
     };

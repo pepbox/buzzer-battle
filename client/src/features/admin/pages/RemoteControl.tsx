@@ -21,6 +21,7 @@ import {
   Typography,
   Paper,
   Switch,
+  Tooltip,
 } from "@mui/material";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
@@ -137,7 +138,8 @@ const RemoteControl: React.FC = () => {
   const { nextQuestion, isLoading: nextLoading } = useNextQuestion();
   const { showAnswer, isLoading: showAnswerLoading } = useShowAnswer();
   const { passToSecondTeam, isLoading: passLoading } = usePassToSecondTeam();
-  const { autoSelectFastestTeam } = useAutoSelectFastestTeam();
+  const { autoSelectFastestTeam, isLoading: autoSelectLoading } =
+    useAutoSelectFastestTeam();
   const { setAnsweringTeam, isLoading: setTeamLoading } = useSetAnsweringTeam();
   const { showHint, isLoading: showHintLoading } = useShowHint();
   const { startSpinRound, isLoading: startSpinLoading } = useStartSpinRound();
@@ -157,7 +159,8 @@ const RemoteControl: React.FC = () => {
 
   const [markAnswer, { isLoading: markAnswerLoading }] =
     useMarkAnswerMutation();
-  const [updateSessionQuestions] = useUpdateSessionQuestionsMutation();
+  const [updateSessionQuestions, { isLoading: isReorderingQuestions }] =
+    useUpdateSessionQuestionsMutation();
   // Per-session question toggles (never modify the shared library question)
   const { setQuestionSettings, isLoading: isSavingQuestionSettings } =
     useSetQuestionSettings();
@@ -168,9 +171,21 @@ const RemoteControl: React.FC = () => {
   const [hintConfirmOpen, setHintConfirmOpen] = useState(false);
 
   // Fetch session questions status list
-  const { data: questionsStatusData } = useFetchSessionQuestionsStatusQuery(undefined, {
+  const {
+    data: questionsStatusData,
+    isLoading: questionsStatusLoading,
+    isFetching: questionsStatusFetching,
+    isError: questionsStatusIsError,
+    refetch: refetchQuestionsStatus,
+  } = useFetchSessionQuestionsStatusQuery(undefined, {
     skip: !sessionId,
   });
+
+  // Played/live questions can't be moved, and nothing can be dropped onto them.
+  const isQuestionItemMovable = (
+    item: { status?: string; isLocked?: boolean } | undefined,
+  ) =>
+    item?.status === "Pending" && item.isLocked !== true;
 
   useEffect(() => {
     if (questionsStatusData?.data) {
@@ -189,7 +204,7 @@ const RemoteControl: React.FC = () => {
   // Drag and drop handlers for manual reordering of pending questions
   const handleDragStart = (e: React.DragEvent, index: number) => {
     const item = localQuestionsList[index];
-    if (item.status !== "Pending") {
+    if (!isQuestionItemMovable(item)) {
       e.preventDefault();
       return;
     }
@@ -206,7 +221,10 @@ const RemoteControl: React.FC = () => {
     if (draggedItemIndex === null || draggedItemIndex === targetIndex) return;
 
     const targetItem = localQuestionsList[targetIndex];
-    if (targetItem.status !== "Pending") return;
+    if (!isQuestionItemMovable(targetItem)) {
+      setDraggedItemIndex(null);
+      return;
+    }
 
     const newList = [...localQuestionsList];
     const [draggedItem] = newList.splice(draggedItemIndex, 1);
@@ -224,6 +242,8 @@ const RemoteControl: React.FC = () => {
       if (questionsStatusData?.data) {
         setLocalQuestionsList(questionsStatusData.data);
       }
+      // e.g. 409: a question became locked meanwhile — pull the fresh lock state.
+      refetchQuestionsStatus();
     }
   };
 
@@ -237,7 +257,24 @@ const RemoteControl: React.FC = () => {
     setTeamLoading ||
     showHintLoading ||
     startSpinLoading ||
-    triggerSpinLoading;
+    triggerSpinLoading ||
+    autoSelectLoading ||
+    spinPassLoading ||
+    isSavingQuestionSettings ||
+    isSavingSpinHide ||
+    isReorderingQuestions;
+
+  // Server sets answerMarked after Correct/Wrong for the current team; a second
+  // mark is rejected (409) until a new team answers or the question changes.
+  const answerMarked = gameState?.answerMarked === true;
+  // In Buzzer Battle a Correct mark moves the game to idle, so "still answering
+  // but already marked" can only mean the mark was Wrong. This keeps Pass enabled
+  // after a page reload, when the local lastAnswerWasWrong flag is gone.
+  const answerWasMarkedWrong =
+    lastAnswerWasWrong ||
+    (!isSpinWheelMode &&
+      gameState?.gameStatus === "answering" &&
+      answerMarked);
 
   const currentAnsweringTeamRaw = gameState?.currentAnsweringTeam;
 
@@ -395,7 +432,9 @@ const RemoteControl: React.FC = () => {
 
       // Whenever a new answering round starts (manual select/pass/auto select),
       // action buttons should be visible again.
-      if (data.gameStatus === "answering") {
+      // (answerMarked=true means this is the post-mark broadcast for the same
+      // team, e.g. after a Wrong — keep "pass to next team" available then.)
+      if (data.gameStatus === "answering" && data?.answerMarked !== true) {
         setLastAnswerWasWrong(false);
       }
 
@@ -538,6 +577,46 @@ const RemoteControl: React.FC = () => {
         hideFromUsers: nextQuestionItem.hideFromUsers === true,
       });
       setNextQuestionPreviewOpen(true);
+      return;
+    }
+
+    // No preview item: explain instead of silently doing nothing.
+    if (questionsStatusLoading || questionsStatusFetching) {
+      showSnackbar("Loading questions, try again in a moment.", "info");
+      return;
+    }
+    if (questionsStatusIsError) {
+      showSnackbar(
+        "Couldn't load the question list. Retrying — try again in a moment.",
+        "error",
+      );
+      if (sessionId) refetchQuestionsStatus();
+      return;
+    }
+
+    // Question list is out of sync with the session (e.g. list changed): let the
+    // server pick the next question without the preview, then resync the list.
+    try {
+      const result = await nextQuestion().unwrap();
+      if (result.data.gameEnded) {
+        showSnackbar("Game completed! All questions done.", "success");
+      } else {
+        showSnackbar(
+          currentQuestionIndex === -1
+            ? "Game started! Buzzer round active."
+            : "Moved to next question",
+          "success",
+        );
+        setLastAnswerWasWrong(false);
+      }
+    } catch (error) {
+      showSnackbar(
+        (error as { data?: { message?: string } })?.data?.message ||
+          "Failed to move to next question",
+        "error",
+      );
+    } finally {
+      if (sessionId) refetchQuestionsStatus();
     }
   };
 
@@ -611,23 +690,38 @@ const RemoteControl: React.FC = () => {
   };
 
   // Mark answer handlers (NEW for verbal answer flow)
+  const handleMarkAnswerError = (error: unknown) => {
+    const apiError = error as { status?: number; data?: { message?: string } };
+    if (apiError?.status === 409) {
+      // Already marked for this team — not a failure, just tell the host.
+      showSnackbar(
+        apiError?.data?.message || "This answer has already been marked.",
+        "info",
+      );
+      return;
+    }
+    showSnackbar(apiError?.data?.message || "Failed to mark answer", "error");
+  };
+
   const handleMarkCorrect = async () => {
+    if (answerMarked) return;
     try {
       await markAnswer({ isCorrect: true }).unwrap();
       showSnackbar("Answer marked as correct! Score updated.", "success");
       setLastAnswerWasWrong(false);
     } catch (error: any) {
-      showSnackbar(error?.data?.message || "Failed to mark answer", "error");
+      handleMarkAnswerError(error);
     }
   };
 
   const handleMarkWrong = async () => {
+    if (answerMarked) return;
     try {
       await markAnswer({ isCorrect: false }).unwrap();
       showSnackbar("Answer marked as wrong.", "error");
       setLastAnswerWasWrong(true);
     } catch (error: any) {
-      showSnackbar(error?.data?.message || "Failed to mark answer", "error");
+      handleMarkAnswerError(error);
     }
   };
 
@@ -1276,7 +1370,8 @@ const RemoteControl: React.FC = () => {
             hasFastestTeam={!isSpinWheelMode && !!buzzerStats?.fastestTeam}
             isAnswerShown={isAnswerShown}
             isLoading={isAnyLoading}
-            lastAnswerWasWrong={lastAnswerWasWrong}
+            answerMarked={answerMarked}
+            lastAnswerWasWrong={answerWasMarkedWrong}
             isSpinWheelMode={isSpinWheelMode}
           />
         </Box>
@@ -1417,7 +1512,7 @@ const RemoteControl: React.FC = () => {
           </Typography>
           <List sx={{ display: "flex", flexDirection: "column", gap: 1, p: 0 }}>
             {localQuestionsList.map((item, idx) => {
-              const isDraggable = item.status === "Pending";
+              const isDraggable = isQuestionItemMovable(item);
               const isCurrent = item.index === currentQuestionIndex;
 
               return (
@@ -1459,7 +1554,15 @@ const RemoteControl: React.FC = () => {
                   {isDraggable ? (
                     <DragIndicatorIcon color="action" sx={{ cursor: "grab" }} />
                   ) : (
-                    <LockIcon color="disabled" fontSize="small" />
+                    <Tooltip
+                      title={
+                        item.isLocked
+                          ? "Already played or live — can't be moved during the game"
+                          : "Only pending questions can be reordered"
+                      }
+                    >
+                      <LockIcon color="disabled" fontSize="small" />
+                    </Tooltip>
                   )}
                   
                   <Typography variant="body2" fontWeight={700} sx={{ minWidth: 20 }}>

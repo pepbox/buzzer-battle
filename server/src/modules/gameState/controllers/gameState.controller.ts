@@ -24,10 +24,48 @@ import {
   passSpinQuestionToTeam,
 } from "../services/spinPass";
 import mongoose from "mongoose";
+import { Team } from "../../teams/models/team.model";
+import { isValidObjectId } from "../utils/sessionScope";
+import { SPIN_NOT_ALLOWED } from "../services/gameState.service";
+import {
+  cancelSpinTimers,
+  emitSpinLanded,
+  spinWheelForTeam,
+} from "../services/spinTimers";
+import { IGameState } from "../types/interfaces";
 
 const gameStateService = new GameStateService();
 const questionService = new QuestionService();
 const teamService = new TeamService();
+
+/** 400/404 unless `teamId` is a valid id of a team in this session. */
+const teamNotInSessionError = async (
+  teamId: unknown,
+  sessionId: string,
+): Promise<AppError | null> => {
+  if (!isValidObjectId(teamId)) {
+    return new AppError("Invalid team ID.", 400);
+  }
+  const exists = await Team.exists({ _id: teamId, session: sessionId });
+  return exists ? null : new AppError("Team not found in this session.", 404);
+};
+
+/** 400 unless `questionId` is the session's current question. */
+const questionNotCurrentError = async (
+  questionId: unknown,
+  sessionId: string,
+  gameState: IGameState,
+): Promise<AppError | null> => {
+  if (!isValidObjectId(questionId)) {
+    return new AppError("Invalid question ID.", 400);
+  }
+  const session = await Session.findById(sessionId).select("questions");
+  const currentQuestionId = session?.questions[gameState.currentQuestionIndex];
+  if (!currentQuestionId || String(currentQuestionId) !== String(questionId)) {
+    return new AppError("Question is not the current question.", 400);
+  }
+  return null;
+};
 
 /**
  * Fetch current game state for the session
@@ -251,6 +289,8 @@ export const updateGameStateUnified = async (
               keepBuzzer: false,
               isNoBuzzerQuestion: true,
               awaitingTeamSelection: true,
+              hintRevealed: false,
+              answerMarked: false,
             });
 
             break;
@@ -286,6 +326,8 @@ export const updateGameStateUnified = async (
             buzzerRoundStartTime: buzzerStartTime,
             isNoBuzzerQuestion: false,
             awaitingTeamSelection: false,
+            hintRevealed: false,
+            answerMarked: false,
           });
         }
         break;
@@ -332,6 +374,15 @@ export const updateGameStateUnified = async (
           );
         }
 
+        {
+          const questionError = await questionNotCurrentError(
+            payload.questionId,
+            sessionId,
+            existingGameState,
+          );
+          if (questionError) return next(questionError);
+        }
+
         // Cancel previous answering timer
         timerManager.cancelTimer(`answering-${sessionId.toString()}-*`);
 
@@ -374,6 +425,8 @@ export const updateGameStateUnified = async (
           currentQuestionIndex: gameState.currentQuestionIndex,
           currentAnsweringTeam: gameState.currentAnsweringTeam,
           answeringStartTime: secondChanceStartTime,
+          hintRevealed: false,
+          answerMarked: false,
         });
         break;
 
@@ -385,6 +438,11 @@ export const updateGameStateUnified = async (
               400,
             ),
           );
+        }
+
+        {
+          const teamError = await teamNotInSessionError(payload.teamId, sessionId);
+          if (teamError) return next(teamError);
         }
 
         // Cancel buzzer timer since we're manually selecting a team
@@ -433,6 +491,8 @@ export const updateGameStateUnified = async (
           currentAnsweringTeam: gameState.currentAnsweringTeam,
           awaitingTeamSelection: false,
           answeringStartTime,
+          hintRevealed: false,
+          answerMarked: false,
         });
         break;
 
@@ -444,6 +504,15 @@ export const updateGameStateUnified = async (
               400,
             ),
           );
+        }
+
+        {
+          const questionError = await questionNotCurrentError(
+            payload.questionId,
+            sessionId,
+            existingGameState,
+          );
+          if (questionError) return next(questionError);
         }
 
         // Cancel the buzzer timer (admin fast-forwarding the process)
@@ -486,6 +555,8 @@ export const updateGameStateUnified = async (
           currentQuestionIndex: gameState.currentQuestionIndex,
           currentAnsweringTeam: gameState.currentAnsweringTeam,
           answeringStartTime: autoSelectStartTime,
+          hintRevealed: false,
+          answerMarked: false,
         });
         break;
 
@@ -528,11 +599,32 @@ export const updateGameStateUnified = async (
           ? currentAnsweringTeamId
           : (currentAnsweringTeamId as any)._id?.toString() || currentAnsweringTeamId.toString();
 
-        // Deduct penalty points immediately
-        await teamService.updateTeamScore(targetTeamId, -hintPenalty);
+        // Atomically claim the hint BEFORE deducting, so concurrent clicks
+        // can't charge the penalty twice.
+        const hintClaim = await GameState.findOneAndUpdate(
+          {
+            sessionId,
+            gameStatus: GameStatus.ANSWERING,
+            currentAnsweringTeam: targetTeamId,
+            hintRevealed: { $ne: true },
+          },
+          { $set: { hintRevealed: true } },
+          { new: true },
+        );
+        if (!hintClaim) {
+          return next(
+            new AppError(
+              "Hint has already been revealed for this question.",
+              400,
+            ),
+          );
+        }
 
         existingGameState.hintRevealed = true;
-        gameState = await existingGameState.save();
+        gameState = existingGameState;
+
+        // Deduct penalty points immediately
+        await teamService.updateTeamScore(targetTeamId, -hintPenalty);
 
         // Emit GAME_STATE_CHANGED and TEAM_UPDATED socket events
         SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
@@ -602,6 +694,10 @@ export const updateGameStateUnified = async (
         if (!payload?.teamId) {
           return next(new AppError("teamId is required.", 400));
         }
+        {
+          const teamError = await teamNotInSessionError(payload.teamId, sessionId);
+          if (teamError) return next(teamError);
+        }
         try {
           gameState = await passSpinQuestionToTeam(
             sessionId.toString(),
@@ -649,6 +745,13 @@ export const updateGameStateUnified = async (
             new AppError("Team ID is required for START_SPIN_ROUND action.", 400),
           );
         }
+        {
+          const teamError = await teamNotInSessionError(payload.teamId, sessionId);
+          if (teamError) return next(teamError);
+        }
+
+        // Drop any pending landing timers from a previous spin.
+        timerManager.cancelSessionTimers(sessionId);
 
         if (typeof payload?.hideFromUsers === "boolean") {
           await gameStateService.updateGameState(sessionId, {
@@ -677,95 +780,62 @@ export const updateGameStateUnified = async (
           availableCategories: categoriesData.categories,
           categoryCounts: categoriesData.categoryCounts,
           spinWheelState: gameState.spinWheelState,
+          answerMarked: false,
         });
         break;
       }
 
       case "TRIGGER_SPIN_WHEEL": {
-        const targetTeamId = payload?.teamId || existingGameState.currentAnsweringTeam;
+        if (existingGameState.gameStatus !== GameStatus.SPIN_ROUND) {
+          return next(
+            new AppError("The wheel can only be spun during a spin round.", 400),
+          );
+        }
+        const targetTeamId =
+          payload?.teamId ||
+          (existingGameState.currentAnsweringTeam as any)?._id ||
+          existingGameState.currentAnsweringTeam;
         if (!targetTeamId) {
           return next(
             new AppError("No team currently assigned to spin.", 400),
           );
         }
+        {
+          const teamError = await teamNotInSessionError(
+            String(targetTeamId),
+            sessionId,
+          );
+          if (teamError) return next(teamError);
+        }
 
-        const spinResult = await gameStateService.triggerSpinWheel(
-          sessionId,
-          targetTeamId,
-        );
+        // Atomic spin claim + broadcast + session-scoped landing timers (shared with
+        // the captain's socket "spin-wheel" event).
+        const spinResult = await spinWheelForTeam(sessionId, String(targetTeamId));
         gameState = spinResult.gameState;
         additionalData.targetCategory = spinResult.targetCategory;
         additionalData.winningIndex = spinResult.winningIndex;
         additionalData.durationMs = spinResult.durationMs;
         additionalData.availableCategories = spinResult.availableCategories;
-
-        // Broadcast spin event to session (Presenter and all teams)
-        SessionEmitters.toSession(sessionId, Events.WHEEL_SPIN_TRIGGERED, {
-          teamId: targetTeamId,
-          targetCategory: spinResult.targetCategory,
-          winningIndex: spinResult.winningIndex,
-          durationMs: spinResult.durationMs,
-          availableCategories: spinResult.availableCategories,
-          startTime: gameState.spinWheelState?.startTime,
-        });
-
-        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
-          gameStatus: gameState.gameStatus,
-          currentQuestionIndex: gameState.currentQuestionIndex,
-          currentAnsweringTeam: gameState.currentAnsweringTeam,
-          spinWheelState: gameState.spinWheelState,
-        });
-
-        // When the spinner stops (at durationMs): broadcast WHEEL_LANDED so clients show the category chip
-        setTimeout(async () => {
-          try {
-            await GameState.updateOne(
-              { sessionId },
-              { $set: { "spinWheelState.isSpinning": false } }
-            );
-          } catch (err) {
-            console.error("Error setting isSpinning to false in trigger spin:", err);
-          }
-          SessionEmitters.toSession(sessionId, Events.WHEEL_LANDED, {
-            targetCategory: spinResult.targetCategory,
-            questionIndex: spinResult.gameState.currentQuestionIndex,
-          });
-        }, spinResult.durationMs);
-
-        // After displaying the landed category chip for 2.5 seconds, transition to ANSWERING to show the question
-        setTimeout(async () => {
-          try {
-            const landedState = await gameStateService.landSpinWheel(sessionId);
-            SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
-              gameStatus: landedState.gameStatus,
-              currentQuestionIndex: landedState.currentQuestionIndex,
-              currentAnsweringTeam: landedState.currentAnsweringTeam,
-              currentCategory: landedState.currentCategory,
-              spinWheelState: landedState.spinWheelState,
-            });
-          } catch (autoLandError) {
-            console.error("Auto land spin wheel error:", autoLandError);
-          }
-        }, spinResult.durationMs + 2500);
-
         break;
       }
 
       case "WHEEL_LANDED": {
-        gameState = await gameStateService.landSpinWheel(sessionId);
+        // Manual land: only while the wheel is in a spin round.
+        const landedState = await gameStateService.landSpinWheel(sessionId);
+        if (!landedState) {
+          return next(
+            new AppError("The wheel is not spinning right now.", 400),
+          );
+        }
+        cancelSpinTimers(sessionId);
+        gameState = landedState;
 
         SessionEmitters.toSession(sessionId, Events.WHEEL_LANDED, {
           targetCategory: gameState.currentCategory,
           questionIndex: gameState.currentQuestionIndex,
         });
 
-        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
-          gameStatus: gameState.gameStatus,
-          currentQuestionIndex: gameState.currentQuestionIndex,
-          currentAnsweringTeam: gameState.currentAnsweringTeam,
-          currentCategory: gameState.currentCategory,
-          spinWheelState: gameState.spinWheelState,
-        });
+        emitSpinLanded(sessionId, gameState);
         break;
       }
 
@@ -797,6 +867,15 @@ export const updateGameStateUnified = async (
       return next(new AppError(error.message, 400));
     }
     if (error.message === "No teams in buzzer queue") {
+      return next(new AppError(error.message, 400));
+    }
+    if (error.message === SPIN_NOT_ALLOWED) {
+      return next(new AppError(`${error.message}.`, 409));
+    }
+    if (
+      error.message === "No unanswered teams available in buzzer queue" ||
+      error.message === "No categories with unattempted questions available"
+    ) {
       return next(new AppError(error.message, 400));
     }
 
@@ -1053,6 +1132,8 @@ export const markAnswer = async (
   res: Response,
   next: NextFunction,
 ) => {
+  // Set once this request owns the mark; released again if it fails before scoring.
+  let claimedMark: { sessionId: string; teamId: string } | null = null;
   try {
     const sessionId = req.user?.sessionId;
     const { isCorrect } = req.body;
@@ -1090,11 +1171,6 @@ export const markAnswer = async (
         ? currentTeam
         : (currentTeam as any)?._id?.toString() || currentTeam.toString();
 
-    // Cancel the answering timer since admin has made a decision
-    timerManager.cancelTimer(
-      `answering-${sessionId.toString()}-${teamId.toString()}`,
-    );
-
     let pointsAwarded = 0;
     const currentQuestion = await questionService.fetchCurrentQuestion(
       sessionId,
@@ -1104,6 +1180,30 @@ export const markAnswer = async (
     if (!currentQuestion) {
       return next(new AppError("Current question not found.", 404));
     }
+
+    // Atomically claim the mark for this team's answer before any scoring.
+    // Blocks double-scoring from concurrent clicks, and a second Correct/Wrong after
+    // a Wrong in Buzzer Battle (where the game stays ANSWERING with the same team).
+    const claimed = await GameState.findOneAndUpdate(
+      {
+        sessionId,
+        gameStatus: GameStatus.ANSWERING,
+        currentAnsweringTeam: teamId,
+        answerMarked: { $ne: true },
+      },
+      { $set: { answerMarked: true } },
+      { new: true },
+    );
+    if (!claimed) {
+      return next(new AppError("This answer has already been marked.", 409));
+    }
+    claimedMark = { sessionId, teamId };
+    gameState.answerMarked = true;
+
+    // Cancel the answering timer since admin has made a decision
+    timerManager.cancelTimer(
+      `answering-${sessionId.toString()}-${teamId.toString()}`,
+    );
 
     // Save the response to database for dashboard tracking
     await questionService.createBuzzerResponse(
@@ -1128,6 +1228,7 @@ export const markAnswer = async (
     if (isCorrect) {
       pointsAwarded = getCorrectPoints(currentQuestion);
       // Update team score
+      claimedMark = null; // Scoring has started: keep the mark claimed.
       await teamService.updateTeamScore(teamId, pointsAwarded);
 
       const session = await Session.findById(sessionId);
@@ -1180,6 +1281,7 @@ export const markAnswer = async (
         currentQuestionIndex: idleGameState.currentQuestionIndex,
         currentAnsweringTeam: idleGameState.currentAnsweringTeam,
         idleStartTime: idleGameState.idleStartTime,
+        answerMarked: Boolean(idleGameState.answerMarked),
         gameEnded,
       });
 
@@ -1200,6 +1302,7 @@ export const markAnswer = async (
       // Deduct the wrong-answer penalty before notifying clients,
       // so leaderboard refetches triggered by the event see the new score.
       const wrongPenalty = getWrongPenalty(currentQuestion);
+      claimedMark = null; // Scoring has started: keep the mark claimed.
       if (wrongPenalty > 0) {
         await teamService.updateTeamScore(teamId, -wrongPenalty);
       }
@@ -1252,6 +1355,7 @@ export const markAnswer = async (
           keepBuzzer: false,
           isNoBuzzerQuestion: true,
           awaitingTeamSelection: true,
+          answerMarked: true,
         });
 
         res.status(200).json({
@@ -1267,6 +1371,16 @@ export const markAnswer = async (
         return;
       }
 
+      // Game stays ANSWERING with the same team: tell clients the answer is marked
+      // so the admin UI disables Correct/Wrong until the question passes on.
+      SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
+        gameStatus: gameState.gameStatus,
+        currentQuestionIndex: gameState.currentQuestionIndex,
+        currentAnsweringTeam: teamId,
+        hintRevealed: Boolean(gameState.hintRevealed),
+        answerMarked: true,
+      });
+
       res.status(200).json({
         message:
           "Answer marked as wrong. Admin can pass to second team or move to next question.",
@@ -1280,6 +1394,16 @@ export const markAnswer = async (
     }
   } catch (error: any) {
     console.error("Error marking answer:", error);
+    if (claimedMark) {
+      // Failed before any score change: release the claim so the admin can retry.
+      await GameState.updateOne(
+        {
+          sessionId: claimedMark.sessionId,
+          currentAnsweringTeam: claimedMark.teamId,
+        },
+        { $set: { answerMarked: false } },
+      ).catch(() => undefined);
+    }
     if (error.message === "Game state not found") {
       return next(new AppError(error.message, 404));
     }

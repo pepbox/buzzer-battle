@@ -87,8 +87,37 @@ const GameStateRouter = () => {
   // Track previous question index to detect question changes
   const previousQuestionIndexRef = useRef<number | null>(null);
 
-  // Track previous navigation to prevent duplicate navigations
-  const lastNavigationRef = useRef<string | null>(null);
+  // Last navigation issued by the router (target + the location key it was
+  // issued from) so we don't push the same route twice before the location
+  // updates. Pages may also navigate on their own; the guard is keyed on the
+  // current location so the router always converges on the right screen.
+  const lastNavigationRef = useRef<{ to: string; fromKey: string } | null>(
+    null,
+  );
+
+  // Timer that ends the 4.5s result-card delay after a mark.
+  const delayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startAnswerDelay = () => {
+    if (delayTimerRef.current) clearTimeout(delayTimerRef.current);
+    setIsDelayingAnswer(true);
+    delayTimerRef.current = setTimeout(() => {
+      delayTimerRef.current = null;
+      setIsDelayingAnswer(false);
+    }, 4500);
+  };
+  const cancelAnswerDelay = () => {
+    if (delayTimerRef.current) {
+      clearTimeout(delayTimerRef.current);
+      delayTimerRef.current = null;
+    }
+    setIsDelayingAnswer(false);
+  };
+  useEffect(
+    () => () => {
+      if (delayTimerRef.current) clearTimeout(delayTimerRef.current);
+    },
+    [],
+  );
 
   // Global force state for Answer Reveal
   const [isDelayingAnswer, setIsDelayingAnswer] = useState(false);
@@ -172,7 +201,7 @@ const GameStateRouter = () => {
       lastNavigationRef.current = null;
 
       // Clear answer reveal delay and tracking for new question
-      setIsDelayingAnswer(false);
+      cancelAnswerDelay();
       setAnsweredWrong(false);
       setWasAnswerMarkedCorrect(false);
       setForceAnswerReveal(false);
@@ -240,10 +269,7 @@ const GameStateRouter = () => {
       }
       setAnsweredWrong(false);
       // Wait 4.5 seconds (during which answering team sees NailedIt status card)
-      setIsDelayingAnswer(true);
-      setTimeout(() => {
-        setIsDelayingAnswer(false);
-      }, 4500);
+      startAnswerDelay();
     };
 
     const handleAnswerMarkedWrong = (data: any) => {
@@ -253,7 +279,7 @@ const GameStateRouter = () => {
         sessionStorage.removeItem(`revealedAnswerForMe_${sessionId}`);
       }
       // Wait 4.5 seconds (during which answering team sees CloseCall status card)
-      setIsDelayingAnswer(true);
+      startAnswerDelay();
 
       const myId = teamRef.current?._id || (teamRef.current as any)?.id;
       if (isSameTeam(data?.teamId, myId)) {
@@ -269,14 +295,10 @@ const GameStateRouter = () => {
           }));
         }
       }
-
-      setTimeout(() => {
-        setIsDelayingAnswer(false);
-      }, 4500);
     };
 
     const handleShowAnswer = () => {
-      setIsDelayingAnswer(false);
+      cancelAnswerDelay();
       setForceAnswerReveal(true);
     };
 
@@ -288,6 +310,9 @@ const GameStateRouter = () => {
         setIsGameEnded(true);
       }
       if (data?.gameStatus === "buzzer_round" || data?.gameStatus === "spin_round") {
+        // A new round/turn started: the result card is over, route immediately
+        // (pages no longer navigate on their own for this transition).
+        cancelAnswerDelay();
         setForceAnswerReveal(false);
         setWasAnswerMarkedCorrect(false);
         setAnsweredWrong(false);
@@ -354,13 +379,12 @@ const GameStateRouter = () => {
     // Helper function to navigate only if different from last navigation
     const safeNavigate = (path: string) => {
       const fullPath = `/game/${sessionId}${path}`;
-      if (
-        lastNavigationRef.current !== fullPath &&
-        location.pathname !== fullPath
-      ) {
-        lastNavigationRef.current = fullPath;
-        navigate(fullPath);
-      }
+      if (location.pathname === fullPath) return;
+      const last = lastNavigationRef.current;
+      // Same navigation already issued from this exact location: still pending.
+      if (last && last.to === fullPath && last.fromKey === location.key) return;
+      lastNavigationRef.current = { to: fullPath, fromKey: location.key };
+      navigate(fullPath);
     };
 
     // Avoid navigating if we are currently delaying for a status card to show
@@ -466,6 +490,8 @@ const GameStateRouter = () => {
     forceAnswerReveal,
     isGameEnded,
     isSpinWheel,
+    location.pathname,
+    location.key,
   ]);
 
   // Render child routes

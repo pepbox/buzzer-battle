@@ -75,12 +75,18 @@ const sessionSlice = createSlice({
       sessionApi.endpoints.fetchSessionById.matchFulfilled,
       (state, action) => {
         state.isLoading = false;
-        state.session = action.payload.data;
+        // Public endpoint returns only a branding/config subset: merge it so a
+        // fully-loaded session (from fetchSession) isn't clobbered.
+        state.session = {
+          ...(state.session ?? {}),
+          ...action.payload.data,
+        } as Session;
         state.error = null;
         // Also set sessionId if not already set
-        if (!state.sessionId && action.payload.data._id) {
-          state.sessionId = action.payload.data._id;
-          localStorage.setItem('sessionId', action.payload.data._id);
+        const requestedId = action.meta.arg.originalArgs;
+        if (!state.sessionId && requestedId) {
+          state.sessionId = requestedId;
+          localStorage.setItem('sessionId', requestedId);
         }
       }
     );

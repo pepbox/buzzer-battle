@@ -8,6 +8,7 @@ import { Types } from 'mongoose';
 import { SessionEmitters } from '../../../services/socket/sessionEmitters';
 import { Events } from '../../../services/socket/enums/Events';
 import { GameStatus } from '../../gameState/types/enums';
+import { isValidObjectId } from '../../gameState/utils/sessionScope';
 
 const buzzerQueueService = new BuzzerQueueService();
 const gameStateService = new GameStateService();
@@ -31,6 +32,10 @@ export const pressBuzzer = async (
 
         if (!teamId || !sessionId) {
             return next(new AppError("Team ID or Session ID not found in token.", 401));
+        }
+
+        if (req.user?.role !== "TEAM" || !isValidObjectId(teamId)) {
+            return next(new AppError("Only teams can press the buzzer.", 403));
         }
 
         if (!timestamp) {
@@ -85,6 +90,7 @@ export const pressBuzzer = async (
 
         // Check if team has already pressed buzzer for this question
         const hasPressed = await buzzerQueueService.checkIfTeamPressed(
+            sessionId,
             questionId,
             teamId
         );
@@ -246,6 +252,10 @@ export const fetchBuzzerLeaderboardByQuestion = async (
 
         if (!sessionId) {
             return next(new AppError("Session ID not found in token.", 401));
+        }
+
+        if (!isValidObjectId(questionId)) {
+            return next(new AppError("Invalid question ID.", 400));
         }
 
         // Fetch buzzer leaderboard for the specific question

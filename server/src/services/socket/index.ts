@@ -5,7 +5,6 @@ import { connectRedis, pubClient, subClient } from "../redis/redisClient";
 import { redisPresence } from "../redis/redisPresence";
 import { redisRooms } from "../redis/redisRooms";
 import { socketAuthMiddleware } from "../../middlewares/socketAuthMiddleware";
-import { handlePressBuzzer } from "./handelers/buzzerHandler";
 import { handleSpinWheel } from "./handelers/spinHandler";
 import { handleTimeSync } from "./handelers/syncHandler";
 import { handleSpinPassSelect } from "./handelers/spinPassHandler";
@@ -37,9 +36,14 @@ export async function initializeSocket(server: HTTPServer): Promise<Server> {
     const user = (socket as any).user;
     const sessionId = user?.sessionId;
 
-    // Track presence and room membership in Redis
-    await redisPresence.addSocket(socket.id, user);
-    await redisRooms.addSocketToSession(socket.id, user);
+    // Track presence and room membership in Redis. A Redis hiccup must not
+    // leave an unhandled rejection or keep the socket out of its rooms.
+    try {
+      await redisPresence.addSocket(socket.id, user);
+      await redisRooms.addSocketToSession(socket.id, user);
+    } catch (error) {
+      console.error(`Redis presence tracking failed for socket ${socket.id}:`, error);
+    }
 
     // Join Socket.IO session room (broadcasting — Redis adapter syncs across instances)
     socket.join(`session:${sessionId}`);
@@ -57,10 +61,7 @@ export async function initializeSocket(server: HTTPServer): Promise<Server> {
       console.log(`Socket ${socket.id} joined team room: ${teamRoom}`);
     }
 
-    // Handle press-buzzer event
-    socket.on("press-buzzer", async (payload) => {
-      await handlePressBuzzer(socket, payload);
-    });
+    // Buzzer presses go through REST (POST /buzzer/press); no socket handler.
 
     // Handle spin-wheel event
     socket.on("spin-wheel", async () => {
@@ -79,8 +80,12 @@ export async function initializeSocket(server: HTTPServer): Promise<Server> {
 
     socket.on("disconnect", async () => {
       console.log(`Socket disconnected: ${socket.id}`);
-      await redisPresence.removeSocket(socket.id);
-      await redisRooms.removeSocketFromSession(socket.id);
+      try {
+        await redisPresence.removeSocket(socket.id);
+        await redisRooms.removeSocketFromSession(socket.id);
+      } catch (error) {
+        console.error(`Redis cleanup failed for socket ${socket.id}:`, error);
+      }
     });
   });
 

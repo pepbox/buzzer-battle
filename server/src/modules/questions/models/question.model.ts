@@ -214,6 +214,13 @@ const questionSchema = new Schema<IQuestion>(
       required: true,
       default: "superadmin",
     },
+    // null = global library question; set = private to that session.
+    session: {
+      type: Schema.Types.ObjectId,
+      ref: "Session",
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true,

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -18,7 +18,13 @@ import { useDragDropReorder } from "../hooks/useDragDropReorder";
 import QuestionPreviewModal from "./QuestionPreviewModal";
 import QuestionLibraryManager from "./QuestionLibraryManager";
 import { useSetQuestionSettings } from "../services/adminRemoteApi";
-import { useFetchSessionQuery } from "../../session/services/session.api";
+import {
+  useFetchSessionQuery,
+  useFetchSessionQuestionsStatusQuery,
+} from "../../session/services/session.api";
+
+const LOCKED_MESSAGE =
+  "Questions that were already played or are live can't be moved or removed during a game.";
 
 export interface CurrentQuestionsModalProps {
   open: boolean;
@@ -47,9 +53,9 @@ const CurrentQuestionsModal: React.FC<CurrentQuestionsModalProps> = ({
   const {
     draggingId,
     items,
-    handleDragStart,
+    handleDragStart: startDrag,
     handleDragOver,
-    handleDrop,
+    handleDrop: dropOn,
     setItems,
   } = useDragDropReorder(selectedQuestionIds);
 
@@ -64,7 +70,43 @@ const CurrentQuestionsModal: React.FC<CurrentQuestionsModalProps> = ({
     null,
   );
   const { setQuestionSettings } = useSetQuestionSettings();
-  const { data: sessionResponse } = useFetchSessionQuery();
+  const { data: sessionResponse, refetch: refetchSession } =
+    useFetchSessionQuery();
+  const { data: questionsStatusData, refetch: refetchQuestionsStatus } =
+    useFetchSessionQuestionsStatusQuery(undefined, { skip: !open });
+
+  // Questions already played / live in the running game can't be moved or removed.
+  const lockedIds = useMemo(() => {
+    const ids = new Set<string>();
+    const statusItems: Array<{ _id?: string; isLocked?: boolean }> = Array.isArray(questionsStatusData?.data)
+      ? questionsStatusData.data
+      : [];
+    statusItems.forEach((item) => {
+      if (item?.isLocked && item?._id) ids.add(String(item._id));
+    });
+    return ids;
+  }, [questionsStatusData]);
+
+  // True once the user has reordered/removed items locally and not saved yet.
+  const isDirtyRef = useRef(false);
+  const wasOpenRef = useRef(false);
+
+  const handleDragStart = (questionId: string) => {
+    if (lockedIds.has(questionId)) return;
+    startDrag(questionId);
+  };
+
+  const handleDrop = (targetQuestionId: string) => {
+    if (lockedIds.has(targetQuestionId)) {
+      // Can't drop onto a locked slot; cancel the drag.
+      dropOn(draggingId ?? targetQuestionId);
+      return;
+    }
+    if (draggingId && draggingId !== targetQuestionId) {
+      isDirtyRef.current = true;
+    }
+    dropOn(targetQuestionId);
+  };
 
   // This session's hide values (the library value is only the default seed).
   const sessionHidden = React.useMemo(() => {
@@ -80,14 +122,28 @@ const CurrentQuestionsModal: React.FC<CurrentQuestionsModalProps> = ({
     sessionHidden.get(question._id) ??
     question.hideFromUsers === true;
 
-  // Sync items with selectedQuestionIds when modal opens
+  // Content key: parents often pass a fresh array each render.
+  const selectedKey = selectedQuestionIds.join("|");
+
+  // Sync items with selectedQuestionIds when the modal opens, and afterwards only
+  // while there are no unsaved local edits — e.g. the hide toggle invalidates the
+  // session, and that refetch must not discard an unsaved reorder.
   React.useEffect(() => {
-    if (open) {
-      setItems(selectedQuestionIds);
+    if (!open) {
+      wasOpenRef.current = false;
+      return;
+    }
+    const justOpened = !wasOpenRef.current;
+    wasOpenRef.current = true;
+    if (justOpened || !isDirtyRef.current) {
+      setItems(selectedKey ? selectedKey.split("|") : []);
+      isDirtyRef.current = false;
+    }
+    if (justOpened) {
       setLocalError(null);
       setHiddenOverrides({});
     }
-  }, [open, selectedQuestionIds, setItems]);
+  }, [open, selectedKey, setItems]);
 
   const handleToggleHide = async (
     question: QuestionBankItem,
@@ -115,6 +171,11 @@ const CurrentQuestionsModal: React.FC<CurrentQuestionsModalProps> = ({
   };
 
   const handleRemoveQuestion = (questionId: string) => {
+    if (lockedIds.has(questionId)) {
+      setLocalError(LOCKED_MESSAGE);
+      return;
+    }
+    isDirtyRef.current = true;
     setItems((prev) => prev.filter((id) => id !== questionId));
   };
 
@@ -122,10 +183,19 @@ const CurrentQuestionsModal: React.FC<CurrentQuestionsModalProps> = ({
     try {
       setLocalError(null);
       await onSave(items);
+      isDirtyRef.current = false;
       onClose();
     } catch (err: any) {
-      const errorMsg = err?.message || "Failed to save questions";
+      // RTK Query errors carry the server message in err.data.message.
+      const errorMsg =
+        err?.data?.message || err?.message || "Failed to save questions";
       setLocalError(errorMsg);
+      if (err?.status === 409 || err?.status === 400) {
+        // Lock state / availability changed on the server: resync.
+        isDirtyRef.current = false;
+        refetchQuestionsStatus();
+        refetchSession();
+      }
     }
   };
 
@@ -183,6 +253,8 @@ const CurrentQuestionsModal: React.FC<CurrentQuestionsModalProps> = ({
                   question={mergedQuestion}
                   index={index}
                   isDragging={draggingId === questionId}
+                  locked={lockedIds.has(questionId)}
+                  canEdit={question?.isEditable !== false}
                   onDragStart={handleDragStart}
                   onDragOver={(e) => handleDragOver(e)}
                   onDrop={handleDrop}
@@ -274,6 +346,8 @@ const CurrentQuestionsModal: React.FC<CurrentQuestionsModalProps> = ({
           <QuestionLibraryManager
             selectedQuestionIds={items}
             onQuestionsSaved={(questionIds) => {
+              // Already persisted by the library manager.
+              isDirtyRef.current = false;
               setItems(questionIds);
               setQuestionLibraryOpen(false);
             }}

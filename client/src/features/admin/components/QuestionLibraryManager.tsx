@@ -33,6 +33,7 @@ import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import SearchIcon from "@mui/icons-material/Search";
 import ViewListIcon from "@mui/icons-material/ViewList";
+import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import {
   QuestionBankItem,
   useCreateQuestionFolderMutation,
@@ -45,7 +46,10 @@ import {
   useBulkCopyQuestionsMutation,
   useBulkMoveQuestionsMutation,
 } from "../services/admin.Api";
-import { useFetchSessionQuery } from "../../session/services/session.api";
+import {
+  useFetchSessionQuery,
+  useFetchSessionQuestionsStatusQuery,
+} from "../../session/services/session.api";
 import QuestionCard from "./QuestionCard";
 import QuestionEditorDialog from "./QuestionEditorDialog";
 import QuestionPreviewModal from "./QuestionPreviewModal";
@@ -77,6 +81,16 @@ export interface QuestionLibraryManagerProps {
 }
 
 const uniqueIds = (questionIds: string[]) => Array.from(new Set(questionIds));
+
+// Stable empty array: a fresh `[]` each render would re-trigger the selection
+// sync effect forever.
+const EMPTY_IDS: string[] = [];
+// Sidebar entry that lists the session's private questions (scope=mine).
+const MY_QUESTIONS_FILTER = "__my_questions__";
+// Folder the server forces session-admin questions into.
+const MY_QUESTIONS_FOLDER = "My Questions";
+const LOCKED_REMOVE_MESSAGE =
+  "Questions that were already played or are live can't be removed during a game.";
 
 const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
   selectedQuestionIds: selectedQuestionIdsProp,
@@ -142,15 +156,21 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
     refetch: refetchFolders,
   } = useFetchQuestionFoldersQuery();
 
+  const isMyQuestionsFilter = selectedFolder === MY_QUESTIONS_FILTER;
   const queryArgs = useMemo(
     () => ({
       search: debouncedSearch || undefined,
-      folder: selectedFolder,
+      folder: isMyQuestionsFilter ? "all" : selectedFolder,
+      // Superadmin only ever sees global questions; session admins can narrow
+      // down to their own private questions.
+      ...(isSuperAdmin
+        ? {}
+        : { scope: isMyQuestionsFilter ? ("mine" as const) : ("all" as const) }),
       sort,
       page: 1,
       limit: 200,
     }),
-    [debouncedSearch, selectedFolder, sort],
+    [debouncedSearch, selectedFolder, sort, isMyQuestionsFilter, isSuperAdmin],
   );
 
   const {
@@ -158,6 +178,22 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
     isLoading: isQuestionLoading,
     refetch: refetchQuestions,
   } = useFetchQuestionBankQuery(queryArgs);
+
+  // Which session questions are locked (already played / live) mid-game.
+  const {
+    data: questionsStatusData,
+    refetch: refetchQuestionsStatus,
+  } = useFetchSessionQuestionsStatusQuery(undefined, { skip: isSuperAdmin });
+  const lockedQuestionIds = useMemo(() => {
+    const ids = new Set<string>();
+    const items: Array<{ _id?: string; isLocked?: boolean }> = Array.isArray(questionsStatusData?.data)
+      ? questionsStatusData.data
+      : [];
+    items.forEach((item) => {
+      if (item?.isLocked && item?._id) ids.add(String(item._id));
+    });
+    return ids;
+  }, [questionsStatusData]);
   const [updateSessionQuestions, { isLoading: isSavingQuestions }] =
     useUpdateSessionQuestionsMutation();
   const [deleteQuestion, { isLoading: isDeletingQuestion }] =
@@ -210,16 +246,37 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
     const apiFolders = foldersResponse?.data?.folders || [];
     return [
       "all",
-      ...apiFolders.filter((folder) => folder.toLowerCase() !== "all"),
+      ...apiFolders.filter(
+        (folder) =>
+          folder.toLowerCase() !== "all" &&
+          // Session admins get a dedicated "My Questions" entry (scope=mine) instead.
+          (isSuperAdmin || folder !== MY_QUESTIONS_FOLDER),
+      ),
     ];
-  }, [foldersResponse]);
+  }, [foldersResponse, isSuperAdmin]);
 
-  const questionBank = questionBankResponse?.data?.questions || [];
+  const questionBank = useMemo(
+    () => questionBankResponse?.data?.questions || [],
+    [questionBankResponse],
+  );
   const totalQuestions =
     questionBankResponse?.data?.pagination?.total ?? questionBank.length;
   const visibleQuestionsCount = questionBank.length;
-  const currentSessionQuestionIds = sessionResponse?.data?.questions || [];
-  const folderPaths = folders.filter((folder) => folder !== "all");
+  const currentSessionQuestionIds =
+    sessionResponse?.data?.questions ?? EMPTY_IDS;
+  // Content-based key so a new-but-equal array (inline prop / refetch) doesn't
+  // reset the selection.
+  const sourceSelectionKey = (
+    selectedQuestionIdsProp ?? currentSessionQuestionIds
+  ).join("|");
+  const sourceSelectionIds = useMemo(
+    () => (sourceSelectionKey ? sourceSelectionKey.split("|") : EMPTY_IDS),
+    [sourceSelectionKey],
+  );
+  const folderPaths = useMemo(
+    () => folders.filter((folder) => folder !== "all"),
+    [folders],
+  );
   const selectedQuestionsCount = selectedQuestionIds.length;
 
   const getFolderLeaf = (folderPath: string) => {
@@ -283,10 +340,8 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
   }, [searchText]);
 
   useEffect(() => {
-    setSelectedQuestionIds(
-      uniqueIds(selectedQuestionIdsProp ?? currentSessionQuestionIds),
-    );
-  }, [currentSessionQuestionIds, selectedQuestionIdsProp]);
+    setSelectedQuestionIds(uniqueIds(sourceSelectionIds));
+  }, [sourceSelectionIds]);
 
   useEffect(() => {
     setCollapsedFolders((current) => {
@@ -319,6 +374,13 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
     ) && !allVisibleSelected;
 
   const toggleQuestion = (questionId: string) => {
+    if (
+      lockedQuestionIds.has(questionId) &&
+      selectedQuestionIds.includes(questionId)
+    ) {
+      setSaveError(LOCKED_REMOVE_MESSAGE);
+      return;
+    }
     setSelectedQuestionIds((current) =>
       current.includes(questionId)
         ? current.filter((id) => id !== questionId)
@@ -337,7 +399,10 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
       }
 
       const visibleSet = new Set(visibleQuestionIds);
-      return current.filter((questionId) => !visibleSet.has(questionId));
+      return current.filter(
+        (questionId) =>
+          !visibleSet.has(questionId) || lockedQuestionIds.has(questionId),
+      );
     });
   };
 
@@ -349,6 +414,9 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
       await onQuestionsSaved?.(selectedQuestionIds);
     } catch (error: any) {
       setSaveError(error?.data?.message || "Failed to save session questions");
+      if (!isSuperAdmin && (error?.status === 409 || error?.status === 400)) {
+        refetchQuestionsStatus();
+      }
     }
   };
 
@@ -560,6 +628,8 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
               }}
             />
           </ListItemButton>
+          {isSuperAdmin && (
+          <>
           <IconButton
             size="small"
             onClick={(event) => {
@@ -583,6 +653,8 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
           >
             <MoreHorizIcon fontSize="small" />
           </IconButton>
+          </>
+          )}
         </Box>
       </ListItem>
       {!collapsedFolders[node.path] &&
@@ -702,6 +774,7 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
             Question Library
           </Typography> */}
 
+          {isSuperAdmin && (
           <Button
             fullWidth
             variant="contained"
@@ -729,6 +802,7 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
           >
             Add new Library
           </Button>
+          )}
 
           <List
             dense
@@ -758,6 +832,31 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
                     />
                   </ListItemButton>
                 </ListItem>
+                {!isSuperAdmin && (
+                  <ListItem disablePadding sx={{ display: "block" }}>
+                    <ListItemButton
+                      selected={isMyQuestionsFilter}
+                      onClick={() => setSelectedFolder(MY_QUESTIONS_FILTER)}
+                      sx={{
+                        borderRadius: 2,
+                        py: 1,
+                      }}
+                    >
+                      <PersonOutlineIcon
+                        sx={{ fontSize: 20, mr: 1, color: "text.secondary" }}
+                      />
+                      <ListItemText
+                        primary={MY_QUESTIONS_FOLDER}
+                        secondary="Only in this session"
+                        primaryTypographyProps={{ noWrap: true, fontWeight: 500 }}
+                        secondaryTypographyProps={{
+                          noWrap: true,
+                          sx: { fontSize: 11, color: "text.secondary" },
+                        }}
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                )}
                 {folderTree.map((node) => renderFolderNode(node))}
               </>
             )}
@@ -926,6 +1025,7 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
               <Typography variant="body2" sx={{ color: "#c2410c", fontWeight: 600 }}>
                 {selectedQuestionIds.length} question(s) selected:
               </Typography>
+              {isSuperAdmin && (
               <Button
                 variant="contained"
                 size="small"
@@ -950,7 +1050,8 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
               >
                 Copy Selected
               </Button>
-              {currentAdminId === "superadmin" && (
+              )}
+              {isSuperAdmin && (
                 <Button
                   variant="outlined"
                   size="small"
@@ -978,7 +1079,12 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
               <Button
                 variant="text"
                 size="small"
-                onClick={() => setSelectedQuestionIds([])}
+                onClick={() => {
+                  // Locked (played/live) questions stay in the session.
+                  setSelectedQuestionIds((current) =>
+                    current.filter((id) => lockedQuestionIds.has(id)),
+                  );
+                }}
                 sx={{
                   color: "#64748b",
                   textTransform: "none",
@@ -1017,24 +1123,25 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
                     onEdit={handleEditQuestion}
                     onDelete={(item) => setQuestionToDelete(item)}
                     onView={(item) => setPreviewQuestion(item)}
-                    onCopy={(item) =>
+                    onCopy={isSuperAdmin ? (item) =>
                       setFolderSelectorDialog({
                         open: true,
                         action: "copy",
                         questionIds: [item._id],
                         targetFolder: item.folder || "General",
-                      })
+                      }) : undefined
                     }
-                    onMove={(item) =>
+                    onMove={isSuperAdmin ? (item) =>
                       setFolderSelectorDialog({
                         open: true,
                         action: "move",
                         questionIds: [item._id],
                         targetFolder: item.folder || "General",
-                      })
+                      }) : undefined
                     }
                     actionButtons="all"
                     currentAdminId={currentAdminId}
+                    locked={lockedQuestionIds.has(question._id)}
                   />
                 ))}
               </List>
@@ -1109,8 +1216,13 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
         open={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
         folders={folders.filter((name) => name !== "all")}
-        defaultFolder={selectedFolder === "all" ? "General" : selectedFolder}
+        defaultFolder={
+          selectedFolder === "all" || isMyQuestionsFilter
+            ? "General"
+            : selectedFolder
+        }
         mode="create"
+        showFolderPicker={isSuperAdmin}
         onSaved={() => {
           refetchQuestions();
           refetchFolders();
@@ -1124,8 +1236,13 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
           setEditingQuestion(null);
         }}
         folders={folders.filter((name) => name !== "all")}
-        defaultFolder={selectedFolder === "all" ? "General" : selectedFolder}
+        defaultFolder={
+          selectedFolder === "all" || isMyQuestionsFilter
+            ? "General"
+            : selectedFolder
+        }
         mode="edit"
+        showFolderPicker={isSuperAdmin}
         initialQuestion={editingQuestion}
         onSaved={() => {
           refetchQuestions();
@@ -1135,7 +1252,10 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
 
       <Dialog
         open={Boolean(questionToDelete)}
-        onClose={() => setQuestionToDelete(null)}
+        onClose={() => {
+          setQuestionToDelete(null);
+          setActionError(null);
+        }}
       >
         <DialogTitle>Delete Question</DialogTitle>
         <DialogContent>
@@ -1143,9 +1263,21 @@ const QuestionLibraryManager: React.FC<QuestionLibraryManagerProps> = ({
             Are you sure you want to delete this question? This will also remove
             it from all sessions.
           </Typography>
+          {actionError && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {actionError}
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setQuestionToDelete(null)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              setQuestionToDelete(null);
+              setActionError(null);
+            }}
+          >
+            Cancel
+          </Button>
           <Button
             color="error"
             variant="contained"

@@ -74,6 +74,7 @@ const QuestionLibraryPage: React.FC = () => {
         defaultFolder={editingQuestion?.folder || "General"}
         mode="edit"
         initialQuestion={editingQuestion}
+        showFolderPicker={false}
         onSaved={() => {}}
       />
     </>

@@ -5,6 +5,10 @@ import SessionService from "../../session/services/session.service";
 import GameStateService from "../../gameState/services/gameState.service";
 import QuestionService from "../../questions/services/question.service";
 import { getCorrectPoints } from "../../questions/constants";
+import {
+  isValidObjectId,
+  sessionScopeError,
+} from "../../gameState/utils/sessionScope";
 
 const teamService = new TeamService();
 const sessionService = new SessionService();
@@ -23,8 +27,9 @@ export const fetchDashboard = async (
   try {
     const sessionId = req.user?.sessionId;
 
-    if (!sessionId) {
-      return next(new AppError("Session ID not found in token.", 401));
+    const scopeError = sessionScopeError(sessionId);
+    if (scopeError) {
+      return next(scopeError);
     }
 
     // Fetch session details
@@ -142,6 +147,15 @@ export const updateTeam = async (
       return next(new AppError("Team ID is required.", 400));
     }
 
+    if (!isValidObjectId(teamId)) {
+      return next(new AppError("Invalid team ID.", 400));
+    }
+
+    const scopeError = sessionScopeError(req.user?.sessionId);
+    if (scopeError) {
+      return next(scopeError);
+    }
+
     // Validate at least one field is provided
     if (teamName === undefined && teamScore === undefined) {
       return next(
@@ -150,8 +164,12 @@ export const updateTeam = async (
     }
 
     // Fetch team to verify it exists
-    const team = await teamService.fetchTeamById(teamId);
-    if (!team) {
+    const team = await teamService.fetchTeamById(teamId).catch(() => null);
+    if (
+      !team ||
+      String((team.session as any)?._id ?? team.session) !==
+        String(req.user.sessionId)
+    ) {
       return next(new AppError("Team not found.", 404));
     }
 
@@ -211,9 +229,22 @@ export const fetchTeamResponses = async (
       return next(new AppError("Team ID is required.", 400));
     }
 
+    if (!isValidObjectId(teamId)) {
+      return next(new AppError("Invalid team ID.", 400));
+    }
+
+    const scopeError = sessionScopeError(req.user?.sessionId);
+    if (scopeError) {
+      return next(scopeError);
+    }
+
     // Fetch team
-    const team = await teamService.fetchTeamById(teamId);
-    if (!team) {
+    const team = await teamService.fetchTeamById(teamId).catch(() => null);
+    if (
+      !team ||
+      String((team.session as any)?._id ?? team.session) !==
+        String(req.user.sessionId)
+    ) {
       return next(new AppError("Team not found.", 404));
     }
 

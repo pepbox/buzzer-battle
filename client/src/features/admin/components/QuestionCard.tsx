@@ -7,7 +7,10 @@ import {
   IconButton,
   CircularProgress,
   Checkbox,
+  Chip,
+  Tooltip,
 } from "@mui/material";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import VisibilityIcon from "@mui/icons-material/Visibility";
@@ -31,6 +34,8 @@ export interface QuestionCardProps {
   loading?: boolean;
   /** Overrides the logged-in admin id (e.g. "superadmin" in the global library). */
   currentAdminId?: string;
+  /** Question is already played/live in the running game: can't be deselected. */
+  locked?: boolean;
 }
 
 const QuestionCard: React.FC<QuestionCardProps> = ({
@@ -46,17 +51,27 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
   variant = "default",
   loading = false,
   currentAdminId: currentAdminIdProp,
+  locked = false,
 }) => {
   const { admin } = useAdminAuth();
   const currentAdminId = currentAdminIdProp ?? (admin?.id || "");
-  const isOwner = currentAdminId === "superadmin" || question.createdBy === currentAdminId || !question.createdBy;
+  const isSuperAdmin = currentAdminId === "superadmin";
+  const isOwner = isSuperAdmin || question.createdBy === currentAdminId || !question.createdBy;
+  // Server tells us whether this admin may edit/delete the question (session admins
+  // can only edit their own session's private questions). Fall back to ownership
+  // for older payloads without the flag.
+  const canEdit = isSuperAdmin ? true : (question.isEditable ?? isOwner);
+  const hasScopeInfo = question.session !== undefined;
+  const isPrivateQuestion = Boolean(question.session);
 
   const showSelectButton =
     actionButtons === "select" || actionButtons === "all";
   const showEditDelete =
     actionButtons === "edit-delete" || actionButtons === "all";
   const showPreview = actionButtons === "all";
-  const isSelectable = showSelectButton && Boolean(onSelect);
+  // A locked question that is selected can't be removed from the session mid-game.
+  const selectionLocked = locked && isSelected;
+  const isSelectable = showSelectButton && Boolean(onSelect) && !selectionLocked;
 
   const handleSelect = () => {
     if (isSelectable && onSelect) {
@@ -100,9 +115,10 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
               checked={isSelected}
               onClick={(event) => {
                 event.stopPropagation();
+                if (selectionLocked) return;
                 onSelect(question._id);
               }}
-              disabled={loading}
+              disabled={loading || selectionLocked}
               sx={{
                 mt: -0.5,
                 color: isSelected ? "success.main" : "rgba(15, 23, 42, 0.35)",
@@ -129,6 +145,30 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
                 question.questionContent?.text ||
                 "Untitled question"}
             </Typography>
+            {!isSuperAdmin && (hasScopeInfo || locked) && (
+              <Box sx={{ display: "flex", gap: 0.75, mt: 0.5, flexWrap: "wrap" }}>
+                {hasScopeInfo && (
+                  <Chip
+                    size="small"
+                    label={isPrivateQuestion ? "My question" : "Library"}
+                    color={isPrivateQuestion ? "secondary" : "default"}
+                    variant="outlined"
+                    sx={{ height: 20, fontSize: 11 }}
+                  />
+                )}
+                {locked && (
+                  <Tooltip title="Already played or live in this game — it can't be moved or removed now">
+                    <Chip
+                      size="small"
+                      icon={<LockOutlinedIcon sx={{ fontSize: 14 }} />}
+                      label="Locked"
+                      variant="outlined"
+                      sx={{ height: 20, fontSize: 11 }}
+                    />
+                  </Tooltip>
+                )}
+              </Box>
+            )}
             {variant !== "minimal" && (
               <Typography
                 variant="caption"
@@ -186,7 +226,7 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
             </IconButton>
           )}
 
-          {showEditDelete && isOwner && onEdit && (
+          {showEditDelete && canEdit && onEdit && (
             <IconButton
               size="small"
               onClick={(event) => {
@@ -228,7 +268,7 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
             </IconButton>
           )}
 
-          {showEditDelete && isOwner && onDelete && (
+          {showEditDelete && canEdit && onDelete && (
             <IconButton
               size="small"
               color="error"

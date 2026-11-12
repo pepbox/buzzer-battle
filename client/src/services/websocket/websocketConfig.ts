@@ -12,7 +12,29 @@ import { questionApi } from "../../features/question/services/questions.api";
 import { clearAdmin } from "../../features/admin/services/adminSlice";
 import { clearTeam, setTeam } from "../../features/game/services/teamSlice";
 
+let globalListenersRegistered = false;
+
+// Registers the app-wide listeners exactly once. They live in the service's
+// listener registry, so they are attached to every socket instance (including
+// ones that only connect after initial failures) and never duplicated.
 export const setupGlobalListeners = () => {
+  if (globalListenersRegistered) return;
+  globalListenersRegistered = true;
+
+  // On every successful RE-connect, refetch whatever may have changed while
+  // we were offline (events missed during the gap).
+  websocketService.onReconnect(() => {
+    store.dispatch(
+      api.util.invalidateTags([
+        "GameState",
+        "Question",
+        "BuzzerLeaderboard",
+        "Leaderboard",
+        "Session",
+      ]),
+    );
+  });
+
   // Game State Changed Event
   websocketService.addGlobalListener(
     Events.GAME_STATE_CHANGED,
@@ -250,24 +272,23 @@ export const initializeWebSocket = async (
   authToken?: string,
   sessionId?: string,
 ) => {
-  try {
-    const options: any = {};
-    if (authToken) {
-      options.auth = { token: authToken };
-    }
-
-    if (sessionId) {
-      options.auth = {
-        ...(options.auth || {}),
-        sessionId,
-      };
-    }
-
-    await websocketService.connect(serverUrl, options);
-    setupGlobalListeners();
-    console.log("Socket.IO initialized with global listeners");
-  } catch (error) {
-    console.error("Failed to initialize Socket.IO:", error);
-    throw error;
+  const options: any = {};
+  if (authToken) {
+    options.auth = { token: authToken };
   }
+
+  if (sessionId) {
+    options.auth = {
+      ...(options.auth || {}),
+      sessionId,
+    };
+  }
+
+  // Register listeners before connecting so they are on the socket even if
+  // the first connect attempt fails and socket.io connects later.
+  setupGlobalListeners();
+  // Rejects on the first failed attempt / timeout, but the socket keeps
+  // retrying in the background (see websocketService.connect).
+  await websocketService.connect(serverUrl, options);
+  console.log("Socket.IO initialized with global listeners");
 };

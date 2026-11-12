@@ -11,6 +11,9 @@ import { IBuzzerQueue } from "../../buzzerQueue/types/buzzerQueue.interface";
 import { Question } from "../../questions/models/question.model";
 import { IQuestion } from "../../questions/types/interfaces";
 
+/** Thrown by triggerSpinWheel when the game is not in SPIN_ROUND or the wheel is already spinning. */
+export const SPIN_NOT_ALLOWED = "The wheel can't be spun right now";
+
 export default class GameStateService {
   private session?: mongoose.ClientSession;
 
@@ -132,6 +135,7 @@ export default class GameStateService {
     gameState.buzzerRoundStartTime = undefined; // Clear timestamps
     gameState.answeringRoundStartTime = undefined;
     gameState.hintRevealed = false;
+    gameState.answerMarked = false;
 
     const options: any = {};
     if (this.session) {
@@ -225,6 +229,7 @@ export default class GameStateService {
     gameState.currentAnsweringTeam = undefined;
     gameState.buzzerRoundStartTime = Date.now() + 1500;
     gameState.answeringRoundStartTime = undefined; // Clear answering time
+    gameState.answerMarked = false;
 
     const options: any = {};
     if (this.session) {
@@ -249,6 +254,7 @@ export default class GameStateService {
       if (currentQuestion) {
         const buzzerQueueService = new BuzzerQueueService(this.session);
         await buzzerQueueService.clearBuzzerQueueForQuestion(
+          sessionId,
           String(currentQuestion._id),
         );
         console.log(
@@ -361,6 +367,7 @@ export default class GameStateService {
       gameState.awaitingTeamSelection = false;
       gameState.buzzerRoundStartTime = undefined; // Clear timestamps
       gameState.answeringRoundStartTime = undefined;
+      gameState.answerMarked = false;
 
       const options: any = {};
       if (this.session) {
@@ -381,6 +388,7 @@ export default class GameStateService {
       gameState.isNoBuzzerQuestion = false; // Reset no-buzzer flag
       gameState.awaitingTeamSelection = false;
       gameState.hintRevealed = false;
+      gameState.answerMarked = false;
 
       const options: any = {};
       if (this.session) {
@@ -466,6 +474,9 @@ export default class GameStateService {
     gameState.currentAnsweringTeam = getTeamId(nextTeam) as any;
     gameState.gameStatus = GameStatus.ANSWERING;
     gameState.answeringRoundStartTime = Date.now();
+    // New team answering: fresh hint and a fresh Correct/Wrong mark.
+    gameState.hintRevealed = false;
+    gameState.answerMarked = false;
     // Keep buzzerRoundStartTime so waiting teams can still render stable elapsed buzzer times.
 
     const options: any = {};
@@ -503,6 +514,9 @@ export default class GameStateService {
     gameState.gameStatus = GameStatus.ANSWERING;
     gameState.answeringRoundStartTime = Date.now();
     gameState.awaitingTeamSelection = false;
+    // New team answering: fresh hint and a fresh Correct/Wrong mark.
+    gameState.hintRevealed = false;
+    gameState.answerMarked = false;
     // gameState.buzzerRoundStartTime = undefined; // Clear buzzer time
 
     console.log("Answering team selected", answeringTeamId);
@@ -602,6 +616,7 @@ export default class GameStateService {
     gameState.awaitingTeamSelection = false;
     gameState.answerWithheld = false;
     gameState.spinPassPickerTeam = undefined;
+    gameState.answerMarked = false;
 
     const options: any = {};
     if (this.session) {
@@ -689,6 +704,7 @@ export default class GameStateService {
     gameState.spinPassPickerTeam = undefined;
     gameState.awaitingTeamSelection = false;
     gameState.answerWithheld = false;
+    gameState.answerMarked = false;
 
     const options: any = {};
     if (this.session) {
@@ -750,13 +766,45 @@ export default class GameStateService {
         (qId) => qId.toString() === targetQuestion._id.toString(),
       ) ?? -1;
 
-    const query = GameState.findOne({ sessionId });
-    if (this.session) {
-      query.session(this.session);
-    }
-    const gameState = await query;
+    const durationMs = 5000;
+
+    // Atomic claim: only one spin can start, and only from SPIN_ROUND while the
+    // wheel is not already spinning (double clicks / admin + captain at once).
+    const options = { new: true, session: this.session ?? null };
+    const gameState = await GameState.findOneAndUpdate(
+      {
+        sessionId,
+        gameStatus: GameStatus.SPIN_ROUND,
+        "spinWheelState.isSpinning": { $ne: true },
+      },
+      {
+        $set: {
+          // New question: every team gets a fresh single attempt at it.
+          teamsWhoAnsweredThisQuestion: [],
+          awaitingTeamSelection: false,
+          answerWithheld: false,
+          hintRevealed: false,
+          answerMarked: false,
+          currentAnsweringTeam: teamId,
+          // Keep currentCategory empty while spinning so it is not shown prematurely
+          currentCategory: "",
+          currentQuestionIndex: questionIndex,
+          spinWheelState: {
+            selectedTeamId: String(teamId),
+            isSpinning: true,
+            targetCategory,
+            winningIndex,
+            durationMs,
+            startTime: Date.now(),
+            targetQuestionId: targetQuestion._id.toString(),
+          },
+        },
+        $unset: { spinPassPickerTeam: 1 },
+      },
+      options,
+    );
     if (!gameState) {
-      throw new Error("Game state not found");
+      throw new Error(SPIN_NOT_ALLOWED);
     }
 
     // Admin's spin "hide question" switch: when ON, hide whichever question lands
@@ -767,33 +815,6 @@ export default class GameStateService {
         hideFromUsers: true,
       });
     }
-
-    // New question: every team gets a fresh single attempt at it.
-    gameState.teamsWhoAnsweredThisQuestion = [];
-    gameState.spinPassPickerTeam = undefined;
-    gameState.awaitingTeamSelection = false;
-    gameState.answerWithheld = false;
-    gameState.hintRevealed = false;
-
-    const durationMs = 5000;
-    // Keep currentCategory empty while spinning so it is not shown prematurely
-    gameState.currentCategory = "";
-    gameState.currentQuestionIndex = questionIndex;
-    gameState.spinWheelState = {
-      selectedTeamId: String(teamId),
-      isSpinning: true,
-      targetCategory,
-      winningIndex,
-      durationMs,
-      startTime: Date.now(),
-      targetQuestionId: targetQuestion._id.toString(),
-    };
-
-    const options: any = {};
-    if (this.session) {
-      options.session = this.session;
-    }
-    await gameState.save(options);
 
     return {
       gameState,
@@ -806,35 +827,54 @@ export default class GameStateService {
   }
 
   /**
-   * Wheel landed: transition to ANSWERING phase
+   * Wheel landed: transition to ANSWERING phase.
+   * Only acts while the game is still in SPIN_ROUND on the same spin
+   * (spinWheelState.startTime === expectedStartTime when given). Returns null
+   * (and changes nothing) when the spin is stale, e.g. after PAUSE / a new round.
    */
   async landSpinWheel(
     sessionId: Types.ObjectId | string,
-  ): Promise<IGameState> {
+    expectedStartTime?: number,
+  ): Promise<IGameState | null> {
     const query = GameState.findOne({ sessionId });
     if (this.session) {
       query.session(this.session);
     }
-    const gameState = await query;
-    if (!gameState) {
+    const current = await query;
+    if (!current) {
       throw new Error("Game state not found");
     }
 
-    gameState.gameStatus = GameStatus.ANSWERING;
-    gameState.answeringRoundStartTime = Date.now();
-    if (gameState.spinWheelState?.targetCategory) {
-      gameState.currentCategory = gameState.spinWheelState.targetCategory;
-    }
-    if (gameState.spinWheelState) {
-      gameState.spinWheelState.isSpinning = false;
+    const startTime = current.spinWheelState?.startTime;
+    if (
+      current.gameStatus !== GameStatus.SPIN_ROUND ||
+      typeof startTime !== "number" ||
+      (expectedStartTime !== undefined && startTime !== expectedStartTime)
+    ) {
+      return null;
     }
 
-    const options: any = {};
-    if (this.session) {
-      options.session = this.session;
+    const options = { new: true, session: this.session ?? null };
+    const $set: Record<string, unknown> = {
+      gameStatus: GameStatus.ANSWERING,
+      answeringRoundStartTime: Date.now(),
+      answerMarked: false,
+      "spinWheelState.isSpinning": false,
+    };
+    if (current.spinWheelState?.targetCategory) {
+      $set.currentCategory = current.spinWheelState.targetCategory;
     }
-    await gameState.save(options);
-    return gameState;
+
+    // Conditional: a concurrent PAUSE / new spin between the read and this write wins.
+    return await GameState.findOneAndUpdate(
+      {
+        sessionId,
+        gameStatus: GameStatus.SPIN_ROUND,
+        "spinWheelState.startTime": startTime,
+      },
+      { $set },
+      options,
+    );
   }
 
   /**

@@ -104,7 +104,13 @@ const GameMain = () => {
     sessionId,
   ]);
 
-  if (isLoading || (!isLoginRoute && (!authResolved || !gameStateLoaded))) {
+  // Full-screen loader only while resolving auth (refresh / login submit), never
+  // for background refetches of an already-authenticated team: swapping out
+  // <Routes> would remount GameStateRouter and lose its state.
+  if (
+    (isLoading && !isAuthenticated) ||
+    (!isLoginRoute && (!authResolved || !gameStateLoaded))
+  ) {
     // Initial boot: keep the same mobile frame + game background as the app shell
     // so players don't see a blank white page while the session loads.
     return (

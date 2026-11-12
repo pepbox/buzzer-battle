@@ -43,6 +43,12 @@ export interface QuestionEditorDialogProps {
   onSaved: () => void;
   mode: "create" | "edit";
   initialQuestion?: QuestionBankItem | null;
+  /**
+   * Show the folder picker / "create folder" controls. Only the superadmin manages
+   * library folders — for session admins the server forces their questions into
+   * the session's "My Questions" folder, so pass false there.
+   */
+  showFolderPicker?: boolean;
 }
 
 const toClientId = () =>
@@ -93,6 +99,37 @@ const cleanupMediaItems = (mediaItems: EditableMediaItem[]) => {
 const previewMediaSource = (media: QuestionMediaItem) =>
   media.url || media.previewUrl || "";
 
+/**
+ * Media to seed the editor with. Older questions only carry the legacy
+ * `questionImage` / `quetionVideo` (sic) fields — surface those as media items
+ * so they show in the editor and survive a save.
+ */
+const getInitialQuestionMedia = (
+  question: QuestionBankItem,
+): QuestionMediaItem[] => {
+  if (question.questionContent?.media?.length) {
+    return question.questionContent.media;
+  }
+  if (question.questionAssets?.length) {
+    return question.questionAssets;
+  }
+  const legacyMedia: QuestionMediaItem[] = [];
+  if (question.questionImage) {
+    const imageMedia = buildLinkedMediaItem(question.questionImage);
+    legacyMedia.push({
+      ...imageMedia,
+      type: imageMedia.type === "gif" ? "gif" : "image",
+    });
+  }
+  if (question.quetionVideo) {
+    legacyMedia.push({
+      ...buildLinkedMediaItem(question.quetionVideo),
+      type: "video",
+    });
+  }
+  return legacyMedia;
+};
+
 const formatFolderLabel = (folderPath: string) => {
   const segments = folderPath.split("/").filter(Boolean);
   const depth = Math.max(0, segments.length - 1);
@@ -108,6 +145,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
   onSaved,
   mode,
   initialQuestion,
+  showFolderPicker = true,
 }) => {
   const [createQuestion, { isLoading: isCreating }] =
     useCreateQuestionMutation();
@@ -198,11 +236,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
           "",
       );
       setQuestionAssets(
-        toEditableMediaItems(
-          initialQuestion.questionContent?.media?.length
-            ? initialQuestion.questionContent.media
-            : initialQuestion.questionAssets,
-        ),
+        toEditableMediaItems(getInitialQuestionMedia(initialQuestion)),
       );
       setAnswerMedia(
         toEditableMediaItems(initialQuestion.answerContent?.media),
@@ -479,15 +513,18 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
       hintPenalty: Number.isFinite(Number(hintPenalty)) ? Number(hintPenalty) : 0,
     };
 
-    const firstQuestionMedia = cleanQuestionAssets[0];
-    if (
-      firstQuestionMedia?.type === "image" ||
-      firstQuestionMedia?.type === "gif"
-    ) {
-      payload.questionImage = firstQuestionMedia.url;
+    // Keep the legacy single-media fields in sync (first image / first video).
+    const firstImageMedia = cleanQuestionAssets.find(
+      (media) => media.type === "image" || media.type === "gif",
+    );
+    const firstVideoMedia = cleanQuestionAssets.find(
+      (media) => media.type === "video",
+    );
+    if (firstImageMedia?.url) {
+      payload.questionImage = firstImageMedia.url;
     }
-    if (firstQuestionMedia?.type === "video") {
-      payload.quetionVideo = firstQuestionMedia.url;
+    if (firstVideoMedia?.url) {
+      payload.quetionVideo = firstVideoMedia.url;
     }
 
     if (options.length > 0) {
@@ -756,6 +793,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
               </Typography>
             )}
 
+            {showFolderPicker && (
             <TextField
               select
               label="Folder"
@@ -773,6 +811,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
                 </MenuItem>
               ))}
             </TextField>
+            )}
 
             <TextField
               label="Category (Used for Spin Wheel)"
@@ -782,6 +821,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
               helperText="Questions in the Spin Wheel round are organized and selected by category."
             />
 
+            {showFolderPicker && (
             <Box sx={{ display: "flex", gap: 1 }}>
               <TextField
                 fullWidth
@@ -797,6 +837,7 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
                 Create
               </Button>
             </Box>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>

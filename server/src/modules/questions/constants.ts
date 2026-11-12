@@ -19,3 +19,6 @@ export const getWrongPenalty = (question?: { wrongPenalty?: unknown } | null) =>
 
 /** Normalise request input; returns undefined if missing/invalid so callers can apply defaults. */
 export const parseScoreInput = toNonNegativeNumber;
+
+/** Folder every session-private question is placed in (no QuestionFolder doc is created for it). */
+export const SESSION_QUESTIONS_FOLDER = "My Questions";
