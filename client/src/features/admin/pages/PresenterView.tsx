@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { Box, Chip, IconButton, Tooltip } from "@mui/material";
-import { VolumeUp, VolumeOff } from "@mui/icons-material";
+import {
+  VolumeUp,
+  VolumeOff,
+  KeyboardDoubleArrowLeft,
+  KeyboardDoubleArrowRight,
+} from "@mui/icons-material";
 import { useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../../app/hooks";
 import { RootState } from "../../../app/store";
@@ -26,11 +31,41 @@ const formatElapsedTime = (elapsedMs: number): string => {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}:${String(centiseconds).padStart(2, "0")}`;
 };
 
+const SIDE_PANEL_STORAGE_KEY = "presenter_side_panel";
+
+const presenterControlButtonSx = {
+  backgroundColor: "rgba(0, 0, 0, 0.5)",
+  color: "#fff",
+  "&:hover": {
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+  },
+};
+
 const PresenterView: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const dispatch = useAppDispatch();
   const [isMuted, setIsMuted] = useState(false);
   const [showAudioPrompt, setShowAudioPrompt] = useState(true);
+  // Right-side panel (leaderboard / buzzer queue). Remembered per browser.
+  const [showSidePanel, setShowSidePanel] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(SIDE_PANEL_STORAGE_KEY) !== "hidden";
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleSidePanel = () => {
+    setShowSidePanel((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SIDE_PANEL_STORAGE_KEY, next ? "shown" : "hidden");
+      } catch {
+        // storage unavailable: toggle still works for this page view
+      }
+      return next;
+    });
+  };
 
   // Get game state from Redux
   const gameState = useAppSelector(
@@ -112,26 +147,32 @@ const PresenterView: React.FC = () => {
         position: "relative",
       }}
     >
-      {/* Audio Control Button */}
+      {/* Presenter Controls: side panel toggle + audio */}
       <Box
         sx={{
           position: "absolute",
           top: 16,
           right: 16,
           zIndex: 1000,
+          display: "flex",
+          gap: 1,
         }}
       >
-        <Tooltip title={isMuted ? "Unmute Audio" : "Mute Audio"}>
+        <Tooltip title={showSidePanel ? "Hide Side Panel" : "Show Side Panel"}>
           <IconButton
-            onClick={handleToggleMute}
-            sx={{
-              backgroundColor: "rgba(0, 0, 0, 0.5)",
-              color: "#fff",
-              "&:hover": {
-                backgroundColor: "rgba(0, 0, 0, 0.7)",
-              },
-            }}
+            onClick={handleToggleSidePanel}
+            aria-label={showSidePanel ? "Hide side panel" : "Show side panel"}
+            sx={presenterControlButtonSx}
           >
+            {showSidePanel ? (
+              <KeyboardDoubleArrowRight />
+            ) : (
+              <KeyboardDoubleArrowLeft />
+            )}
+          </IconButton>
+        </Tooltip>
+        <Tooltip title={isMuted ? "Unmute Audio" : "Mute Audio"}>
+          <IconButton onClick={handleToggleMute} sx={presenterControlButtonSx}>
             {isMuted ? <VolumeOff /> : <VolumeUp />}
           </IconButton>
         </Tooltip>
@@ -143,7 +184,7 @@ const PresenterView: React.FC = () => {
           sx={{ 
             position: "absolute",
             top: 16,
-            right: 70,
+            right: 120,
             display: "flex", 
             alignItems: "center", 
             backgroundColor: "rgba(0, 0, 0, 0.6)",
@@ -192,10 +233,10 @@ const PresenterView: React.FC = () => {
         </Box>
       )}
 
-      {/* Left Panel - Game View (70%) */}
+      {/* Left Panel - Game View (70%, full width when side panel is hidden) */}
       <Box
         sx={{
-          width: "70%",
+          width: showSidePanel ? "70%" : "100%",
           height: "100%",
           overflow: "auto",
         }}
@@ -205,6 +246,7 @@ const PresenterView: React.FC = () => {
       {/* Right Panel - Buzzer Queue or Leaderboard (30%) */}
       <Box
         sx={{
+          display: showSidePanel ? "block" : "none",
           width: "30%",
           height: "100%",
           overflow: "auto",

@@ -13,6 +13,78 @@ import {
 import { useFetchOverallLeaderboardQuery } from "../services/teamApi";
 import { useTriggerSpinWheel } from "../../admin/services/adminRemoteApi";
 
+const SPINNER_ICON_COLORS = [
+  "#ef4444",
+  "#f59e0b",
+  "#eab308",
+  "#22c55e",
+  "#06b6d4",
+  "#3b82f6",
+  "#8b5cf6",
+  "#ec4899",
+];
+
+/** Small prize-wheel icon with a fixed pointer; the wheel rotates while `spinning`. */
+const SpinnerWheelIcon: React.FC<{ spinning: boolean; size?: number }> = ({
+  spinning,
+  size = 72,
+}) => {
+  const r = 30;
+  const segments = SPINNER_ICON_COLORS.length;
+  const slice = (2 * Math.PI) / segments;
+  const point = (angle: number) =>
+    `${32 + r * Math.cos(angle)} ${32 + r * Math.sin(angle)}`;
+
+  return (
+    <Box sx={{ position: "relative", width: size, height: size + 8 }}>
+      {/* Pointer (stays still) */}
+      <Box
+        component="svg"
+        viewBox="0 0 16 12"
+        sx={{
+          position: "absolute",
+          top: 0,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: size * 0.22,
+          zIndex: 1,
+          filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.5))",
+        }}
+      >
+        <path d="M1 0 H15 L8 12 Z" fill="#ffffff" />
+      </Box>
+      <Box
+        component="svg"
+        viewBox="0 0 64 64"
+        sx={{
+          position: "absolute",
+          top: 8,
+          left: 0,
+          width: size,
+          height: size,
+          animation: spinning ? "spinnerWheelRotate 1.2s linear infinite" : "none",
+          "@keyframes spinnerWheelRotate": {
+            "0%": { transform: "rotate(0deg)" },
+            "100%": { transform: "rotate(360deg)" },
+          },
+        }}
+      >
+        {SPINNER_ICON_COLORS.map((color, i) => (
+          <path
+            key={color}
+            d={`M32 32 L${point(i * slice)} A${r} ${r} 0 0 1 ${point((i + 1) * slice)} Z`}
+            fill={color}
+            stroke="#0f172a"
+            strokeWidth={1}
+          />
+        ))}
+        <circle cx="32" cy="32" r={r} fill="none" stroke="#ffffff" strokeWidth={2.5} />
+        <circle cx="32" cy="32" r={5} fill="#ffffff" stroke="#0f172a" strokeWidth={1.5} />
+      </Box>
+    </Box>
+  );
+};
+
 export const SpinWheelPage: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const team = useAppSelector((state: RootState) => state.team?.team);
@@ -319,18 +391,8 @@ export const SpinWheelPage: React.FC = () => {
               boxSizing: "border-box",
             }}
           >
-            <Box
-              sx={{
-                fontSize: 54,
-                mb: 2,
-                animation: isSpinning ? "spin 2s linear infinite" : "none",
-                "@keyframes spin": {
-                  "0%": { transform: "rotate(0deg)" },
-                  "100%": { transform: "rotate(360deg)" },
-                },
-              }}
-            >
-              🎡
+            <Box sx={{ mb: 2, display: "flex", justifyContent: "center" }}>
+              <SpinnerWheelIcon spinning={isSpinning} />
             </Box>
 
             <Typography

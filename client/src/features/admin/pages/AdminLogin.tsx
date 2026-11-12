@@ -1,5 +1,13 @@
 import React, { useState, useRef, KeyboardEvent, useEffect } from "react";
-import { Box, Typography, TextField, Container, Alert } from "@mui/material";
+import {
+  Box,
+  Typography,
+  TextField,
+  Container,
+  Alert,
+  Button,
+} from "@mui/material";
+import { SettingsRemote, Tv } from "@mui/icons-material";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import GlobalButton from "../../../components/ui/button";
@@ -15,7 +23,11 @@ import { RootState } from "../../../app/store";
 import { useAppSelector } from "../../../app/hooks";
 import { selectSessionId } from "../../session/services/sessionSlice";
 
+// Where to land after login: the admin panel, or straight into a live-game screen.
+type AdminDestination = "dashboard" | "remote-control" | "presenter";
+
 const AdminLogin: React.FC = () => {
+  const [destination, setDestination] = useState<AdminDestination>("dashboard");
   const [pin, setPin] = useState<string[]>(["", "", "", ""]);
   const [localError, setLocalError] = useState<string>("");
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -46,9 +58,9 @@ const AdminLogin: React.FC = () => {
     dispatch(initializeAuth());
 
     if (isAuthenticated && sessionId) {
-      navigate(`/admin/${sessionId}/dashboard`);
+      navigate(`/admin/${sessionId}/${destination}`);
     }
-  }, [dispatch, isAuthenticated, navigate, sessionId]);
+  }, [dispatch, isAuthenticated, navigate, sessionId, destination]);
 
   // Auto-focus first input on component mount
   useEffect(() => {
@@ -92,11 +104,13 @@ const AdminLogin: React.FC = () => {
 
     // Handle Enter key to submit if PIN is complete
     if (e.key === "Enter" && isPinComplete && !isLoading) {
-      handleLogin();
+      handleLogin("dashboard");
     }
   };
 
-  const handleLogin = async () => {
+  const handleLogin = async (target: AdminDestination = "dashboard") => {
+    // Set before the request so the post-login redirect (on isAuthenticated) uses it too.
+    setDestination(target);
     const fullPin = pin.join("");
 
     if (fullPin.length !== 4) {
@@ -115,8 +129,8 @@ const AdminLogin: React.FC = () => {
 
       if (result.success) {
         // The Redux slice will handle the state updates via extraReducers
-        // Navigate to admin dashboard
-        navigate(`/admin/${sessionId}/dashboard`);
+        // Navigate to the chosen admin screen
+        navigate(`/admin/${sessionId}/${target}`);
       } else {
         setLocalError(result.message || "Login failed");
       }
@@ -135,7 +149,7 @@ const AdminLogin: React.FC = () => {
   };
 
   if (isAuthenticated) {
-    return <Navigate to={`/admin/${sessionId}/dashboard`} replace />;
+    return <Navigate to={`/admin/${sessionId}/${destination}`} replace />;
   }
 
   return (
@@ -168,7 +182,7 @@ const AdminLogin: React.FC = () => {
             onSubmit={(e) => {
               e.preventDefault();
               if (isPinComplete && !isLoading) {
-                handleLogin();
+                handleLogin("dashboard");
               }
             }}
             sx={{ width: "100%" }}
@@ -253,7 +267,7 @@ const AdminLogin: React.FC = () => {
               ))}
             </Box>
             <GlobalButton
-              onClick={handleLogin}
+              onClick={() => handleLogin("dashboard")}
               disabled={!isPinComplete || isLoading}
               sx={{
                 py: { xs: 1.25, sm: 1.5 },
@@ -263,8 +277,42 @@ const AdminLogin: React.FC = () => {
                 minHeight: { xs: "44px", sm: "48px" },
               }}
             >
-              {isLoading ? "Logging in..." : "Login"}
+              {isLoading && destination === "dashboard" ? "Logging in..." : "Login"}
             </GlobalButton>
+            <Typography
+              variant="body2"
+              sx={{ mt: 3, mb: 1.5, color: "#666", fontSize: "0.85rem" }}
+            >
+              Or go directly to
+            </Typography>
+            <Box sx={{ display: "flex", gap: 1.5 }}>
+              {(
+                [
+                  { target: "remote-control", label: "Remote Control", icon: <SettingsRemote /> },
+                  { target: "presenter", label: "Presenter", icon: <Tv /> },
+                ] as const
+              ).map(({ target, label, icon }) => (
+                <Button
+                  key={target}
+                  type="button"
+                  variant="outlined"
+                  color="secondary"
+                  fullWidth
+                  startIcon={icon}
+                  disabled={!isPinComplete || isLoading}
+                  onClick={() => handleLogin(target)}
+                  sx={{
+                    py: 1.25,
+                    fontWeight: 600,
+                    borderRadius: 2,
+                    minHeight: { xs: "44px", sm: "48px" },
+                    textTransform: "none",
+                  }}
+                >
+                  {isLoading && destination === target ? "Logging in..." : label}
+                </Button>
+              ))}
+            </Box>
           </Box>
         </Box>
       </Container>
