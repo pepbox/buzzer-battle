@@ -1,4 +1,5 @@
 import { Socket } from "socket.io";
+import { isTeamCaptain } from "../../../modules/teams/captain";
 import GameStateService from "../../../modules/gameState/services/gameState.service";
 import { GameStatus } from "../../../modules/gameState/types/enums";
 import { SessionEmitters } from "../sessionEmitters";
@@ -29,7 +30,7 @@ export const handleSpinWheel = async (socket: Socket) => {
       : null;
 
     // Check if this team is the selected answering team and user is buzzer person (captain)
-    if (currentTeamId !== teamId || user.playerRole === "TEAM_MEMBER") {
+    if (currentTeamId !== teamId || !(await isTeamCaptain(user))) {
       return;
     }
 

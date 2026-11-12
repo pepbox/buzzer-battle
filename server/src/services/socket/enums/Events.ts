@@ -10,6 +10,7 @@ export enum Events {
   // Team Management Events
   TEAM_JOINED = "team-joined", // When a new team joins the session
   TEAM_UPDATED = "team-updated", // When admin edits team details
+  TEAM_ROLE_UPDATED = "team-role-updated", // Captain auto-assigned / changed
 
   // Game Flow Events
   BUZZER_ROUND_STARTED = "buzzer-round-started", // Buzzer round starts with timestamp
@@ -30,6 +31,7 @@ export enum Events {
   SESSION_UPDATE = "session-update", // Session settings changed
   SESSION_ENDED = "session-ended", // Super admin ended the session - log out all users
   HINT_REVEALED = "hint-revealed",
+  QUESTION_SETTINGS_UPDATED = "question-settings-updated", // Per-session hide/keepBuzzer changed
   GAME_MODE_SELECTED = "game-mode-selected",
 
   // Spin Wheel Events
@@ -37,4 +39,8 @@ export enum Events {
   WHEEL_SPIN_TRIGGERED = "wheel-spin-triggered",
   WHEEL_LANDED = "wheel-landed",
   CATEGORY_EXHAUSTED = "category-exhausted",
+
+  // Spin Wheel pass-to-next-team (after a wrong answer)
+  SPIN_PASS_SELECT = "spin-pass-select", // Client -> server: captain picks a team
+  SPIN_PASS_ERROR = "spin-pass-error", // Server -> captain: pick rejected
 }

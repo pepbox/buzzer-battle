@@ -148,7 +148,8 @@ export const SpinWheelPage: React.FC = () => {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "space-between",
-        p: 2.5,
+        p: { xs: 1.5, sm: 2.5 },
+        gap: 1,
         background: "linear-gradient(180deg, #0f172a 0%, #1e1b4b 100%)",
         color: "#ffffff",
         overflowY: "auto",
@@ -156,7 +157,7 @@ export const SpinWheelPage: React.FC = () => {
       }}
     >
       {/* Top Banner */}
-      <Box sx={{ width: "100%", textAlign: "center", mt: 1 }}>
+      <Box sx={{ width: "100%", textAlign: "center", flexShrink: 0 }}>
         <Chip
           label="🎡 CATEGORY WHEEL"
           sx={{
@@ -165,7 +166,7 @@ export const SpinWheelPage: React.FC = () => {
             fontWeight: 800,
             fontSize: "0.85rem",
             letterSpacing: "0.08em",
-            mb: 1.5,
+            mb: 1,
           }}
         />
 
@@ -173,7 +174,7 @@ export const SpinWheelPage: React.FC = () => {
           <Paper
             elevation={4}
             sx={{
-              p: 1.5,
+              p: 1.25,
               borderRadius: "16px",
               background:
                 "linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(239, 68, 68, 0.25) 100%)",
@@ -182,11 +183,11 @@ export const SpinWheelPage: React.FC = () => {
               backdropFilter: "blur(10px)",
             }}
           >
-            <Typography variant="h6" fontWeight="bold">
+            <Typography sx={{ fontWeight: 800, fontSize: { xs: "1.05rem", sm: "1.25rem" } }}>
               🎯 It's Your Turn to Spin!
             </Typography>
-            <Typography variant="body2" sx={{ color: "#cbd5e1", mt: 0.5 }}>
-              Tap the SPIN button below to select your team's question category!
+            <Typography variant="body2" sx={{ color: "#cbd5e1", mt: 0.25 }}>
+              Tap the SPIN button to pick your team's category.
             </Typography>
           </Paper>
         ) : (
@@ -221,10 +222,12 @@ export const SpinWheelPage: React.FC = () => {
       {/* Main Content: Interactive Wheel ONLY for Captain, Spectator Waiting Card for Everyone Else */}
       {isCaptainTurn ? (
         <>
+          {/* Takes all remaining height; the wheel sizes itself to fit with the button visible */}
           <Box
             sx={{
-              my: "auto",
-              py: 2,
+              flex: "1 1 auto",
+              minHeight: 0,
+              width: "100%",
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
@@ -237,7 +240,8 @@ export const SpinWheelPage: React.FC = () => {
               durationMs={gameState?.spinWheelState?.durationMs || 5000}
               onSpin={handleSpinClick}
               canSpin={!isSpinning}
-              size="medium"
+              size="auto"
+              maxDiameter={360}
               showSpinButton={true}
               spinButtonText="SPIN WHEEL!"
               onSpinEnd={() => {
@@ -254,8 +258,8 @@ export const SpinWheelPage: React.FC = () => {
             sx={{
               width: "100%",
               textAlign: "center",
-              mb: 1,
-              minHeight: 52,
+              flexShrink: 0,
+              minHeight: 44,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -265,7 +269,7 @@ export const SpinWheelPage: React.FC = () => {
               <Paper
                 elevation={4}
                 sx={{
-                  p: 1.5,
+                  p: 1,
                   borderRadius: "50px",
                   background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
                   color: "#ffffff",

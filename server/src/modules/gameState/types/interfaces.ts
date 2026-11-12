@@ -23,6 +23,10 @@ export interface IGameState extends Document {
   teamsWhoAnsweredThisQuestion: Types.ObjectId[];
   isNoBuzzerQuestion: boolean;
   hintRevealed?: boolean;
+  awaitingTeamSelection?: boolean;
+  spinHideQuestion?: boolean;
+  spinPassPickerTeam?: Types.ObjectId;
+  answerWithheld?: boolean;
   completedQuestionIds: Types.ObjectId[];
   currentCategory?: string;
   spinWheelState?: ISpinWheelState;

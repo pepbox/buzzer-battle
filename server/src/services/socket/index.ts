@@ -8,6 +8,7 @@ import { socketAuthMiddleware } from "../../middlewares/socketAuthMiddleware";
 import { handlePressBuzzer } from "./handelers/buzzerHandler";
 import { handleSpinWheel } from "./handelers/spinHandler";
 import { handleTimeSync } from "./handelers/syncHandler";
+import { handleSpinPassSelect } from "./handelers/spinPassHandler";
 import { Events } from "./enums/Events";
 
 let ioInstance: Server | null = null;
@@ -64,6 +65,11 @@ export async function initializeSocket(server: HTTPServer): Promise<Server> {
     // Handle spin-wheel event
     socket.on("spin-wheel", async () => {
       await handleSpinWheel(socket);
+    });
+
+    // Spin wheel: wrong team's captain picks the next team
+    socket.on(Events.SPIN_PASS_SELECT, async (payload) => {
+      await handleSpinPassSelect(socket, payload);
     });
 
     // Handle time-sync event

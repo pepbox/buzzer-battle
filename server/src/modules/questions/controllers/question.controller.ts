@@ -1,6 +1,12 @@
 import { NextFunction, Request, Response } from "express";
+import { isTeamCaptain } from "../../teams/captain";
 import AppError from "../../../utils/appError";
 import QuestionService from "../services/question.service";
+import {
+  getCorrectPoints,
+  getWrongPenalty,
+  parseScoreInput,
+} from "../constants";
 import GameStateService from "../../gameState/services/gameState.service";
 import { GameStatus } from "../../gameState/types/enums";
 import mongoose from "mongoose";
@@ -194,6 +200,7 @@ export const createQuestion = async (
       options,
       correctAnswer,
       score,
+      wrongPenalty,
       folder,
       category,
       keepBuzzer,
@@ -255,7 +262,8 @@ export const createQuestion = async (
       quetionVideo,
       options: normalizedOptions,
       correctAnswer: selectedCorrectAnswer,
-      score: Number(score || 0),
+      score: parseScoreInput(score),
+      wrongPenalty: parseScoreInput(wrongPenalty),
       folder,
       category,
       keepBuzzer,
@@ -301,6 +309,7 @@ export const updateQuestion = async (
       options,
       correctAnswer,
       score,
+      wrongPenalty,
       folder,
       category,
       keepBuzzer,
@@ -362,7 +371,8 @@ export const updateQuestion = async (
       quetionVideo,
       options: normalizedOptions,
       correctAnswer: selectedCorrectAnswer,
-      score: Number(score || 0),
+      score: parseScoreInput(score),
+      wrongPenalty: parseScoreInput(wrongPenalty),
       folder,
       category,
       keepBuzzer,
@@ -508,10 +518,23 @@ export const fetchCurrentQuestion = async (
 
     const isTeamUser = req.user?.role === "TEAM";
 
+    // No-buzzer question waiting for the admin to pick a team: the game is IDLE,
+    // but this is NOT the answer-reveal phase, so teams get neither question nor answer.
+    const isAwaitingTeamSelection =
+      gameState.gameStatus === GameStatus.IDLE &&
+      gameState.awaitingTeamSelection === true;
+
     // Determine if we can reveal the answer
-    const canRevealAnswer = gameState.gameStatus === GameStatus.IDLE;
+    // answerWithheld: spin turn ended without a correct answer (question back in pool).
+    const canRevealAnswer =
+      gameState.gameStatus === GameStatus.IDLE &&
+      !isAwaitingTeamSelection &&
+      gameState.answerWithheld !== true;
+    // question.hideFromUsers here is the per-session value (see fetchCurrentQuestion).
     const shouldHideQuestionForUser =
-      isTeamUser && question.hideFromUsers === true && !canRevealAnswer;
+      isTeamUser &&
+      !canRevealAnswer &&
+      (question.hideFromUsers === true || isAwaitingTeamSelection);
 
     const questionContentForResponse = shouldHideQuestionForUser
       ? undefined
@@ -526,24 +549,28 @@ export const fetchCurrentQuestion = async (
       : (currentAnsweringTeamId as any)?._id?.toString() || currentAnsweringTeamId?.toString();
 
     const isAnsweringTeam = answeringTeamIdStr === req.user?.id;
-    const isBuzzerPerson = req.user?.playerRole === "BUZZER_PERSON";
-    const isHintRevealedForTeam = isAnsweringTeam && isBuzzerPerson && gameState.hintRevealed === true;
+    const isHintRevealedForTeam =
+      isAnsweringTeam &&
+      gameState.hintRevealed === true &&
+      (await isTeamCaptain(req.user));
 
     const questionForTeam: any = {
       _id: question._id,
       questionText: shouldHideQuestionForUser ? "" : question.questionText,
       questionImage: shouldHideQuestionForUser ? undefined : question.questionImage,
       quetionVideo: shouldHideQuestionForUser ? undefined : question.quetionVideo,
-      options: question.options.map((opt) => ({
+      options: shouldHideQuestionForUser ? [] : question.options.map((opt) => ({
         optionId: opt.optionId,
         optionText: opt.optionText,
       })),
       questionContent: questionContentForResponse,
-      score: question.score,
+      score: getCorrectPoints(question),
+      wrongPenalty: getWrongPenalty(question),
       folder: question.folder,
       category: question.category || question.folder || "General",
       keepBuzzer: question.keepBuzzer,
       hideFromUsers: question.hideFromUsers,
+      awaitingTeamSelection: isAwaitingTeamSelection,
       questionAssets: questionAssetsForResponse,
       hint: (!isTeamUser || isHintRevealedForTeam) ? question.hint : undefined,
       hintPenalty: question.hintPenalty,

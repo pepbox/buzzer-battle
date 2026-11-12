@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import { ensureTeamCaptain, getPlayerRole } from "../captain";
 import AppError from "../../../utils/appError";
 import TeamService from "../services/team.service";
 import { generateAccessToken } from "../../../utils/jwtUtils";
@@ -77,12 +78,21 @@ export const createTeam = async (
       sessionId,
     });
 
+    // Game already running and this team has no captain yet -> first joiner is captain.
+    if (session.status === SessionStatus.PLAYING) {
+      await ensureTeamCaptain(team);
+    }
+    const effectiveRole =
+      team.members.find(
+        (m) => m.name.trim().toLowerCase() === String(playerName).trim().toLowerCase(),
+      )?.role ?? playerRole;
+
     // Generate JWT token including player details
     const accessToken = generateAccessToken({
       id: team._id.toString(),
       role: "TEAM",
       sessionId: team.session.toString(),
-      playerRole,
+      playerRole: effectiveRole,
       playerName,
     });
 
@@ -123,7 +133,7 @@ export const createTeam = async (
           teamScore: team.teamScore,
           joinedAt: team.joinedAt,
           sessionId: team.session,
-          playerRole,
+          playerRole: effectiveRole,
           playerName,
         },
         accessToken,
@@ -177,7 +187,8 @@ export const fetchTeam = async (
           teamScore: team.teamScore,
           joinedAt: team.joinedAt,
           sessionId: team.session,
-          playerRole: req.user?.playerRole,
+          // Read from the team record so auto-assigned captains are reflected.
+          playerRole: await getPlayerRole(req.user),
           playerName: req.user?.playerName,
         },
       },

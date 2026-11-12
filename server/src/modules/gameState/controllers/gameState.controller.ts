@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import { ensureSessionCaptains } from "../../teams/captain";
 import { Types } from "mongoose";
 import AppError from "../../../utils/appError";
 import GameStateService from "../services/gameState.service";
@@ -11,6 +12,18 @@ import { timerManager } from "../../../services/timerManager";
 import { Session } from "../../session/models/session.model";
 import { SessionStatus } from "../../session/types/enums";
 import { GameState } from "../models/gameState.model";
+import {
+  getCorrectPoints,
+  getWrongPenalty,
+} from "../../questions/constants";
+import { setSessionQuestionFlags } from "../../session/questionSettings";
+import {
+  SpinPassError,
+  endSpinTurn,
+  handleSpinWrongAnswer,
+  passSpinQuestionToTeam,
+} from "../services/spinPass";
+import mongoose from "mongoose";
 
 const gameStateService = new GameStateService();
 const questionService = new QuestionService();
@@ -124,6 +137,9 @@ export const updateGameStateUnified = async (
         // Cancel any active timers for this session
         timerManager.cancelSessionTimers(sessionId);
 
+        // Teams without a captain get their first-joined member as captain.
+        await ensureSessionCaptains(sessionId);
+
         const currentSessionForNext = await Session.findById(sessionId);
         if (currentSessionForNext?.gameMode === "SPIN_WHEEL") {
           if (existingGameState.currentQuestionIndex < 0) {
@@ -151,6 +167,26 @@ export const updateGameStateUnified = async (
             categoryCounts: categoriesData.categoryCounts,
           });
           break;
+        }
+
+        // Apply the admin's per-session toggles (from the Next Question preview)
+        // to the upcoming question before it starts.
+        if (
+          typeof payload?.hideFromUsers === "boolean" ||
+          typeof payload?.keepBuzzer === "boolean"
+        ) {
+          const sessionForToggles =
+            currentSessionForNext ?? (await Session.findById(sessionId));
+          const upcomingQuestionId =
+            sessionForToggles?.questions[
+              existingGameState.currentQuestionIndex + 1
+            ];
+          if (upcomingQuestionId) {
+            await setSessionQuestionFlags(sessionId, upcomingQuestionId, {
+              hideFromUsers: payload.hideFromUsers,
+              keepBuzzer: payload.keepBuzzer,
+            });
+          }
         }
 
         if (existingGameState.currentQuestionIndex < 0) {
@@ -199,9 +235,11 @@ export const updateGameStateUnified = async (
             gameState = await gameStateService.updateGameState(sessionId, {
               gameStatus: GameStatus.IDLE,
               currentAnsweringTeam: null,
+              awaitingTeamSelection: true,
             });
 
-            // Mark as no-buzzer question so frontend knows to show question, not answer
+            // Mark as no-buzzer question. Players see a "host is picking a team" screen
+            // until the admin selects a team; the question appears only after that.
             gameState.isNoBuzzerQuestion = true;
             gameState.teamsWhoAnsweredThisQuestion = [];
             await gameState.save();
@@ -212,6 +250,7 @@ export const updateGameStateUnified = async (
               currentAnsweringTeam: gameState.currentAnsweringTeam,
               keepBuzzer: false,
               isNoBuzzerQuestion: true,
+              awaitingTeamSelection: true,
             });
 
             break;
@@ -245,6 +284,8 @@ export const updateGameStateUnified = async (
             currentQuestionIndex: gameState.currentQuestionIndex,
             currentAnsweringTeam: gameState.currentAnsweringTeam,
             buzzerRoundStartTime: buzzerStartTime,
+            isNoBuzzerQuestion: false,
+            awaitingTeamSelection: false,
           });
         }
         break;
@@ -260,6 +301,9 @@ export const updateGameStateUnified = async (
         // Move to idle so /questions/current returns answer content for teams.
         gameState = await gameStateService.updateGameState(sessionId, {
           gameStatus: GameStatus.IDLE,
+          awaitingTeamSelection: false,
+          spinPassPickerTeam: null,
+          answerWithheld: false,
         });
 
         SessionEmitters.toSession(sessionId, Events.SHOW_ANSWER, {
@@ -271,6 +315,9 @@ export const updateGameStateUnified = async (
           gameStatus: gameState.gameStatus,
           currentQuestionIndex: gameState.currentQuestionIndex,
           currentAnsweringTeam: gameState.currentAnsweringTeam,
+          awaitingTeamSelection: false,
+          spinPassPickerTeam: null,
+          answerWithheld: false,
           forceAnswerReveal: true,
         });
         break;
@@ -384,6 +431,7 @@ export const updateGameStateUnified = async (
           gameStatus: gameState.gameStatus,
           currentQuestionIndex: gameState.currentQuestionIndex,
           currentAnsweringTeam: gameState.currentAnsweringTeam,
+          awaitingTeamSelection: false,
           answeringStartTime,
         });
         break;
@@ -515,6 +563,86 @@ export const updateGameStateUnified = async (
         }
         break;
 
+      case "SET_QUESTION_SETTINGS": {
+        // Per-session hide/keepBuzzer for one question (never touches the library).
+        const targetQuestionId = payload?.questionId;
+        if (
+          !targetQuestionId ||
+          !mongoose.Types.ObjectId.isValid(String(targetQuestionId))
+        ) {
+          return next(new AppError("Valid questionId is required.", 400));
+        }
+        if (
+          typeof payload?.hideFromUsers !== "boolean" &&
+          typeof payload?.keepBuzzer !== "boolean"
+        ) {
+          return next(
+            new AppError("hideFromUsers or keepBuzzer (boolean) is required.", 400),
+          );
+        }
+
+        await setSessionQuestionFlags(sessionId, targetQuestionId, {
+          hideFromUsers: payload.hideFromUsers,
+          keepBuzzer: payload.keepBuzzer,
+        });
+        gameState = existingGameState;
+        additionalData.questionId = targetQuestionId;
+
+        // Players re-fetch the current question so hiding/unhiding applies live.
+        SessionEmitters.toSession(sessionId, Events.QUESTION_SETTINGS_UPDATED, {
+          questionId: String(targetQuestionId),
+          hideFromUsers: payload.hideFromUsers,
+          keepBuzzer: payload.keepBuzzer,
+        });
+        break;
+      }
+
+      case "SPIN_PASS_SELECT_TEAM": {
+        // Admin picks the next team on the wrong team's captain's behalf.
+        if (!payload?.teamId) {
+          return next(new AppError("teamId is required.", 400));
+        }
+        try {
+          gameState = await passSpinQuestionToTeam(
+            sessionId.toString(),
+            String(payload.teamId),
+            "admin",
+          );
+        } catch (err) {
+          if (err instanceof SpinPassError) {
+            return next(new AppError(err.message, err.status));
+          }
+          throw err;
+        }
+        break;
+      }
+
+      case "SPIN_END_TURN": {
+        // Admin stops passing: question returns to the pool, answer stays hidden.
+        if (!existingGameState.spinPassPickerTeam) {
+          return next(new AppError("No pass is in progress.", 400));
+        }
+        gameState = await endSpinTurn(sessionId.toString());
+        break;
+      }
+
+      case "SET_SPIN_HIDE": {
+        // Spin wheel: hide choice applied to whichever question the wheel lands on.
+        if (typeof payload?.hideFromUsers !== "boolean") {
+          return next(new AppError("hideFromUsers (boolean) is required.", 400));
+        }
+        gameState = await gameStateService.updateGameState(sessionId, {
+          spinHideQuestion: payload.hideFromUsers,
+        });
+        SessionEmitters.toSessionAdmins(sessionId, Events.GAME_STATE_CHANGED, {
+          gameStatus: gameState.gameStatus,
+          currentQuestionIndex: gameState.currentQuestionIndex,
+          currentAnsweringTeam: gameState.currentAnsweringTeam,
+          spinHideQuestion: gameState.spinHideQuestion,
+        });
+        break;
+      }
+
       case "START_SPIN_ROUND": {
         if (!payload?.teamId) {
           return next(
@@ -522,6 +650,13 @@ export const updateGameStateUnified = async (
           );
         }
 
+        if (typeof payload?.hideFromUsers === "boolean") {
+          await gameStateService.updateGameState(sessionId, {
+            spinHideQuestion: payload.hideFromUsers,
+          });
+        }
+        // Make sure the spinning team has a captain to press "Spin".
+        await ensureSessionCaptains(sessionId);
         gameState = await gameStateService.startSpinRound(sessionId, payload.teamId);
         const categoriesData = await gameStateService.getAvailableCategories(sessionId);
         additionalData.availableCategories = categoriesData.categories;
@@ -975,6 +1110,9 @@ export const markAnswer = async (
       currentQuestion._id as Types.ObjectId,
       teamId,
       isCorrect,
+      isCorrect
+        ? getCorrectPoints(currentQuestion)
+        : -getWrongPenalty(currentQuestion),
     );
 
     let teamName = "A team";
@@ -988,7 +1126,7 @@ export const markAnswer = async (
     }
 
     if (isCorrect) {
-      pointsAwarded = currentQuestion.score || 100;
+      pointsAwarded = getCorrectPoints(currentQuestion);
       // Update team score
       await teamService.updateTeamScore(teamId, pointsAwarded);
 
@@ -1059,35 +1197,43 @@ export const markAnswer = async (
         },
       });
     } else {
+      // Deduct the wrong-answer penalty before notifying clients,
+      // so leaderboard refetches triggered by the event see the new score.
+      const wrongPenalty = getWrongPenalty(currentQuestion);
+      if (wrongPenalty > 0) {
+        await teamService.updateTeamScore(teamId, -wrongPenalty);
+      }
+      pointsAwarded = -wrongPenalty;
+
       // Emit ANSWER_MARKED_WRONG to the session
       SessionEmitters.toSession(sessionId, Events.ANSWER_MARKED_WRONG, {
         teamId,
         teamName,
         isCorrect: false,
-        pointsAwarded: 0,
+        pointsAwarded,
         timestamp: Date.now(),
       });
 
       const session = await Session.findById(sessionId);
       if (session?.gameMode === "SPIN_WHEEL") {
-        // In Spin Wheel mode, turn ends immediately and question remains in pool!
-        const idleGameState = await gameStateService.transitionToIdle(sessionId);
-
-        SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
-          gameStatus: idleGameState.gameStatus,
-          currentQuestionIndex: idleGameState.currentQuestionIndex,
-          currentAnsweringTeam: idleGameState.currentAnsweringTeam,
-          idleStartTime: idleGameState.idleStartTime,
-        });
+        // Spin Wheel: the wrong team's captain picks the next team for the SAME question
+        // (each team gets one attempt). If no team is left, the turn ends and the
+        // question returns to the pool with its answer withheld.
+        const { gameState: spinState, passing } = await handleSpinWrongAnswer(
+          sessionId.toString(),
+          teamId.toString(),
+        );
 
         return res.status(200).json({
-          message:
-            "Answer marked as wrong. Turn ended. Question remains in unattempted pool for future spins.",
+          message: passing
+            ? "Answer marked as wrong. The team's captain will choose the next team."
+            : "Answer marked as wrong. All teams have tried; question returns to the pool.",
           data: {
-            gameState: idleGameState,
+            gameState: spinState,
             isCorrect: false,
-            pointsAwarded: 0,
+            pointsAwarded,
             teamId,
+            spinPassPending: passing,
           },
         });
       }
@@ -1096,6 +1242,7 @@ export const markAnswer = async (
         const updatedState = await gameStateService.updateGameState(sessionId, {
           gameStatus: GameStatus.IDLE,
           currentAnsweringTeam: null,
+          awaitingTeamSelection: true,
         });
 
         SessionEmitters.toSession(sessionId, Events.GAME_STATE_CHANGED, {
@@ -1103,6 +1250,8 @@ export const markAnswer = async (
           currentQuestionIndex: updatedState.currentQuestionIndex,
           currentAnsweringTeam: updatedState.currentAnsweringTeam,
           keepBuzzer: false,
+          isNoBuzzerQuestion: true,
+          awaitingTeamSelection: true,
         });
 
         res.status(200).json({
@@ -1111,7 +1260,7 @@ export const markAnswer = async (
           data: {
             gameState: updatedState,
             isCorrect: false,
-            pointsAwarded: 0,
+            pointsAwarded,
             teamId,
           },
         });
@@ -1124,7 +1273,7 @@ export const markAnswer = async (
         data: {
           gameState,
           isCorrect: false,
-          pointsAwarded: 0,
+          pointsAwarded,
           teamId,
         },
       });
@@ -1156,10 +1305,13 @@ export const fetchAvailableCategories = async (
       return next(new AppError("Session ID not found in token.", 401));
     }
 
-    const categoriesData = await gameStateService.getAvailableCategories(sessionId);
+    const { categories, categoryCounts, remainingQuestions } =
+      await gameStateService.getAvailableCategories(sessionId);
     res.status(200).json({
       message: "Available categories fetched successfully.",
-      data: categoriesData,
+      // Never send the question documents themselves: players call this endpoint
+      // and those include answers.
+      data: { categories, categoryCounts, remainingQuestions },
     });
   } catch (error: any) {
     console.error("Error fetching available categories:", error);

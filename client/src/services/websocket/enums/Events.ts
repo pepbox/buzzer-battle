@@ -30,6 +30,11 @@ export enum Events {
   SESSION_UPDATE = "session-update", // Session settings changed
   SESSION_ENDED = "session-ended", // Super admin ended the session - log out all users
   HINT_REVEALED = "hint-revealed",
+  QUESTION_SETTINGS_UPDATED = "question-settings-updated",
+  TEAM_ROLE_UPDATED = "team-role-updated",
+  SPIN_PASS_PENDING = "spin-pass-pending",
+  SPIN_PASS_SELECT = "spin-pass-select",
+  SPIN_PASS_ERROR = "spin-pass-error",
   GAME_MODE_SELECTED = "game-mode-selected",
 
   // Spin Wheel Events

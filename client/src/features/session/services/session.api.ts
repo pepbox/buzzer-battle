@@ -8,6 +8,12 @@ export interface Session {
     questionTimeLimit: number;
     answerTimeLimit: number;
     questions: string[];
+    /** Per-session overrides of library question flags. */
+    questionSettings?: Array<{
+        question: string;
+        hideFromUsers?: boolean;
+        keepBuzzer?: boolean;
+    }>;
     gameMode?: 'BUZZER_BATTLE' | 'SPIN_WHEEL' | null;
     status: 'not_started' | 'playing' | 'ended';
     numberOfTeams: number | null;

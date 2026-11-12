@@ -207,6 +207,18 @@ const PresenterGameView: React.FC<PresenterGameViewProps> = ({ session }) => {
       }
 
       if (session?.gameMode === "SPIN_WHEEL") {
+        const passPicker = gameState.spinPassPickerTeam;
+        if (passPicker && !shouldRevealAnswer) {
+          const pickerName =
+            (typeof passPicker === "object" && passPicker?.teamName) ||
+            "The team";
+          return (
+            <WaitingAnimation
+              sessionName={session?.sessionName}
+              customMessage={`${pickerName}'s captain is choosing the next team...`}
+            />
+          );
+        }
         return shouldRevealAnswer ? (
           <AnswerRevealPage presenterMode />
         ) : (

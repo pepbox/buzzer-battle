@@ -1,4 +1,5 @@
 import mongoose, { Types } from "mongoose";
+import { setSessionQuestionFlags } from "../../session/questionSettings";
 import { GameState } from "../models/gameState.model";
 import { IGameState } from "../types/interfaces";
 import { GameStatus } from "../types/enums";
@@ -23,6 +24,7 @@ export default class GameStateService {
   ): Promise<IGameState | null> {
     const query = GameState.findOne({ sessionId })
       .populate("currentAnsweringTeam", "teamNumber teamName teamScore")
+      .populate("spinPassPickerTeam", "teamNumber teamName")
       .populate(
         "sessionId",
         "sessionName status questionTimeLimit answerTimeLimit",
@@ -147,6 +149,10 @@ export default class GameStateService {
       gameStatus?: GameStatus;
       currentQuestionIndex?: number;
       currentAnsweringTeam?: Types.ObjectId | string | null;
+      awaitingTeamSelection?: boolean;
+      spinHideQuestion?: boolean;
+      spinPassPickerTeam?: null;
+      answerWithheld?: boolean;
     },
   ): Promise<IGameState> {
     const query = GameState.findOne({ sessionId });
@@ -165,6 +171,22 @@ export default class GameStateService {
 
     if (updates.currentQuestionIndex !== undefined) {
       gameState.currentQuestionIndex = updates.currentQuestionIndex;
+    }
+
+    if (updates.awaitingTeamSelection !== undefined) {
+      gameState.awaitingTeamSelection = updates.awaitingTeamSelection;
+    }
+
+    if (updates.spinHideQuestion !== undefined) {
+      gameState.spinHideQuestion = updates.spinHideQuestion;
+    }
+
+    if (updates.spinPassPickerTeam === null) {
+      gameState.spinPassPickerTeam = undefined;
+    }
+
+    if (updates.answerWithheld !== undefined) {
+      gameState.answerWithheld = updates.answerWithheld;
     }
 
     if (updates.currentAnsweringTeam !== undefined) {
@@ -336,6 +358,7 @@ export default class GameStateService {
 
       gameState.gameStatus = GameStatus.PAUSED;
       gameState.currentAnsweringTeam = undefined;
+      gameState.awaitingTeamSelection = false;
       gameState.buzzerRoundStartTime = undefined; // Clear timestamps
       gameState.answeringRoundStartTime = undefined;
 
@@ -356,6 +379,7 @@ export default class GameStateService {
       gameState.answeringRoundStartTime = undefined;
       gameState.teamsWhoAnsweredThisQuestion = []; // Reset for new question
       gameState.isNoBuzzerQuestion = false; // Reset no-buzzer flag
+      gameState.awaitingTeamSelection = false;
       gameState.hintRevealed = false;
 
       const options: any = {};
@@ -478,6 +502,7 @@ export default class GameStateService {
     gameState.currentAnsweringTeam = answeringTeamId as any;
     gameState.gameStatus = GameStatus.ANSWERING;
     gameState.answeringRoundStartTime = Date.now();
+    gameState.awaitingTeamSelection = false;
     // gameState.buzzerRoundStartTime = undefined; // Clear buzzer time
 
     console.log("Answering team selected", answeringTeamId);
@@ -573,6 +598,10 @@ export default class GameStateService {
     gameState.buzzerRoundStartTime = undefined;
     gameState.answeringRoundStartTime = undefined;
     gameState.currentCategory = "";
+    // Normal IDLE (answer decided): not waiting for a team pick, answer may be revealed.
+    gameState.awaitingTeamSelection = false;
+    gameState.answerWithheld = false;
+    gameState.spinPassPickerTeam = undefined;
 
     const options: any = {};
     if (this.session) {
@@ -656,6 +685,10 @@ export default class GameStateService {
       selectedTeamId: String(teamId),
       isSpinning: false,
     };
+    // Fresh turn: clear any leftover pass state.
+    gameState.spinPassPickerTeam = undefined;
+    gameState.awaitingTeamSelection = false;
+    gameState.answerWithheld = false;
 
     const options: any = {};
     if (this.session) {
@@ -725,6 +758,22 @@ export default class GameStateService {
     if (!gameState) {
       throw new Error("Game state not found");
     }
+
+    // Admin's spin "hide question" switch: when ON, hide whichever question lands
+    // (per-session only). When OFF, the question keeps its own session/library setting,
+    // so a question already marked hidden is never exposed by the spin.
+    if (gameState.spinHideQuestion) {
+      await setSessionQuestionFlags(sessionId, targetQuestion._id as Types.ObjectId, {
+        hideFromUsers: true,
+      });
+    }
+
+    // New question: every team gets a fresh single attempt at it.
+    gameState.teamsWhoAnsweredThisQuestion = [];
+    gameState.spinPassPickerTeam = undefined;
+    gameState.awaitingTeamSelection = false;
+    gameState.answerWithheld = false;
+    gameState.hintRevealed = false;
 
     const durationMs = 5000;
     // Keep currentCategory empty while spinning so it is not shown prematurely

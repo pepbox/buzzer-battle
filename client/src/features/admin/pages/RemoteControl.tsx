@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { formatQuestionScoring } from "../utils/scoring";
 import {
   Box,
   Alert,
@@ -40,11 +41,13 @@ import {
   useShowHint,
   useStartSpinRound,
   useTriggerSpinWheel,
+  useSetQuestionSettings,
+  useSetSpinHide,
+  useSpinPass,
 } from "../services/adminRemoteApi";
 import {
   useFetchTeamDashboardQuery,
   useUpdateSessionQuestionsMutation,
-  useUpdateQuestionMutation,
 } from "../services/admin.Api";
 import {
   useFetchSessionQuery,
@@ -149,11 +152,16 @@ const RemoteControl: React.FC = () => {
     useFetchAvailableCategoriesQuery(undefined, { skip: !isSpinWheelMode });
 
   const [selectedSpinTeamId, setSelectedSpinTeamId] = useState("");
+  const [selectedPassTeamId, setSelectedPassTeamId] = useState("");
+  const { passToTeam, endTurn, isLoading: spinPassLoading } = useSpinPass();
 
   const [markAnswer, { isLoading: markAnswerLoading }] =
     useMarkAnswerMutation();
   const [updateSessionQuestions] = useUpdateSessionQuestionsMutation();
-  const [updateQuestion, { isLoading: isUpdatingQuestion }] = useUpdateQuestionMutation();
+  // Per-session question toggles (never modify the shared library question)
+  const { setQuestionSettings, isLoading: isSavingQuestionSettings } =
+    useSetQuestionSettings();
+  const { setSpinHide, isLoading: isSavingSpinHide } = useSetSpinHide();
 
   const [selectedTeamIdForNoBuzzer, setSelectedTeamIdForNoBuzzer] =
     useState("");
@@ -364,7 +372,14 @@ const RemoteControl: React.FC = () => {
           prev.includes(failedTeamId) ? prev : [...prev, failedTeamId],
         );
       }
-      showSnackbar("Answer marked wrong. You can pass to next team.", "error");
+      const deducted =
+        typeof data?.pointsAwarded === "number" && data.pointsAwarded < 0
+          ? ` ${data.pointsAwarded} points.`
+          : "";
+      showSnackbar(
+        `Answer marked wrong.${deducted} You can pass to next team.`,
+        "error",
+      );
     };
 
     const handleGameStateChanged = (data: any) => {
@@ -530,19 +545,12 @@ const RemoteControl: React.FC = () => {
     if (!nextQuestionItem) return;
 
     try {
-      // Step 1: Save the updated toggles to the question template
-      const { index, status, _id, ...cleanQuestionData } = nextQuestionItem;
-      await updateQuestion({
-        questionId: nextQuestionItem._id,
-        payload: {
-          ...cleanQuestionData,
-          keepBuzzer: nextQuestionToggles.keepBuzzer,
-          hideFromUsers: nextQuestionToggles.hideFromUsers,
-        },
+      // Toggles are saved for THIS session only (server applies them to the
+      // upcoming question before starting it); the library question is untouched.
+      const result = await nextQuestion({
+        keepBuzzer: nextQuestionToggles.keepBuzzer,
+        hideFromUsers: nextQuestionToggles.hideFromUsers,
       }).unwrap();
-
-      // Step 2: Call the next question state transition
-      const result = await nextQuestion().unwrap();
       setNextQuestionPreviewOpen(false);
 
       if (result.data.gameEnded) {
@@ -557,7 +565,7 @@ const RemoteControl: React.FC = () => {
       }
     } catch (error: any) {
       showSnackbar(
-        error?.data?.message || "Failed to update question or move to next question",
+        error?.data?.message || "Failed to move to next question",
         "error",
       );
     }
@@ -640,11 +648,76 @@ const RemoteControl: React.FC = () => {
       return;
     }
     try {
-      await startSpinRound(selectedSpinTeamId).unwrap();
+      await startSpinRound(selectedSpinTeamId, spinHideQuestion).unwrap();
       showSnackbar("Spin round started! Selected team can now spin.", "success");
       setLastAnswerWasWrong(false);
     } catch (error: any) {
       showSnackbar(error?.data?.message || "Failed to start spin turn", "error");
+    }
+  };
+
+  const spinHideQuestion = Boolean(gameState?.spinHideQuestion);
+
+  // Spin wheel pass phase: wrong team's captain is choosing the next team.
+  const spinPassPicker = gameState?.spinPassPickerTeam;
+  const isSpinPassPhase =
+    isSpinWheelMode && gameStatus === "idle" && Boolean(spinPassPicker);
+  const spinPassPickerId =
+    typeof spinPassPicker === "object" ? spinPassPicker?._id : spinPassPicker;
+  const spinPassPickerName =
+    (typeof spinPassPicker === "object" && spinPassPicker?.teamName) ||
+    teams.find((t) => t._id === spinPassPickerId)?.teamName ||
+    "The team";
+  const spinPassAttempted = new Set(
+    (gameState?.teamsWhoAnsweredThisQuestion || []).map(String),
+  );
+  const spinPassEligibleTeams = teams.filter(
+    (t) => !spinPassAttempted.has(String(t._id)),
+  );
+
+  const handleSpinPassToTeam = async () => {
+    if (!selectedPassTeamId) return;
+    try {
+      await passToTeam(selectedPassTeamId).unwrap();
+      setSelectedPassTeamId("");
+      showSnackbar("Question passed to the selected team.", "success");
+    } catch (error: any) {
+      showSnackbar(error?.data?.message || "Failed to pass the question", "error");
+    }
+  };
+
+  const handleSpinEndTurn = async () => {
+    try {
+      await endTurn().unwrap();
+      setSelectedPassTeamId("");
+      showSnackbar("Turn ended. Question returned to the pool.", "info");
+    } catch (error: any) {
+      showSnackbar(error?.data?.message || "Failed to end the turn", "error");
+    }
+  };
+  const currentQuestionHidden =
+    currentQuestionData?.data?.question?.hideFromUsers === true;
+
+  // Spin wheel, before the spin: applies to whichever question the wheel lands on.
+  const handleToggleSpinHide = async (hide: boolean) => {
+    try {
+      await setSpinHide(hide).unwrap();
+    } catch (error: any) {
+      showSnackbar(error?.data?.message || "Failed to update hide setting", "error");
+    }
+  };
+
+  // Live toggle for the question currently on screen (this session only).
+  const handleToggleCurrentQuestionHide = async (hide: boolean) => {
+    if (!currentQuestionId) return;
+    try {
+      await setQuestionSettings(currentQuestionId, { hideFromUsers: hide }).unwrap();
+      showSnackbar(
+        hide ? "Question hidden from players." : "Question visible to players.",
+        "info",
+      );
+    } catch (error: any) {
+      showSnackbar(error?.data?.message || "Failed to update hide setting", "error");
     }
   };
 
@@ -684,6 +757,7 @@ const RemoteControl: React.FC = () => {
       questionText: question.questionText,
       correctAnswer: question.correctAnswer,
       score: question.score,
+      wrongPenalty: question.wrongPenalty,
       keepBuzzer: question.keepBuzzer,
       options: question.options || [],
       questionImage: question.questionImage,
@@ -885,8 +959,74 @@ const RemoteControl: React.FC = () => {
             </Box>
           )}
 
+          {/* Spin Wheel Pass: wrong team's captain chooses the next team */}
+          {isSpinPassPhase && (
+            <Paper
+              variant="outlined"
+              sx={{
+                mx: 2,
+                mt: 2,
+                p: 2,
+                borderRadius: "12px",
+                backgroundColor: "#fffdf5",
+                borderColor: "#f59e0b",
+              }}
+            >
+              <Typography
+                variant="subtitle2"
+                sx={{ mb: 0.5, fontWeight: 700, color: "#92400e" }}
+              >
+                👉 {spinPassPickerName}'s captain is choosing the next team
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
+                Same question, one chance per team. You can pick on their behalf or
+                end the turn (question goes back to the pool, answer stays hidden).
+              </Typography>
+              <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
+                <InputLabel id="spin-pass-team-label">Pick for them</InputLabel>
+                <Select
+                  labelId="spin-pass-team-label"
+                  value={selectedPassTeamId}
+                  label="Pick for them"
+                  onChange={(e) => setSelectedPassTeamId(e.target.value)}
+                  disabled={spinPassLoading}
+                >
+                  {spinPassEligibleTeams.map((team) => (
+                    <MenuItem key={team._id} value={team._id}>
+                      Team {team.teamNumber} - {team.teamName}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  disabled={!selectedPassTeamId || spinPassLoading}
+                  onClick={handleSpinPassToTeam}
+                  sx={{
+                    bgcolor: "#f59e0b",
+                    fontWeight: 700,
+                    "&:hover": { bgcolor: "#d97706" },
+                  }}
+                >
+                  Pass to Team
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="warning"
+                  disabled={spinPassLoading}
+                  onClick={handleSpinEndTurn}
+                  sx={{ fontWeight: 700, whiteSpace: "nowrap" }}
+                >
+                  End Turn
+                </Button>
+              </Box>
+            </Paper>
+          )}
+
           {/* Spin Wheel Turn Selector */}
-          {isSpinWheelMode && gameStatus !== "answering" && (
+          {isSpinWheelMode && gameStatus !== "answering" && !isSpinPassPhase && (
             <Paper
               variant="outlined"
               sx={{
@@ -924,6 +1064,34 @@ const RemoteControl: React.FC = () => {
                   ))}
                 </Select>
               </FormControl>
+
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mb: 1.5,
+                }}
+              >
+                <Box sx={{ pr: 1 }}>
+                  <Typography variant="body2" fontWeight={600} sx={{ color: "#92400e" }}>
+                    Hide Question From Players
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Applies to the question the wheel lands on. It will only show on
+                    the Presenter screen.
+                  </Typography>
+                </Box>
+                <Switch
+                  checked={spinHideQuestion}
+                  disabled={
+                    isSavingSpinHide ||
+                    Boolean(gameState?.spinWheelState?.isSpinning)
+                  }
+                  onChange={(e) => handleToggleSpinHide(e.target.checked)}
+                  color="warning"
+                />
+              </Box>
 
               <Box sx={{ display: "flex", gap: 1 }}>
                 <Button
@@ -984,6 +1152,39 @@ const RemoteControl: React.FC = () => {
                   </Typography>
                 </Box>
               )}
+            </Paper>
+          )}
+
+          {/* Spin Wheel: live hide toggle for the landed question */}
+          {isSpinWheelMode && gameStatus === "answering" && currentQuestionId && (
+            <Paper
+              variant="outlined"
+              sx={{
+                mx: 2,
+                mt: 2,
+                p: 2,
+                borderRadius: "12px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                borderColor: "#f59e0b",
+                backgroundColor: "#fffdf5",
+              }}
+            >
+              <Box sx={{ pr: 1 }}>
+                <Typography variant="body2" fontWeight={600} sx={{ color: "#92400e" }}>
+                  Hide Current Question From Players
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Updates players' screens instantly (this session only).
+                </Typography>
+              </Box>
+              <Switch
+                checked={currentQuestionHidden}
+                disabled={isSavingQuestionSettings}
+                onChange={(e) => handleToggleCurrentQuestionHide(e.target.checked)}
+                color="warning"
+              />
             </Paper>
           )}
 
@@ -1280,7 +1481,7 @@ const RemoteControl: React.FC = () => {
                         {item.questionText || item.questionContent?.text || "No question text"}
                       </Typography>
                     }
-                    secondary={`Score: ${item.score || 0} pts | Buzzer: ${item.keepBuzzer !== false ? "On" : "Off"}`}
+                    secondary={`Score: ${formatQuestionScoring(item)} pts | Buzzer: ${item.keepBuzzer !== false ? "On" : "Off"}`}
                   />
                   
                   <Box>
@@ -1381,7 +1582,10 @@ const RemoteControl: React.FC = () => {
                         Hide Question From Users
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        Question text/media will only show on the Presenter screen.
+                        Question text/media will only show on the Presenter screen
+                        (this session only).
+                        {!nextQuestionToggles.keepBuzzer &&
+                          " Without buzzer, players see a waiting screen until you select a team."}
                       </Typography>
                     </Box>
                     <Switch
@@ -1407,13 +1611,13 @@ const RemoteControl: React.FC = () => {
           <Button
             onClick={handleConfirmNextQuestion}
             variant="contained"
-            disabled={isAnyLoading || isUpdatingQuestion}
+            disabled={isAnyLoading || nextLoading}
             sx={{
               backgroundColor: "#3B82F6",
               "&:hover": { backgroundColor: "#2563EB" },
             }}
           >
-            {isUpdatingQuestion ? "Saving..." : "Confirm & Move"}
+            {nextLoading ? "Saving..." : "Confirm & Move"}
           </Button>
         </DialogActions>
       </Dialog>

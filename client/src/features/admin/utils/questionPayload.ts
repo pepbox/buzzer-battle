@@ -47,6 +47,7 @@ export const questionToPayload = (
     })),
     correctAnswer: question.correctAnswer,
     score: question.score,
+    wrongPenalty: question.wrongPenalty,
     folder: question.folder,
     keepBuzzer: question.keepBuzzer,
     hideFromUsers: question.hideFromUsers,

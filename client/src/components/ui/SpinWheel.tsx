@@ -8,11 +8,104 @@ export interface SpinWheelProps {
   durationMs?: number;
   onSpin?: () => void;
   canSpin?: boolean;
-  size?: "small" | "medium" | "large" | "fill";
+  /**
+   * Fixed presets, or "auto" to fit the space the parent gives it (width AND height),
+   * keeping the spin button visible on small phones. The parent must give it a
+   * bounded height (e.g. flex: 1; min-height: 0).
+   */
+  size?: "small" | "medium" | "large" | "fill" | "auto";
+  /** Upper bound for the wheel diameter in px (mainly for size="auto"). */
+  maxDiameter?: number;
   showSpinButton?: boolean;
   spinButtonText?: string;
   onSpinEnd?: () => void;
 }
+
+const MIN_DIAMETER = 140;
+const LABEL_FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+const MIN_FONT = 10;
+
+interface LabelLayout {
+  lines: string[];
+  fontSize: number;
+}
+
+/**
+ * Fit a category label inside its wheel segment.
+ * Text runs along the radius, so its length is limited by the space between the hub
+ * and the rim, and its height (line count x font size) by the segment's arc width.
+ * Tries the largest font first, then two lines, then ellipsis at the minimum size.
+ */
+const fitLabel = (
+  ctx: CanvasRenderingContext2D,
+  label: string,
+  maxWidth: number,
+  maxHeight: number,
+  maxFont: number,
+): LabelLayout => {
+  const fits = (text: string, size: number) => {
+    ctx.font = `800 ${size}px ${LABEL_FONT}`;
+    return ctx.measureText(text).width <= maxWidth;
+  };
+  const words = label.split(/\s+/).filter(Boolean);
+
+  for (let size = Math.floor(maxFont); size >= MIN_FONT; size--) {
+    if (size * 1.15 <= maxHeight && fits(label, size)) {
+      return { lines: [label], fontSize: size };
+    }
+    if (words.length > 1 && size * 2.3 <= maxHeight) {
+      // Most balanced two-line split
+      let best: string[] | null = null;
+      let bestDiff = Infinity;
+      for (let i = 1; i < words.length; i++) {
+        const a = words.slice(0, i).join(" ");
+        const b = words.slice(i).join(" ");
+        if (fits(a, size) && fits(b, size)) {
+          const diff = Math.abs(a.length - b.length);
+          if (diff < bestDiff) {
+            bestDiff = diff;
+            best = [a, b];
+          }
+        }
+      }
+      if (best) return { lines: best, fontSize: size };
+    }
+  }
+
+  // Still too long: use a small-but-readable size and show as much as possible.
+  const size = Math.max(
+    MIN_FONT,
+    Math.min(12, Math.floor(maxFont), Math.floor(maxHeight / 1.15)),
+  );
+  const truncate = (text: string) => {
+    if (fits(text, size)) return text;
+    let cut = text;
+    while (cut.length > 1 && !fits(`${cut.trimEnd()}…`, size)) {
+      cut = cut.slice(0, -1);
+    }
+    return `${cut.trimEnd()}…`;
+  };
+
+  if (words.length > 1 && size * 2.3 <= maxHeight) {
+    // First line: as many whole words as fit; second line: the rest, truncated.
+    let firstCount = 1;
+    while (
+      firstCount < words.length - 1 &&
+      fits(words.slice(0, firstCount + 1).join(" "), size)
+    ) {
+      firstCount++;
+    }
+    return {
+      lines: [
+        truncate(words.slice(0, firstCount).join(" ")),
+        truncate(words.slice(firstCount).join(" ")),
+      ],
+      fontSize: size,
+    };
+  }
+
+  return { lines: [truncate(label)], fontSize: size };
+};
 
 const SEGMENT_COLORS = [
   "#FF4B4B", // Red / Coral
@@ -37,6 +130,7 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
   onSpin,
   canSpin = false,
   size = "medium",
+  maxDiameter,
   showSpinButton = true,
   spinButtonText = "SPIN!",
   onSpinEnd,
@@ -49,19 +143,81 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
   const startRotationRef = useRef<number>(0);
   const targetRotationRef = useRef<number>(0);
 
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLDivElement | null>(null);
+  const [available, setAvailable] = useState<{ width: number; height: number }>({
+    width: 0,
+    height: 0,
+  });
+
+  // Track the space we can use so the wheel never overflows (or pushes the
+  // spin button off-screen) on small devices.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const measure = () => {
+      const buttonBlock = showSpinButton
+        ? (buttonRef.current?.offsetHeight ?? 0) + 16
+        : 0;
+      setAvailable({
+        width: el.clientWidth,
+        // 16px headroom for the pointer that sits above the wheel
+        height: size === "auto" ? Math.max(0, el.clientHeight - buttonBlock - 16) : 0,
+      });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [size, showSpinButton]);
+
   // Dimension presets
   const sizeMap = {
     small: 260,
     medium: 360,
     large: 480,
     fill: 540,
+    auto: 360,
   };
-  const diameter = sizeMap[size] || 360;
+  const presetDiameter = maxDiameter ?? sizeMap[size] ?? 360;
+  const fitLimits = [presetDiameter];
+  if (available.width > 0) fitLimits.push(available.width - 8);
+  if (size === "auto" && available.height > 0) fitLimits.push(available.height);
+  const diameter = Math.max(
+    MIN_DIAMETER,
+    Math.floor(Math.min(...fitLimits)),
+  );
   const radius = diameter / 2;
 
   const validSegments = segments && segments.length > 0 ? segments : ["No Categories"];
   const numSegments = validSegments.length;
   const arcSize = (2 * Math.PI) / numSegments;
+
+  // Geometry shared by label fitting and drawing
+  // Margins scale with the wheel so small wheels keep room for labels.
+  const wheelRadius = radius - Math.max(9, Math.round(diameter * 0.045)); // rim, pegs, shadow
+  const hubRadius = Math.max(14, diameter * 0.085);
+  const labelOuter = wheelRadius - Math.max(6, diameter * 0.025);
+  const labelInner = hubRadius + 4;
+
+  // Label layouts only change with segments/diameter, not every animation frame.
+  const labelCacheRef = useRef<{ key: string; layouts: LabelLayout[] } | null>(null);
+  const getLabelLayouts = (ctx: CanvasRenderingContext2D): LabelLayout[] => {
+    const key = `${diameter}|${validSegments.join("\u0000")}`;
+    if (labelCacheRef.current?.key === key) return labelCacheRef.current.layouts;
+
+    const maxWidth = labelOuter - labelInner;
+    const maxFont = Math.min(24, diameter / 14);
+    const layouts = validSegments.map((label) => {
+      // Arc width available at the label's middle; a single segment has no limit.
+      const midRadius = labelOuter - maxWidth * 0.35;
+      const arcWidth =
+        numSegments === 1 ? Infinity : 2 * midRadius * Math.sin(arcSize / 2) * 0.9;
+      return fitLabel(ctx, label, maxWidth, arcWidth, maxFont);
+    });
+    labelCacheRef.current = { key, layouts };
+    return layouts;
+  };
 
   // Draw the wheel on canvas
   const drawWheel = (rotationAngleDeg: number) => {
@@ -85,7 +241,7 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
 
     const centerX = radius;
     const centerY = radius;
-    const wheelRadius = radius - 16; // Margin for border / shadow
+    const labelLayouts = getLabelLayouts(ctx);
 
     // Rotate context
     ctx.translate(centerX, centerY);
@@ -116,28 +272,24 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Draw text
+      // Draw label: fitted size, dark outline for contrast on every segment colour
       ctx.save();
       const textAngle = angle + arcSize / 2;
       ctx.rotate(textAngle);
       ctx.textAlign = "right";
       ctx.textBaseline = "middle";
+      const { lines, fontSize } = labelLayouts[i];
+      ctx.font = `800 ${fontSize}px ${LABEL_FONT}`;
+      ctx.lineJoin = "round";
+      ctx.lineWidth = Math.max(2.5, fontSize / 4);
+      ctx.strokeStyle = "rgba(15, 23, 42, 0.75)";
       ctx.fillStyle = "#ffffff";
-      ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
-      ctx.shadowBlur = 4;
-      ctx.shadowOffsetX = 1;
-      ctx.shadowOffsetY = 1;
-
-      // Dynamic font size depending on diameter & number of segments
-      const fontSize = Math.max(11, Math.min(18, Math.floor(diameter / (numSegments > 8 ? 26 : 20))));
-      ctx.font = `bold ${fontSize}px sans-serif`;
-
-      let label = validSegments[i];
-      if (label.length > 15) {
-        label = label.substring(0, 13) + "...";
-      }
-
-      ctx.fillText(label, wheelRadius - 20, 0);
+      const lineHeight = fontSize * 1.15;
+      lines.forEach((line, lineIndex) => {
+        const y = (lineIndex - (lines.length - 1) / 2) * lineHeight;
+        ctx.strokeText(line, labelOuter, y);
+        ctx.fillText(line, labelOuter, y);
+      });
       ctx.restore();
     }
 
@@ -169,7 +321,6 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
     }
 
     // Center Hub
-    const hubRadius = Math.max(26, diameter * 0.12);
     const hubGrad = ctx.createRadialGradient(0, 0, 5, 0, 0, hubRadius);
     hubGrad.addColorStop(0, "#ffffff");
     hubGrad.addColorStop(0.4, "#94a3b8");
@@ -266,6 +417,7 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
 
   return (
     <Box
+      ref={containerRef}
       sx={{
         display: "flex",
         flexDirection: "column",
@@ -273,6 +425,8 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
         justifyContent: "center",
         position: "relative",
         userSelect: "none",
+        width: "100%",
+        ...(size === "auto" && { height: "100%", minHeight: 0 }),
       }}
     >
       {/* Outer Wrapper with Glowing Border */}
@@ -281,6 +435,8 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
           position: "relative",
           width: diameter,
           height: diameter,
+          mt: 2, // room for the pointer so it never overlaps content above
+          flexShrink: 0,
           borderRadius: "50%",
           boxShadow: localSpinning
             ? "0 0 45px rgba(245, 158, 11, 0.6), 0 0 80px rgba(99, 102, 241, 0.4)"
@@ -334,15 +490,15 @@ export const SpinWheel: React.FC<SpinWheelProps> = ({
 
       {/* Optional Interactive Spin Button Below */}
       {showSpinButton && (
-        <Box sx={{ mt: 3, textAlign: "center" }}>
+        <Box ref={buttonRef} sx={{ mt: 2, textAlign: "center", flexShrink: 0 }}>
           <Button
             variant="contained"
             onClick={onSpin}
             disabled={!canSpin || localSpinning}
             sx={{
               px: 5,
-              py: 1.5,
-              fontSize: "1.25rem",
+              py: 1.25,
+              fontSize: "1.15rem",
               fontWeight: 800,
               letterSpacing: "0.08em",
               borderRadius: "50px",

@@ -1,4 +1,5 @@
 import React from "react";
+import { formatQuestionScoring } from "../utils/scoring";
 import {
   Dialog,
   DialogTitle,
@@ -129,7 +130,7 @@ const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
                 Score
               </Typography>
               <Typography variant="body2" fontWeight={600}>
-                {question.score ?? 0}
+                {formatQuestionScoring(question)}
               </Typography>
             </Box>
             <Box>

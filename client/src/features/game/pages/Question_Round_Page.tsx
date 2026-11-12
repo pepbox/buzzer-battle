@@ -12,6 +12,7 @@ import {
   GameStatusScreen,
 } from "../../../components/ui/GameScreen";
 import { NailedIt, CloseCall } from "../../question/components/StatusCard";
+import SpinPassPicker from "../components/SpinPassPicker";
 import { useFetchOverallLeaderboardQuery } from "../services/teamApi";
 import { useFetchSessionQuery } from "../../session/services/session.api";
 
@@ -371,6 +372,65 @@ const QuestionRoundPage: React.FC = () => {
 
   const isNoBuzzerQuestion = (gameState as any)?.isNoBuzzerQuestion;
   const isHiddenQuestion = activeQuestion.hideFromUsers === true;
+
+  // No-buzzer question: the host picks a team first, then the question is shown.
+  // (The server also withholds the question content during this phase.)
+  const isAwaitingTeamSelection =
+    gameState?.gameStatus === "idle" &&
+    !normalizeId(gameState?.currentAnsweringTeam) &&
+    Boolean(
+      gameState?.awaitingTeamSelection ?? activeQuestion.awaitingTeamSelection,
+    );
+
+  // Spin wheel pass: the team that just answered wrong picks the next team.
+  const spinPassPicker = gameState?.spinPassPickerTeam;
+  if (isAwaitingTeamSelection && isSpinWheel && spinPassPicker) {
+    const pickerId = normalizeId(spinPassPicker);
+    const isMyTeamPicking = isSameTeam(pickerId, team?._id);
+    const pickerTeam =
+      typeof spinPassPicker === "object" ? spinPassPicker : undefined;
+    const pickerName =
+      pickerTeam?.teamName ||
+      leaderboardData?.data?.leaderboard?.find((t) => isSameTeam(t._id, pickerId))
+        ?.teamName ||
+      "The team";
+
+    if (isMyTeamPicking && team?.playerRole === "BUZZER_PERSON") {
+      const attempted = new Set(
+        (gameState?.teamsWhoAnsweredThisQuestion || []).map((id) =>
+          normalizeId(id),
+        ),
+      );
+      const eligibleTeams = (leaderboardData?.data?.leaderboard || [])
+        .filter((t) => !attempted.has(normalizeId(t._id)))
+        .sort((a, b) => (a.teamNumber ?? 0) - (b.teamNumber ?? 0));
+      return <SpinPassPicker teams={eligibleTeams} />;
+    }
+
+    return (
+      <GameStatusScreen
+        icon="👉"
+        title={
+          isMyTeamPicking
+            ? "Your captain is choosing the next team..."
+            : `${pickerName}'s captain is choosing the next team...`
+        }
+        subtitle="The question will appear once a team is chosen."
+        showSpinner
+      />
+    );
+  }
+
+  if (isAwaitingTeamSelection) {
+    return (
+      <GameStatusScreen
+        icon="🎯"
+        title="Host is picking a team..."
+        subtitle="The question will appear once a team is selected."
+        showSpinner
+      />
+    );
+  }
 
   if (!isAnsweringTeam && !isNoBuzzerQuestion) {
     // For non-answering teams in buzzer and spin questions, show a waiting screen

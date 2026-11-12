@@ -110,6 +110,24 @@ const getEmbeddableUrl = (url: string): string => {
   return url;
 };
 
+// Question/answer assets are view-only: no download, playback speed,
+// picture-in-picture, casting, or "save as" via right-click / long-press.
+const RESTRICTED_CONTROLS = "nodownload noplaybackrate noremoteplayback";
+const blockContextMenu = (event: React.SyntheticEvent) => event.preventDefault();
+const noSaveSx = {
+  WebkitTouchCallout: "none",
+  WebkitUserSelect: "none",
+  userSelect: "none",
+} as const;
+
+const isPdfUrl = (url: string) => /\.pdf($|[?#])/i.test(url);
+
+/** Hide the built-in PDF viewer toolbar (download / print) where supported. */
+const withoutPdfToolbar = (url: string) =>
+  isPdfUrl(url) && !url.includes("#")
+    ? `${url}#toolbar=0&navpanes=0`
+    : url;
+
 const SmartMedia: React.FC<SmartMediaProps> = ({
   media,
   alt,
@@ -174,7 +192,9 @@ const SmartMedia: React.FC<SmartMediaProps> = ({
         src={media.url}
         alt={alt || media.name || "Media"}
         onError={advanceCandidate}
-        sx={sx}
+        onContextMenu={blockContextMenu}
+        draggable={false}
+        sx={[noSaveSx, ...(Array.isArray(sx) ? sx : [sx])]}
       />
     );
   }
@@ -185,9 +205,13 @@ const SmartMedia: React.FC<SmartMediaProps> = ({
         component="video"
         src={media.url}
         controls
+        controlsList={RESTRICTED_CONTROLS}
+        disablePictureInPicture
+        disableRemotePlayback
         playsInline
         preload="metadata"
         onError={advanceCandidate}
+        onContextMenu={blockContextMenu}
         sx={sx}
       />
     );
@@ -199,8 +223,10 @@ const SmartMedia: React.FC<SmartMediaProps> = ({
         component="audio"
         src={media.url}
         controls
+        controlsList={RESTRICTED_CONTROLS}
         preload="metadata"
         onError={advanceCandidate}
+        onContextMenu={blockContextMenu}
         sx={audioSx || { width: "100%" }}
       />
     );
@@ -211,7 +237,7 @@ const SmartMedia: React.FC<SmartMediaProps> = ({
       <Box sx={{ width: "100%" }}>
         <Box
           component="iframe"
-          src={embeddedUrl || media.url}
+          src={withoutPdfToolbar(embeddedUrl || media.url)}
           title={media.name || "Embedded asset"}
           sx={{
             width: "100%",
@@ -222,22 +248,26 @@ const SmartMedia: React.FC<SmartMediaProps> = ({
             ...iframeSx,
           }}
         />
-        <Typography
-          component="a"
-          href={media.url}
-          target="_blank"
-          rel="noreferrer"
-          sx={{
-            display: "inline-block",
-            mt: 1,
-            color: "#1565C0",
-            textDecoration: "underline",
-            wordBreak: "break-all",
-            fontWeight: 600,
-          }}
-        >
-          {media.name || media.url}
-        </Typography>
+        {/* Non-PDF embeds (some sites refuse to be framed and render blank) keep a
+            way to open the content. PDFs get none, since that is just a download. */}
+        {!isPdfUrl(media.url) && (
+          <Typography
+            component="a"
+            href={embeddedUrl || media.url}
+            target="_blank"
+            rel="noreferrer"
+            sx={{
+              display: "inline-block",
+              mt: 1,
+              color: "#1565C0",
+              textDecoration: "underline",
+              wordBreak: "break-all",
+              fontWeight: 600,
+            }}
+          >
+            {media.name || "Open content"}
+          </Typography>
+        )}
       </Box>
     );
   }

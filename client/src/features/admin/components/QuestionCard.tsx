@@ -1,4 +1,5 @@
 import React from "react";
+import { formatQuestionScoring } from "../utils/scoring";
 import {
   Paper,
   Box,
@@ -135,7 +136,7 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
                 sx={{ display: "block", mt: 0.75 }}
               >
                 Folder: {question.folder || "General"} | Score:{" "}
-                {question.score ?? 0} | Options: {question.options?.length || 0}{" "}
+                {formatQuestionScoring(question)} | Options: {question.options?.length || 0}{" "}
                 | Hidden: {question.hideFromUsers ? "Yes" : "No"} | Owner:{" "}
                 {question.createdBy === "superadmin"
                   ? "Super Admin"

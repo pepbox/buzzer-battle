@@ -74,6 +74,7 @@ export interface QuestionBankItem {
   questionText: string;
   correctAnswer?: string;
   score: number;
+  wrongPenalty?: number;
   folder?: string;
   category?: string;
   keepBuzzer?: boolean;

@@ -1,3 +1,4 @@
+import { api } from "../../app/api";
 import store from "../../app/store";
 import { websocketService } from "./websocketService";
 import { throttle } from "../../utils/throttle";
@@ -9,7 +10,7 @@ import { adminApi } from "../../features/admin/services/admin.Api";
 import { teamApi } from "../../features/game/services/teamApi";
 import { questionApi } from "../../features/question/services/questions.api";
 import { clearAdmin } from "../../features/admin/services/adminSlice";
-import { clearTeam } from "../../features/game/services/teamSlice";
+import { clearTeam, setTeam } from "../../features/game/services/teamSlice";
 
 export const setupGlobalListeners = () => {
   // Game State Changed Event
@@ -99,6 +100,8 @@ export const setupGlobalListeners = () => {
     (data: any) => {
       console.log("Team selected to answer:", data);
       store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
+      // Question content may have been withheld while waiting for team selection.
+      store.dispatch(questionApi.util.invalidateTags(["Question"]));
     },
     "redux",
   );
@@ -166,6 +169,36 @@ export const setupGlobalListeners = () => {
       console.log("Show answer triggered:", data);
       store.dispatch(gameStateApi.util.invalidateTags(["GameState"]));
       store.dispatch(questionApi.util.invalidateTags(["Question"]));
+    },
+    "redux",
+  );
+
+  // Team captain auto-assigned: update my role locally (players) / team list (admins).
+  // (Not refetching /teams/me here: that toggles the global team loading flag and
+  // would flash the whole game screen.)
+  websocketService.addGlobalListener(
+    Events.TEAM_ROLE_UPDATED,
+    (data: any) => {
+      store.dispatch(adminApi.util.invalidateTags(["Team"]));
+      const myTeam = store.getState().team?.team;
+      if (!myTeam || String(myTeam._id) !== String(data?.teamId)) return;
+      const isMe =
+        Boolean(myTeam.playerName && data?.captainName) &&
+        myTeam.playerName!.trim().toLowerCase() ===
+          String(data.captainName).trim().toLowerCase();
+      store.dispatch(
+        setTeam({ ...myTeam, playerRole: isMe ? "BUZZER_PERSON" : "TEAM_MEMBER" }),
+      );
+    },
+    "redux",
+  );
+
+  // Per-session hide/keepBuzzer changed (e.g. admin hid/unhid the live question)
+  websocketService.addGlobalListener(
+    Events.QUESTION_SETTINGS_UPDATED,
+    () => {
+      store.dispatch(questionApi.util.invalidateTags(["Question"]));
+      store.dispatch(api.util.invalidateTags(["Session"]));
     },
     "redux",
   );

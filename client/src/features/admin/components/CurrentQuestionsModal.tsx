@@ -17,8 +17,8 @@ import CurrentQuestionListItem from "./CurrentQuestionListItem";
 import { useDragDropReorder } from "../hooks/useDragDropReorder";
 import QuestionPreviewModal from "./QuestionPreviewModal";
 import QuestionLibraryManager from "./QuestionLibraryManager";
-import { useUpdateQuestionMutation } from "../services/admin.Api";
-import { questionToPayload } from "../utils/questionPayload";
+import { useSetQuestionSettings } from "../services/adminRemoteApi";
+import { useFetchSessionQuery } from "../../session/services/session.api";
 
 export interface CurrentQuestionsModalProps {
   open: boolean;
@@ -63,7 +63,22 @@ const CurrentQuestionsModal: React.FC<CurrentQuestionsModalProps> = ({
   const [togglingQuestionId, setTogglingQuestionId] = useState<string | null>(
     null,
   );
-  const [updateQuestion] = useUpdateQuestionMutation();
+  const { setQuestionSettings } = useSetQuestionSettings();
+  const { data: sessionResponse } = useFetchSessionQuery();
+
+  // This session's hide values (the library value is only the default seed).
+  const sessionHidden = React.useMemo(() => {
+    const map = new Map<string, boolean | undefined>();
+    (sessionResponse?.data?.questionSettings || []).forEach((setting) => {
+      map.set(String(setting.question), setting.hideFromUsers);
+    });
+    return map;
+  }, [sessionResponse]);
+
+  const isHiddenInSession = (question: QuestionBankItem) =>
+    hiddenOverrides[question._id] ??
+    sessionHidden.get(question._id) ??
+    question.hideFromUsers === true;
 
   // Sync items with selectedQuestionIds when modal opens
   React.useEffect(() => {
@@ -82,9 +97,9 @@ const CurrentQuestionsModal: React.FC<CurrentQuestionsModalProps> = ({
     setTogglingQuestionId(question._id);
 
     try {
-      await updateQuestion({
-        questionId: question._id,
-        payload: questionToPayload(question, { hideFromUsers: checked }),
+      // Saved for this session only; the library question is not modified.
+      await setQuestionSettings(question._id, {
+        hideFromUsers: checked,
       }).unwrap();
       setHiddenOverrides((current) => ({
         ...current,
@@ -158,11 +173,7 @@ const CurrentQuestionsModal: React.FC<CurrentQuestionsModalProps> = ({
             {items.map((questionId: string, index: number) => {
               const question = questionLookup.get(questionId);
               const mergedQuestion = question
-                ? {
-                    ...question,
-                    hideFromUsers:
-                      hiddenOverrides[questionId] ?? question.hideFromUsers,
-                  }
+                ? { ...question, hideFromUsers: isHiddenInSession(question) }
                 : undefined;
 
               return (
@@ -176,17 +187,9 @@ const CurrentQuestionsModal: React.FC<CurrentQuestionsModalProps> = ({
                   onDragOver={(e) => handleDragOver(e)}
                   onDrop={handleDrop}
                   onEdit={(qId) => {
-                    const q = items
-                      .map((id) => {
-                        const baseQuestion = questionLookup.get(id);
-                        if (!baseQuestion) return undefined;
-                        return {
-                          ...baseQuestion,
-                          hideFromUsers:
-                            hiddenOverrides[id] ?? baseQuestion.hideFromUsers,
-                        };
-                      })
-                      .find((item) => item?._id === qId);
+                    // Edit the library question as-is (its own default flags),
+                    // not this session's overrides.
+                    const q = questionLookup.get(qId);
                     if (q) onEdit(q);
                   }}
                   onRemove={(qId) => {

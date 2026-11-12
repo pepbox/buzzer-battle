@@ -21,6 +21,11 @@ const questionResponseSchema = new Schema<IQuestionResponse>(
       type: Boolean,
       required: false,
     },
+    // Points actually applied when the answer was marked (older records won't have it).
+    pointsAwarded: {
+      type: Number,
+      required: false,
+    },
   },
   {
     timestamps: true,

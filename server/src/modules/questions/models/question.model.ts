@@ -40,7 +40,12 @@ const questionSchema = new Schema<IQuestion>(
     score: {
       type: Number,
       required: false,
-      default: 0,
+      default: 10, // points awarded for a correct answer
+    },
+    wrongPenalty: {
+      type: Number,
+      required: false,
+      default: 5, // points deducted for a wrong answer
     },
     folder: {
       type: String,

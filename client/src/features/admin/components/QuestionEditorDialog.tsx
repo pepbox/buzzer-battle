@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  DEFAULT_CORRECT_POINTS,
+  DEFAULT_WRONG_PENALTY,
+} from "../utils/scoring";
+import {
   Alert,
   Box,
   Button,
@@ -128,7 +132,8 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
   const [answerText, setAnswerText] = useState("");
   const [hintText, setHintText] = useState("");
   const [hintPenalty, setHintPenalty] = useState<number>(0);
-  const [score, setScore] = useState<number>(0);
+  const [score, setScore] = useState<number>(DEFAULT_CORRECT_POINTS);
+  const [wrongPenalty, setWrongPenalty] = useState<number>(DEFAULT_WRONG_PENALTY);
   const [keepBuzzer, setKeepBuzzer] = useState(true);
   const [hideFromUsers, setHideFromUsers] = useState(false);
   const [folder, setFolder] = useState(defaultFolder || "General");
@@ -170,7 +175,8 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
           "",
       );
       setAnswerText(initialQuestion.answerContent?.text || "");
-      setScore(initialQuestion.score ?? 0);
+      setScore(initialQuestion.score ?? DEFAULT_CORRECT_POINTS);
+      setWrongPenalty(initialQuestion.wrongPenalty ?? DEFAULT_WRONG_PENALTY);
       setKeepBuzzer(initialQuestion.keepBuzzer ?? true);
       setHideFromUsers(initialQuestion.hideFromUsers ?? false);
       setFolder(initialQuestion.folder || defaultFolder || "General");
@@ -219,7 +225,8 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
     setAnswerText("");
     setHintText("");
     setHintPenalty(0);
-    setScore(0);
+    setScore(DEFAULT_CORRECT_POINTS);
+    setWrongPenalty(DEFAULT_WRONG_PENALTY);
     setKeepBuzzer(true);
     setHideFromUsers(false);
     setFolder(defaultFolder || "General");
@@ -446,7 +453,12 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
 
     const payload: CreateQuestionPayload = {
       questionText: questionText.trim(),
-      score: Number.isFinite(Number(score)) ? Number(score) : 0,
+      score: Number.isFinite(Number(score)) && Number(score) >= 0
+        ? Number(score)
+        : DEFAULT_CORRECT_POINTS,
+      wrongPenalty: Number.isFinite(Number(wrongPenalty)) && Number(wrongPenalty) >= 0
+        ? Number(wrongPenalty)
+        : DEFAULT_WRONG_PENALTY,
       folder,
       category: category.trim() || folder || "General",
       keepBuzzer,
@@ -688,12 +700,28 @@ const QuestionEditorDialog: React.FC<QuestionEditorDialogProps> = ({
               label="Hide Question From User Screens"
             />
 
-            <TextField
-              label="Score"
-              type="number"
-              value={score}
-              onChange={(e) => setScore(Number(e.target.value || 0))}
-            />
+            <Box sx={{ display: "flex", gap: 2 }}>
+              <TextField
+                fullWidth
+                label="Points for Correct Answer"
+                type="number"
+                value={score}
+                onChange={(e) => setScore(Math.max(0, Number(e.target.value || 0)))}
+                inputProps={{ min: 0 }}
+                helperText="Added to the team's score when marked correct."
+              />
+              <TextField
+                fullWidth
+                label="Points Deducted for Wrong Answer"
+                type="number"
+                value={wrongPenalty}
+                onChange={(e) =>
+                  setWrongPenalty(Math.max(0, Number(e.target.value || 0)))
+                }
+                inputProps={{ min: 0 }}
+                helperText="Subtracted from the team's score when marked wrong."
+              />
+            </Box>
 
             <Box sx={{ display: "flex", gap: 1 }}>
               <TextField

@@ -5,6 +5,13 @@ import { QuestionFolder } from "../models/questionFolder.model";
 import { IQuestion, IQuestionResponse } from "../types/interfaces";
 import { Session } from "../../session/models/session.model";
 import TeamService from "../../teams/services/team.service";
+import { applyQuestionFlags } from "../../session/questionSettings";
+import {
+  DEFAULT_CORRECT_POINTS,
+  DEFAULT_WRONG_PENALTY,
+  getCorrectPoints,
+  getWrongPenalty,
+} from "../constants";
 
 export default class QuestionService {
   private session?: mongoose.ClientSession;
@@ -74,6 +81,7 @@ export default class QuestionService {
     options?: { optionId: string; optionText: string }[];
     correctAnswer?: string;
     score?: number;
+    wrongPenalty?: number;
     folder?: string;
     category?: string;
     keepBuzzer?: boolean;
@@ -109,7 +117,8 @@ export default class QuestionService {
       quetionVideo: input.quetionVideo,
       options: input.options || [],
       correctAnswer: input.correctAnswer,
-      score: input.score ?? 0,
+      score: input.score ?? DEFAULT_CORRECT_POINTS,
+      wrongPenalty: input.wrongPenalty ?? DEFAULT_WRONG_PENALTY,
       folder: normalizedFolder,
       category: normalizedCategory,
       keepBuzzer: input.keepBuzzer ?? true,
@@ -140,6 +149,7 @@ export default class QuestionService {
       options?: { optionId: string; optionText: string }[];
       correctAnswer?: string;
       score?: number;
+      wrongPenalty?: number;
       folder?: string;
       category?: string;
       keepBuzzer?: boolean;
@@ -237,7 +247,12 @@ export default class QuestionService {
     question.quetionVideo = input.quetionVideo;
     question.options = input.options || [];
     question.correctAnswer = input.correctAnswer;
-    question.score = input.score ?? 0;
+    if (input.score !== undefined) {
+      question.score = input.score;
+    }
+    if (input.wrongPenalty !== undefined) {
+      question.wrongPenalty = input.wrongPenalty;
+    }
     question.keepBuzzer = input.keepBuzzer ?? true;
     if (input.hideFromUsers !== undefined) {
       question.hideFromUsers = input.hideFromUsers;
@@ -550,7 +565,9 @@ export default class QuestionService {
       questionQuery.session(this.session);
     }
 
-    return await questionQuery;
+    // Overlay this session's hide/keepBuzzer values. Callers must NOT save this doc
+    // (it would write the session's values back into the shared library question).
+    return applyQuestionFlags(sessionData, await questionQuery);
   }
 
   // Fetch question by ID (for teams - without correct answer)
@@ -633,13 +650,18 @@ export default class QuestionService {
     const isCorrect = question.correctAnswer === responseOptionId.toString();
 
     // Update team score if correct
+    const teamService = new TeamService(this.session);
     if (isCorrect) {
-      const teamService = new TeamService(this.session);
-      await teamService.updateTeamScore(teamId, question.score);
-      return { isCorrect: true, pointsAwarded: question.score };
+      const points = getCorrectPoints(question);
+      await teamService.updateTeamScore(teamId, points);
+      return { isCorrect: true, pointsAwarded: points };
     }
 
-    return { isCorrect: false, pointsAwarded: 0 };
+    const penalty = getWrongPenalty(question);
+    if (penalty > 0) {
+      await teamService.updateTeamScore(teamId, -penalty);
+    }
+    return { isCorrect: false, pointsAwarded: -penalty };
   }
 
   // Get all questions for a session
@@ -697,6 +719,7 @@ export default class QuestionService {
     questionId: Types.ObjectId | string,
     teamId: Types.ObjectId | string,
     isCorrect: boolean,
+    pointsAwarded?: number,
   ): Promise<IQuestionResponse> {
     // Check if team has already responded to this question
     const existingResponseQuery = QuestionResponse.findOne({
@@ -711,6 +734,7 @@ export default class QuestionService {
     if (existingResponse) {
       // Update existing response instead of creating duplicate
       existingResponse.isCorrect = isCorrect;
+      if (pointsAwarded !== undefined) existingResponse.pointsAwarded = pointsAwarded;
 
       const options: any = {};
       if (this.session) {
@@ -727,6 +751,7 @@ export default class QuestionService {
       team: teamId,
       response: isCorrect ? "CORRECT" : "INCORRECT", // For buzzer/verbal answers
       isCorrect: isCorrect,
+      pointsAwarded,
     });
 
     const options: any = {};

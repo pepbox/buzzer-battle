@@ -85,6 +85,7 @@ export interface QuestionBankItem {
   questionText: string;
   correctAnswer?: string;
   score: number;
+  wrongPenalty?: number;
   folder?: string;
   category?: string;
   keepBuzzer?: boolean;
@@ -141,6 +142,7 @@ export interface CreateQuestionPayload {
   options?: Array<{ optionId?: string; optionText: string }>;
   correctAnswer?: string;
   score?: number;
+  wrongPenalty?: number;
   folder?: string;
   category?: string;
   keepBuzzer?: boolean;

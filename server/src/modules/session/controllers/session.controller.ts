@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { Request, Response, NextFunction } from "express";
 import AppError from "../../../utils/appError"; // Adjust path as needed
 import { ISession, Session } from "../models/session.model";
@@ -13,6 +14,10 @@ import axios from "axios";
 import { GameState } from "../../gameState/models/gameState.model";
 import { QuestionResponse } from "../../questions/models/question.response.model";
 import { Team } from "../../teams/models/team.model";
+import {
+    applyQuestionFlags,
+    seedSessionQuestionSettings,
+} from "../questionSettings";
 
 
 const sessionService = new SessionService();
@@ -27,10 +32,43 @@ export const updateSession = async (
 ) => {
     try {
         const sessionId = req.user?.sessionId;
-        const updateData: Partial<ISession> = req.body;
+        if (!sessionId || !mongoose.isValidObjectId(sessionId)) {
+            return next(new AppError("A valid session is required.", 400));
+        }
 
-        if (!sessionId) {
-            return next(new AppError("Session ID is required.", 400));
+        // Only these fields may be changed through this endpoint. Anything else in the
+        // body (e.g. questionSettings, _id, sessionName, createdAt) is ignored.
+        // Per-question settings go through SET_QUESTION_SETTINGS instead.
+        const UPDATABLE_FIELDS = [
+            "companyName",
+            "companyLogo",
+            "questionTimeLimit",
+            "answerTimeLimit",
+            "questions",
+            "gameMode",
+            "status",
+            "numberOfTeams",
+            "teamMode",
+            "colorTeams",
+        ] as const;
+        const updateData: Partial<ISession> = {};
+        for (const field of UPDATABLE_FIELDS) {
+            if (req.body?.[field] !== undefined) {
+                (updateData as any)[field] = req.body[field];
+            }
+        }
+
+        if (updateData.questions !== undefined) {
+            const valid =
+                Array.isArray(updateData.questions) &&
+                updateData.questions.every((id) => mongoose.isValidObjectId(id));
+            if (!valid) {
+                return next(new AppError("questions must be a list of question IDs.", 400));
+            }
+        }
+
+        if (Object.keys(updateData).length === 0) {
+            return next(new AppError("No updatable fields provided.", 400));
         }
 
         if (updateData.status && !Object.values(SessionStatus).includes(updateData.status)) {
@@ -46,10 +84,16 @@ export const updateSession = async (
 
         // Assuming you have imported the service as sessionService
         updateData.updatedAt = new Date();
-        const updatedSession = await sessionService.updateSessionById(sessionId, updateData);
+        let updatedSession = await sessionService.updateSessionById(sessionId, updateData);
 
         if (!updatedSession) {
             return next(new AppError("Session not found.", 404));
+        }
+
+        if (Array.isArray(updateData.questions)) {
+            // Seed hide/keepBuzzer for newly added questions from the library defaults.
+            await seedSessionQuestionSettings(sessionId);
+            updatedSession = (await Session.findById(sessionId)) ?? updatedSession;
         }
         SessionEmitters.toSession(sessionId.toString(), Events.SESSION_UPDATE, {});
         // if (updateData.status === "ended") {
@@ -236,8 +280,8 @@ export const getSessionQuestionsStatus = async (
 ) => {
     try {
         const sessionId = req.user?.sessionId;
-        if (!sessionId) {
-            return next(new AppError("Session ID is required.", 400));
+        if (!sessionId || !mongoose.isValidObjectId(sessionId)) {
+            return next(new AppError("A valid session is required.", 400));
         }
 
         const session = await Session.findById(sessionId).populate("questions");
@@ -277,7 +321,7 @@ export const getSessionQuestionsStatus = async (
             }
 
             return {
-                ...q.toObject(),
+                ...applyQuestionFlags(session, q.toObject()),
                 index,
                 status,
             };

@@ -50,6 +50,28 @@ const gameStateSchema = new Schema<IGameState>(
       type: Boolean,
       default: false,
     },
+    // No-buzzer question: admin hasn't picked a team yet, so players must not see the question.
+    awaitingTeamSelection: {
+      type: Boolean,
+      default: false,
+    },
+    // Spin wheel: admin's "hide question" choice applied to whichever question the wheel lands on.
+    spinHideQuestion: {
+      type: Boolean,
+      default: false,
+    },
+    // Spin wheel pass: the team that just answered wrong; its captain picks the next team.
+    spinPassPickerTeam: {
+      type: Schema.Types.ObjectId,
+      ref: "Team",
+      required: false,
+    },
+    // Spin wheel: turn ended without a correct answer -> question returns to the pool,
+    // so its answer must NOT be revealed even though the game is IDLE.
+    answerWithheld: {
+      type: Boolean,
+      default: false,
+    },
     completedQuestionIds: {
       type: [Schema.Types.ObjectId],
       ref: "Question",

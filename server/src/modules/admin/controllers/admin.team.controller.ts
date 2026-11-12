@@ -4,6 +4,7 @@ import TeamService from "../../teams/services/team.service";
 import SessionService from "../../session/services/session.service";
 import GameStateService from "../../gameState/services/gameState.service";
 import QuestionService from "../../questions/services/question.service";
+import { getCorrectPoints } from "../../questions/constants";
 
 const teamService = new TeamService();
 const sessionService = new SessionService();
@@ -165,9 +166,9 @@ export const updateTeam = async (
     }
 
     if (teamScore !== undefined) {
-      if (typeof teamScore !== "number" || teamScore < 0) {
+      if (typeof teamScore !== "number" || !Number.isFinite(teamScore)) {
         return next(
-          new AppError("Team score must be a non-negative number.", 400),
+          new AppError("Team score must be a valid number.", 400),
         );
       }
       updateData.teamScore = teamScore;
@@ -251,7 +252,14 @@ export const fetchTeamResponses = async (
             correctAnswer: "CORRECT", // Set to "CORRECT" for buzzer responses so chip comparison works
             correctAnswerText: correctOption?.optionText || "Verbal Answer",
             isCorrect: response.isCorrect,
-            pointsEarned: response.isCorrect ? question.score : 0,
+            // Use the points recorded at marking time; older records predate
+            // wrong-answer penalties, so a wrong answer there counted as 0.
+            pointsEarned:
+              typeof response.pointsAwarded === "number"
+                ? response.pointsAwarded
+                : response.isCorrect
+                  ? getCorrectPoints(question)
+                  : 0,
             timeElapsed: response.timeElapsed,
             answeredAt: response.createdAt,
           };
@@ -281,7 +289,12 @@ export const fetchTeamResponses = async (
             correctAnswer: question.correctAnswer,
             correctAnswerText: correctOption?.optionText || "N/A",
             isCorrect: isCorrect,
-            pointsEarned: isCorrect ? question.score : 0,
+            pointsEarned:
+              typeof response.pointsAwarded === "number"
+                ? response.pointsAwarded
+                : isCorrect
+                  ? getCorrectPoints(question)
+                  : 0,
             timeElapsed: response.timeElapsed,
             answeredAt: response.createdAt,
           };

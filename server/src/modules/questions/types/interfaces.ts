@@ -26,6 +26,7 @@ export interface IQuestion extends Document {
   options: option[];
   correctAnswer?: string; // This should be the optionId of the correct option (e.g., 'a', 'b', 'c', 'd')
   score: number;
+  wrongPenalty?: number;
   folder?: string;
   category?: string;
   keepBuzzer?: boolean;
@@ -45,6 +46,7 @@ export interface IQuestionResponse extends Document {
   team: Types.ObjectId;
   response: string; // This stores the optionId (e.g., 'a', 'b', 'c', 'd') or "VERBAL_ANSWER" for buzzer questions
   isCorrect?: boolean; // Optional: used for verbal/buzzer answers where admin marks correct/wrong
+  pointsAwarded?: number; // Points actually applied for this answer (+correct / -wrong penalty)
   createdAt: Date;
   updatedAt: Date;
 }

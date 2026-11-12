@@ -27,6 +27,15 @@ export interface GameState {
   answeringRoundStartTime?: number;
   idleStartTime?: number;
   hintRevealed?: boolean;
+  isNoBuzzerQuestion?: boolean;
+  awaitingTeamSelection?: boolean;
+  spinHideQuestion?: boolean;
+  /** Spin wheel pass: team whose captain picks the next team (id or populated team). */
+  spinPassPickerTeam?: string | { _id: string; teamName?: string; teamNumber?: number } | null;
+  /** Teams that already attempted the current question. */
+  teamsWhoAnsweredThisQuestion?: string[];
+  /** Spin turn ended without a correct answer; answer is not revealed. */
+  answerWithheld?: boolean;
   completedQuestionIds?: string[];
   currentCategory?: string;
   spinWheelState?: ISpinWheelState;

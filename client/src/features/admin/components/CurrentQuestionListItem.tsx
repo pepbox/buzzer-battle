@@ -1,4 +1,5 @@
 import React from "react";
+import { formatQuestionScoring } from "../utils/scoring";
 import {
   Paper,
   Box,
@@ -88,7 +89,7 @@ const CurrentQuestionListItem: React.FC<CurrentQuestionListItemProps> = ({
               "Question details unavailable"}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            Score: {question?.score ?? 0} | Buzzer:{" "}
+            Score: {formatQuestionScoring(question)} | Buzzer:{" "}
             {question?.keepBuzzer === false ? "Off" : "On"}
           </Typography>
         </Box>

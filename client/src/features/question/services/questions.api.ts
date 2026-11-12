@@ -32,8 +32,10 @@ export interface Question {
   hint?: ContentSection;
   hintPenalty?: number;
   score: number;
+  wrongPenalty?: number;
   keepBuzzer?: boolean;
   hideFromUsers?: boolean;
+  awaitingTeamSelection?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
